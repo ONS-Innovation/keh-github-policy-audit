@@ -1,0 +1,24 @@
+---
+name: Linting and Formatting
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/**
+      - tests/**
+  pull_request:
+    branches: [main]
+    paths:
+      - src/**
+      - tests/**
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Implement linting and formatting checks (TODO)
+        run: |-
+          echo "TODO: Implement linting and formatting checks"
