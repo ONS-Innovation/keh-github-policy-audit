@@ -54,3 +54,15 @@ megalinter-reports/
 .idea
 .DS_Store
 *.log
+
+# Poetry Build Artifacts
+dist/
+build/
+
+# Cache files
+__pycache__/
+
+# Test and coverage reports
+.coverage
+htmlcov/
+coverage.xml

@@ -19,16 +19,21 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Implement unit tests (TODO)
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # V4.3.1
+        with:
+          persist-credentials: false
+      - name: Install Poetry
         run: |
-          echo "TODO: Implement unit tests"
-  ui-tests:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Implement UI tests (TODO)
+          pipx install poetry
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # V5.6.0
+        with:
+          python-version-file: ".python-version"
+          cache: poetry
+      - name: Install dependencies
         run: |
-          echo "TODO: Implement UI tests"
-
-    # Add more test jobs as needed, such as integration tests, end-to-end tests, etc.
+          make install-dev
+      - name: Run linters
+        run: |
+          make test
