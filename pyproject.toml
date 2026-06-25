@@ -1,9 +1,9 @@
 [project]
-name = "keh-template-repo"
+name = "github-policy-audit"
 version = "1.0.0"
-description = "Sample Description"
+description = "A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage Policy."
 authors = [
-    {name = "ONSdigital/keh-dev"}
+    {name = "ONS-Innovation/keh-dev"}
 ]
 license = {text = "MIT"}
 readme = "README.md"
@@ -11,15 +11,33 @@ requires-python = ">=3.12"
 dependencies = [
 ]
 
+[tool.poetry.group.docs]
+optional = true
+
 [tool.poetry.group.docs.dependencies]
 mkdocs = "^1.6.1"
 mkdocs-material = "^9.6.15"
 mkdocstrings-python = "^1.16.12"
 
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.0.3"
+pytest-xdist = "^3.8.0"
+pytest-cov = "^7.1.0"
+ruff = "^0.15.12"
+mypy = "^1.20.2"
+cryptography = "^48.0.0"
+types-requests = "^2.33.0.20260503"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-package-mode=false
+repository = "http://github.com/ONS-Innovation/keh-github-policy-audit"
+package-mode = false

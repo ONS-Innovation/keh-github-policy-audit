@@ -14,7 +14,7 @@
 
 ## 
 ## -----------------------------------------------
-## Makefile for [Project Name]
+## Makefile for GitHub Policy Audit.
 ## -----------------------------------------------
 ## 
 
@@ -28,10 +28,21 @@ help:				## This help message.
 clean: 				## Clean the temporary files.
 	rm -rf megalinter-reports
 	rm -rf site
+	rm -rf dist
+	rm -rf build
+	rm -rf .ruff_cache
+	rm -rf .mypy_cache
+	rm -rf .pytest_cache
+	rm -rf .coverage
+	find . -type d -name '__pycache__' -exec rm -rf {} +
 
 ## 
 
-# TODO: Add more targets as needed.
+.PHONY: install-dev
+install-dev: 			## Install the development dependencies.
+	poetry install --with dev
+
+## 
 
 # MkDocs
 
@@ -63,7 +74,26 @@ docs-fix: 			## Install and run the documentation linter with auto-fix (Markdown
 
 # Primary Linting
 
-# TODO: Add the primary linting target here.
+.PHONY: lint
+lint:				## Run all linters.
+	poetry run ruff check src tests
+	poetry run ruff format src tests --check
+	poetry run mypy src tests
+
+.PHONY: fmt
+fmt:				## Run all formatters.
+	poetry run ruff check src tests --fix
+	poetry run ruff format src tests
+
+##
+
+# Tests
+
+.PHONY: test
+test:				## Run all tests and check coverage.
+	poetry run pytest -n auto --cov=src --cov-report term-missing --cov-fail-under=80
+
+## 
 
 # Megalinter
 
@@ -72,6 +102,6 @@ megalinter: 			## Run the Megalinter.
 	docker run --platform linux/amd64 --rm \
     -v /var/run/docker.sock:/var/run/docker.sock:rw \
     -v $(shell pwd):/tmp/lint:rw \
-    oxsecurity/megalinter:v9
+    ghcr.io/oxsecurity/megalinter:v9
 
 ## 
