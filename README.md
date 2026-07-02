@@ -9,6 +9,9 @@ A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage 
   - [Prerequisites](#prerequisites)
   - [Makefile](#makefile)
   - [Running the Project](#running-the-project)
+    - [1. Setup environment](#1-setup-environment)
+    - [2. Run command](#2-run-command)
+    - [3. Payload summary](#3-payload-summary)
   - [Deployment](#deployment)
     - [Deployments with Concourse](#deployments-with-concourse)
     - [Manual Deployment](#manual-deployment)
@@ -39,7 +42,59 @@ make help
 
 ## Running the Project
 
-<!-- Instructions for running the project go here. This can include commands to start the project, as well as any necessary configuration steps. -->
+### 1. Setup environment
+
+```bash
+python -m venv venv
+source venv/bin/activate
+poetry install
+export AWS_REGION=eu-west-2
+export GITHUB_SECRET_NAME=<your-secrets-manager-secret-name>
+```
+
+### 2. Run command
+
+Use the helper script in `src/run_handler.py`:
+
+```bash
+python src/run_handler.py <handler-module> '<event-json>'
+```
+
+Example:
+
+```bash
+python src/run_handler.py functions.checks.codeowners.handler '{"owner":"ONS-Innovation","repository_name":"keh-github-policy-audit"}'
+```
+
+You can also pass a JSON file:
+
+```bash
+python src/run_handler.py functions.checks.codeowners.handler payload.json --event-file
+```
+
+Ready-to-use payload files are provided in `examples/`:
+
+- `examples/repository_event.json`
+- `examples/organisation_event.json`
+- `examples/dependabot_slo_event.json`
+- `examples/naming_convention_event.json`
+- `examples/team_maintainer_event.json`
+
+To use these examples, run:
+
+```bash
+python src/run_handler.py functions.checks.codeowners.handler examples/<example-file>.json --event-file
+```
+
+### 3. Payload summary
+
+| Checks | Handler modules | Required event payload |
+| --- | --- | --- |
+| Repository-scoped checks | `functions.checks.codeowners.handler`, `functions.checks.dependabot.handler`, `functions.checks.external_pull_request.handler`, `functions.checks.gitignore.handler`, `functions.checks.inactivity.handler`, `functions.checks.license.handler`, `functions.checks.pirr.handler`, `functions.checks.readme.handler`, `functions.checks.repository_access.handler`, `functions.checks.security_scanning.handler` | `{"owner":"<org>","repository_name":"<repo>"}` |
+| Secret scanning SLO | `functions.checks.secret_scanning_slo.handler` | `{"owner":"<org>"}` |
+| Dependabot SLO | `functions.checks.dependabot_slo.handler` | `{"owner":"<org>","levels":["critical","high"]}` (`levels` optional) |
+| Naming convention | `functions.checks.naming_convention.handler` | `{"repository_name":"<repo>"}` |
+| Team maintainer | `functions.checks.team_maintainer.handler` | `{"owner":"<org>","team_slug":"<team>"}` |
 
 ## Deployment
 
