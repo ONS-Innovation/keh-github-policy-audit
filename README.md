@@ -12,6 +12,8 @@ A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage 
     - [1. Setup environment](#1-setup-environment)
     - [2. Run command](#2-run-command)
     - [3. Payload summary](#3-payload-summary)
+      - [Repository Listing](#repository-listing)
+      - [Check Handlers](#check-handlers)
   - [Deployment](#deployment)
     - [Deployments with Concourse](#deployments-with-concourse)
     - [Manual Deployment](#manual-deployment)
@@ -92,11 +94,22 @@ To use these examples, run:
 python src/run_handler.py functions.checks.codeowners.handler examples/<example-file>.json --event-file
 ```
 
+Some repository-scoped handlers can also accept optional repository metadata under `data` when they are invoked downstream of `functions.list_repositories.handler`. This allows the policy methods library to reuse fields already returned by the repository listing and avoid extra GitHub API calls.
+
 ### 3. Payload summary
+
+#### Repository Listing
+
+| Handler modules | Required event payload |
+| --- | --- |
+| `functions.list_repositories.handler` | `{"owner":"<org>"}` |
+
+#### Check Handlers
 
 | Checks | Handler modules | Required event payload |
 | --- | --- | --- |
-| Repository-scoped checks | `functions.checks.codeowners.handler`, `functions.checks.dependabot.handler`, `functions.checks.external_pull_request.handler`, `functions.checks.gitignore.handler`, `functions.checks.inactivity.handler`, `functions.checks.license.handler`, `functions.checks.pirr.handler`, `functions.checks.readme.handler`, `functions.checks.repository_access.handler`, `functions.checks.security_scanning.handler` | `{"owner":"<org>","repository_name":"<repo>"}` |
+| Repository-scoped checks | `functions.checks.codeowners.handler`, `functions.checks.dependabot.handler`, `functions.checks.external_pull_request.handler`, `functions.checks.gitignore.handler`, `functions.checks.license.handler`, `functions.checks.pirr.handler`, `functions.checks.readme.handler`, `functions.checks.repository_access.handler` | `{"owner":"<org>","repository_name":"<repo>"}` |
+| Repository-scoped checks with optional passthrough data | `functions.checks.inactivity.handler`, `functions.checks.security_scanning.handler` | `{"owner":"<org>","repository_name":"<repo>"}` or `{"owner":"<org>","repository_name":"<repo>","data":{...}}` |
 | Secret scanning SLO | `functions.checks.secret_scanning_slo.handler` | `{"owner":"<org>"}` |
 | Dependabot SLO | `functions.checks.dependabot_slo.handler` | `{"owner":"<org>","levels":["critical","high"]}` (`levels` optional) |
 | Naming convention | `functions.checks.naming_convention.handler` | `{"repository_name":"<repo>"}` |

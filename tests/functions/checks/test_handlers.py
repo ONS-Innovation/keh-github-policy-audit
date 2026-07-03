@@ -29,11 +29,6 @@ REPO_CHECK_CASES = [
         "gitignore",
     ),
     (
-        "functions.checks.inactivity.handler",
-        "check_inactivity",
-        "inactivity",
-    ),
-    (
         "functions.checks.license.handler",
         "check_license",
         "license",
@@ -52,11 +47,6 @@ REPO_CHECK_CASES = [
         "functions.checks.repository_access.handler",
         "check_repository_access",
         "repository_access",
-    ),
-    (
-        "functions.checks.security_scanning.handler",
-        "check_security_scanning",
-        "security_scanning",
     ),
 ]
 
@@ -108,6 +98,148 @@ def test_repository_scoped_handlers_wire_client_and_repo(
         "repository_name": "keh-github-policy-audit",
     }
     assert result == {"status": "PASS", "check_name": check_name}
+
+
+def test_inactivity_handler_passes_event_data_for_flat_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = importlib.import_module("functions.checks.inactivity.handler")
+    client = object()
+    monkeypatch.setattr(module, "get_github_client", lambda owner: client)
+
+    captured: dict[str, object] = {}
+    event = {
+        "owner": "ONS-Innovation",
+        "repository_name": "keh-github-policy-audit",
+        "data": {"updated_at": "2026-07-03T10:00:00Z"},
+    }
+
+    def fake_check(
+        check_client: object,
+        repository_name: str,
+        data: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        captured["client"] = check_client
+        captured["repository_name"] = repository_name
+        captured["data"] = data
+        return {"status": "PASS"}
+
+    monkeypatch.setattr(module, "check_inactivity", fake_check)
+
+    result = module.handler(event, None)
+
+    assert captured == {
+        "client": client,
+        "repository_name": "keh-github-policy-audit",
+        "data": {"updated_at": "2026-07-03T10:00:00Z"},
+    }
+    assert result == {"status": "PASS", "check_name": "inactivity"}
+
+
+def test_inactivity_handler_passes_none_when_data_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = importlib.import_module("functions.checks.inactivity.handler")
+    client = object()
+    event = {
+        "owner": "ONS-Innovation",
+        "repository_name": "keh-github-policy-audit",
+    }
+
+    monkeypatch.setattr(module, "get_github_client", lambda owner: client)
+    captured: dict[str, object] = {}
+
+    def fake_check(
+        check_client: object,
+        repository_name: str,
+        data: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        captured["client"] = check_client
+        captured["repository_name"] = repository_name
+        captured["data"] = data
+        return {"status": "PASS"}
+
+    monkeypatch.setattr(module, "check_inactivity", fake_check)
+
+    result = module.handler(event, None)
+
+    assert captured == {
+        "client": client,
+        "repository_name": "keh-github-policy-audit",
+        "data": None,
+    }
+    assert result == {"status": "PASS", "check_name": "inactivity"}
+
+
+def test_security_scanning_handler_passes_event_data_for_flat_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = importlib.import_module("functions.checks.security_scanning.handler")
+    client = object()
+    monkeypatch.setattr(module, "get_github_client", lambda owner: client)
+
+    captured: dict[str, object] = {}
+    event = {
+        "owner": "ONS-Innovation",
+        "repository_name": "keh-github-policy-audit",
+        "data": {"security_and_analysis": {"secret_scanning": {"status": "enabled"}}},
+    }
+
+    def fake_check(
+        check_client: object,
+        repository_name: str,
+        data: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        captured["client"] = check_client
+        captured["repository_name"] = repository_name
+        captured["data"] = data
+        return {"status": "PASS"}
+
+    monkeypatch.setattr(module, "check_security_scanning", fake_check)
+
+    result = module.handler(event, None)
+
+    assert captured == {
+        "client": client,
+        "repository_name": "keh-github-policy-audit",
+        "data": {"security_and_analysis": {"secret_scanning": {"status": "enabled"}}},
+    }
+    assert result == {"status": "PASS", "check_name": "security_scanning"}
+
+
+def test_security_scanning_handler_passes_none_when_data_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = importlib.import_module("functions.checks.security_scanning.handler")
+    client = object()
+    event = {
+        "owner": "ONS-Innovation",
+        "repository_name": "keh-github-policy-audit",
+    }
+
+    monkeypatch.setattr(module, "get_github_client", lambda owner: client)
+    captured: dict[str, object] = {}
+
+    def fake_check(
+        check_client: object,
+        repository_name: str,
+        data: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        captured["client"] = check_client
+        captured["repository_name"] = repository_name
+        captured["data"] = data
+        return {"status": "PASS"}
+
+    monkeypatch.setattr(module, "check_security_scanning", fake_check)
+
+    result = module.handler(event, None)
+
+    assert captured == {
+        "client": client,
+        "repository_name": "keh-github-policy-audit",
+        "data": None,
+    }
+    assert result == {"status": "PASS", "check_name": "security_scanning"}
 
 
 def test_dependabot_slo_handler_passes_levels(
