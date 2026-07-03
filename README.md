@@ -49,8 +49,14 @@ python -m venv venv
 source venv/bin/activate
 poetry install
 export AWS_REGION=eu-west-2
-export GITHUB_SECRET_NAME=<your-secrets-manager-secret-name>
+export GITHUB_APP_ID_SECRET_NAME=<your-app-id-secret-name>
+export GITHUB_PRIVATE_KEY_SECRET_NAME=<your-private-key-secret-name>
 ```
+  
+`GITHUB_APP_ID_SECRET_NAME` should point to a secret containing a JSON object with the GitHub App ID under the `AppID` key (for example: `{"AppID":"123456"}`).
+`GITHUB_PRIVATE_KEY_SECRET_NAME` should point to a separate secret containing only the GitHub App private key as plain text (PEM), not a key-value JSON object.
+
+`boto3` uses the standard AWS credential provider chain. For local development, this can come from an AWS CLI SSO profile after running `aws sso login`. In Lambda, credentials are provided by the function's IAM execution role.
 
 ### 2. Run command
 
