@@ -9,6 +9,8 @@ license = {text = "MIT"}
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "policy-methods-library @ git+https://github.com/ONS-Innovation/keh-policy-methods-library.git",
+    "boto3 (>=1.43.40,<2.0.0)"
 ]
 
 [tool.poetry.group.docs]
