@@ -29,17 +29,33 @@ def parse_event(event_arg: str, event_file: bool) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run a Lambda-style handler locally")
-    parser.add_argument("module", help="Module path, e.g. functions.checks.codeowners.handler")
-    parser.add_argument("event", help="Inline JSON event or file path with --event-file")
-    parser.add_argument("--function", default="handler", help="Function name (default: handler)")
-    parser.add_argument("--event-file", action="store_true", help="Treat event argument as a JSON file path")
+    parser.add_argument(
+        "module", help="Module path, e.g. functions.checks.codeowners.handler"
+    )
+    parser.add_argument(
+        "event", help="Inline JSON event or file path with --event-file"
+    )
+    parser.add_argument(
+        "--function", default="handler", help="Function name (default: handler)"
+    )
+    parser.add_argument(
+        "--event-file",
+        action="store_true",
+        help="Treat event argument as a JSON file path",
+    )
     args = parser.parse_args()
 
     try:
         event = parse_event(args.event, args.event_file)
         module = importlib.import_module(args.module)
         handler = getattr(module, args.function)
-    except (json.JSONDecodeError, OSError, ValueError, ImportError, AttributeError) as exc:
+    except (
+        json.JSONDecodeError,
+        OSError,
+        ValueError,
+        ImportError,
+        AttributeError,
+    ) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
