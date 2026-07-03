@@ -1,6 +1,8 @@
 """Lambda handler for the external pull request policy check."""
 
-from policy_methods_library.checks.external_pull_request import check_external_pull_request
+from policy_methods_library.checks.external_pull_request import (
+    check_external_pull_request,
+)
 from utils.github import get_github_client
 
 
