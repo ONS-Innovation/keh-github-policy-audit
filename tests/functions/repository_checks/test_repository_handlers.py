@@ -1,4 +1,4 @@
-"""Unit tests for Lambda check handlers."""
+"""Unit tests for repository-scoped Lambda check handlers."""
 
 from __future__ import annotations
 
@@ -9,42 +9,42 @@ import pytest
 
 REPO_CHECK_CASES = [
     (
-        "functions.checks.codeowners.handler",
+        "functions.repository_checks.codeowners.handler",
         "check_codeowners",
         "codeowners",
     ),
     (
-        "functions.checks.dependabot.handler",
+        "functions.repository_checks.dependabot.handler",
         "check_dependabot",
         "dependabot",
     ),
     (
-        "functions.checks.external_pull_request.handler",
+        "functions.repository_checks.external_pull_request.handler",
         "check_external_pull_request",
         "external_pull_request",
     ),
     (
-        "functions.checks.gitignore.handler",
+        "functions.repository_checks.gitignore.handler",
         "check_gitignore",
         "gitignore",
     ),
     (
-        "functions.checks.license.handler",
+        "functions.repository_checks.license.handler",
         "check_license",
         "license",
     ),
     (
-        "functions.checks.pirr.handler",
+        "functions.repository_checks.pirr.handler",
         "check_pirr",
         "pirr",
     ),
     (
-        "functions.checks.readme.handler",
+        "functions.repository_checks.readme.handler",
         "check_readme",
         "readme",
     ),
     (
-        "functions.checks.repository_access.handler",
+        "functions.repository_checks.repository_access.handler",
         "check_repository_access",
         "repository_access",
     ),
@@ -103,7 +103,7 @@ def test_repository_scoped_handlers_wire_client_and_repo(
 def test_inactivity_handler_passes_event_data_for_flat_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = importlib.import_module("functions.checks.inactivity.handler")
+    module = importlib.import_module("functions.repository_checks.inactivity.handler")
     client = object()
     monkeypatch.setattr(module, "get_github_client", lambda owner: client)
 
@@ -139,7 +139,7 @@ def test_inactivity_handler_passes_event_data_for_flat_payload(
 def test_inactivity_handler_passes_none_when_data_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = importlib.import_module("functions.checks.inactivity.handler")
+    module = importlib.import_module("functions.repository_checks.inactivity.handler")
     client = object()
     event = {
         "owner": "ONS-Innovation",
@@ -174,7 +174,9 @@ def test_inactivity_handler_passes_none_when_data_missing(
 def test_security_scanning_handler_passes_event_data_for_flat_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = importlib.import_module("functions.checks.security_scanning.handler")
+    module = importlib.import_module(
+        "functions.repository_checks.security_scanning.handler"
+    )
     client = object()
     monkeypatch.setattr(module, "get_github_client", lambda owner: client)
 
@@ -210,7 +212,9 @@ def test_security_scanning_handler_passes_event_data_for_flat_payload(
 def test_security_scanning_handler_passes_none_when_data_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = importlib.import_module("functions.checks.security_scanning.handler")
+    module = importlib.import_module(
+        "functions.repository_checks.security_scanning.handler"
+    )
     client = object()
     event = {
         "owner": "ONS-Innovation",
@@ -242,103 +246,12 @@ def test_security_scanning_handler_passes_none_when_data_missing(
     assert result == {"status": "PASS", "check_name": "security_scanning"}
 
 
-def test_dependabot_slo_handler_passes_levels(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    module = importlib.import_module("functions.checks.dependabot_slo.handler")
-    client = object()
-    monkeypatch.setattr(module, "get_github_client", lambda owner: client)
-
-    captured: dict[str, object] = {}
-
-    def fake_check(check_client: object, levels: list[str] | None) -> dict[str, object]:
-        captured["client"] = check_client
-        captured["levels"] = levels
-        return {"status": "PASS"}
-
-    monkeypatch.setattr(module, "get_dependabot_slo", fake_check)
-
-    result = module.handler(
-        {"owner": "ONS-Innovation", "levels": ["critical", "high"]},
-        None,
-    )
-
-    assert captured == {"client": client, "levels": ["critical", "high"]}
-    assert result == {"status": "PASS", "check_name": "dependabot_slo"}
-
-
-def test_dependabot_slo_handler_defaults_levels_to_none(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    module = importlib.import_module("functions.checks.dependabot_slo.handler")
-    client = object()
-    monkeypatch.setattr(module, "get_github_client", lambda owner: client)
-
-    captured: dict[str, object] = {}
-
-    def fake_check(check_client: object, levels: list[str] | None) -> dict[str, object]:
-        captured["client"] = check_client
-        captured["levels"] = levels
-        return {"status": "PASS"}
-
-    monkeypatch.setattr(module, "get_dependabot_slo", fake_check)
-
-    result = module.handler({"owner": "ONS-Innovation"}, None)
-
-    assert captured == {"client": client, "levels": None}
-    assert result == {"status": "PASS", "check_name": "dependabot_slo"}
-
-
-def test_secret_scanning_slo_handler_wires_client(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    module = importlib.import_module("functions.checks.secret_scanning_slo.handler")
-    client = object()
-    monkeypatch.setattr(module, "get_github_client", lambda owner: client)
-
-    captured: dict[str, object] = {}
-
-    def fake_check(check_client: object) -> dict[str, object]:
-        captured["client"] = check_client
-        return {"status": "PASS"}
-
-    monkeypatch.setattr(module, "get_secret_scanning_slo", fake_check)
-
-    result = module.handler({"owner": "ONS-Innovation"}, None)
-
-    assert captured == {"client": client}
-    assert result == {"status": "PASS", "check_name": "secret_scanning_slo"}
-
-
-def test_team_maintainer_handler_wires_team_slug(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    module = importlib.import_module("functions.checks.team_maintainer.handler")
-    client = object()
-    monkeypatch.setattr(module, "get_github_client", lambda owner: client)
-
-    captured: dict[str, object] = {}
-
-    def fake_check(check_client: object, team_slug: str) -> dict[str, object]:
-        captured["client"] = check_client
-        captured["team_slug"] = team_slug
-        return {"status": "PASS"}
-
-    monkeypatch.setattr(module, "check_team_maintainer", fake_check)
-
-    result = module.handler(
-        {"owner": "ONS-Innovation", "team_slug": "keh-dev"},
-        None,
-    )
-
-    assert captured == {"client": client, "team_slug": "keh-dev"}
-    assert result == {"status": "PASS", "check_name": "team_maintainer"}
-
-
 def test_naming_convention_handler_uses_repository_name_only(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = importlib.import_module("functions.checks.naming_convention.handler")
+    module = importlib.import_module(
+        "functions.repository_checks.naming_convention.handler"
+    )
 
     captured: dict[str, object] = {}
 
@@ -354,53 +267,17 @@ def test_naming_convention_handler_uses_repository_name_only(
     assert result == {"status": "PASS", "check_name": "naming_convention"}
 
 
-def test_list_repositories_handler_fetches_paginated_repositories(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    module = importlib.import_module("functions.list_repositories.handler")
-    client = object()
-    monkeypatch.setattr(module, "get_github_client", lambda owner: client)
-
-    captured: dict[str, object] = {}
-
-    def fake_get_paginated_list(
-        check_client: object,
-        endpoint: str,
-        result_key: str,
-    ) -> list[dict[str, str]]:
-        captured["client"] = check_client
-        captured["endpoint"] = endpoint
-        captured["result_key"] = result_key
-        return [{"name": "keh-github-policy-audit"}]
-
-    monkeypatch.setattr(module, "get_paginated_list", fake_get_paginated_list)
-
-    result = module.handler({"owner": "ONS-Innovation"}, None)
-
-    assert captured == {
-        "client": client,
-        "endpoint": "/orgs/ONS-Innovation/repos?per_page=100",
-        "result_key": "repositories",
-    }
-    assert result == [{"name": "keh-github-policy-audit"}]
-
-
 def test_codeowners_handler_raises_for_missing_owner() -> None:
-    module = importlib.import_module("functions.checks.codeowners.handler")
+    module = importlib.import_module("functions.repository_checks.codeowners.handler")
 
     with pytest.raises(KeyError, match="owner"):
         module.handler({"repository_name": "keh-github-policy-audit"}, None)
 
 
 def test_naming_convention_handler_raises_for_missing_repository_name() -> None:
-    module = importlib.import_module("functions.checks.naming_convention.handler")
+    module = importlib.import_module(
+        "functions.repository_checks.naming_convention.handler"
+    )
 
     with pytest.raises(KeyError, match="repository_name"):
-        module.handler({}, None)
-
-
-def test_list_repositories_handler_raises_for_missing_owner() -> None:
-    module = importlib.import_module("functions.list_repositories.handler")
-
-    with pytest.raises(KeyError, match="owner"):
         module.handler({}, None)

@@ -1,8 +1,8 @@
 """Run Lambda-style check handlers locally.
 
 Examples:
-python src/run_handler.py functions.checks.codeowners.handler '{"owner":"ONS-Innovation","repository_name":"keh-github-policy-audit"}'
-python src/run_handler.py functions.checks.codeowners.handler payload.json --event-file
+python src/run_handler.py functions.repository_checks.codeowners.handler '{"owner":"ONS-Innovation","repository_name":"keh-github-policy-audit"}'
+python src/run_handler.py functions.repository_checks.codeowners.handler payload.json --event-file
 """
 
 from __future__ import annotations
@@ -30,7 +30,8 @@ def parse_event(event_arg: str, event_file: bool) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run a Lambda-style handler locally")
     parser.add_argument(
-        "module", help="Module path, e.g. functions.checks.codeowners.handler"
+        "module",
+        help="Module path, e.g. functions.repository_checks.codeowners.handler",
     )
     parser.add_argument(
         "event", help="Inline JSON event or file path with --event-file"

@@ -49,7 +49,7 @@ def test_main_runs_handler_and_prints_result(
         "argv",
         [
             "run_handler.py",
-            "functions.checks.codeowners.handler",
+            "functions.repository_checks.codeowners.handler",
             '{"owner":"ONS-Innovation"}',
         ],
     )
@@ -74,7 +74,7 @@ def test_main_returns_error_for_non_callable_handler(
         "argv",
         [
             "run_handler.py",
-            "functions.checks.codeowners.handler",
+            "functions.repository_checks.codeowners.handler",
             '{"owner":"ONS-Innovation"}',
         ],
     )
@@ -102,7 +102,7 @@ def test_main_returns_error_when_handler_raises(
         "argv",
         [
             "run_handler.py",
-            "functions.checks.codeowners.handler",
+            "functions.repository_checks.codeowners.handler",
             '{"owner":"ONS-Innovation"}',
         ],
     )
@@ -124,7 +124,7 @@ def test_main_returns_error_for_invalid_json_event(
         "argv",
         [
             "run_handler.py",
-            "functions.checks.codeowners.handler",
+            "functions.repository_checks.codeowners.handler",
             "not-json",
         ],
     )
