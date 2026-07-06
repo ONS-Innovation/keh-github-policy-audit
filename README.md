@@ -13,6 +13,7 @@ A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage 
     - [2. Run command](#2-run-command)
     - [3. Payload summary](#3-payload-summary)
       - [Repository Listing](#repository-listing)
+      - [Organisation Team Listing](#organisation-team-listing)
       - [Check Handlers](#check-handlers)
   - [Deployment](#deployment)
     - [Deployments with Concourse](#deployments-with-concourse)
@@ -103,6 +104,12 @@ Some repository-scoped handlers can also accept optional repository metadata und
 | Handler modules | Required event payload |
 | --- | --- |
 | `functions.list_repositories.handler` | `{"owner":"<org>"}` |
+
+#### Organisation Team Listing
+
+| Handler modules | Required event payload |
+| --- | --- |
+| `functions.list_teams.handler` | `{"owner":"<org>"}` |
 
 #### Check Handlers
 
