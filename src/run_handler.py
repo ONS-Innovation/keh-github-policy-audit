@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import logging
 import sys
 from typing import Any
 
@@ -28,6 +29,12 @@ def parse_event(event_arg: str, event_file: bool) -> dict[str, Any]:
 
 
 def main() -> int:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+        force=True,
+    )
+
     parser = argparse.ArgumentParser(description="Run a Lambda-style handler locally")
     parser.add_argument(
         "module",

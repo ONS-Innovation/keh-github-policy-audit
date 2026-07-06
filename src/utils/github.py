@@ -10,8 +10,13 @@ from policy_methods_library.github.clients import GitHubRestClient
 
 def get_github_client(owner: str) -> GitHubRestClient:
     """Create a GitHubRestClient for the provided owner."""
-    app_id_secret_name = os.environ["GITHUB_APP_ID_SECRET_NAME"]
-    private_key_secret_name = os.environ["GITHUB_PRIVATE_KEY_SECRET_NAME"]
+    try:
+        app_id_secret_name = os.environ["GITHUB_APP_ID_SECRET_NAME"]
+        private_key_secret_name = os.environ["GITHUB_PRIVATE_KEY_SECRET_NAME"]
+    except KeyError as e:
+        raise KeyError(
+            f"Missing required environment variable: {e}. Please ensure the Lambda function has the necessary environment variables set."
+        ) from e
 
     secrets_manager = boto3.client("secretsmanager")
     app_id_secret = secrets_manager.get_secret_value(SecretId=app_id_secret_name)[

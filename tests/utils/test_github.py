@@ -121,3 +121,20 @@ def test_get_github_client_raises_when_private_key_empty(
 
     with pytest.raises(ValueError, match="is empty"):
         github.get_github_client("ONS-Innovation")
+
+
+@pytest.mark.parametrize(
+    "missing_env_var",
+    ["GITHUB_APP_ID_SECRET_NAME", "GITHUB_PRIVATE_KEY_SECRET_NAME"],
+)
+def test_get_github_client_raises_for_missing_required_env_var(
+    monkeypatch: pytest.MonkeyPatch,
+    missing_env_var: str,
+) -> None:
+    """Raise a clear KeyError when required secret env vars are not set."""
+    monkeypatch.setenv("GITHUB_APP_ID_SECRET_NAME", "app-id-secret")
+    monkeypatch.setenv("GITHUB_PRIVATE_KEY_SECRET_NAME", "private-key-secret")
+    monkeypatch.delenv(missing_env_var)
+
+    with pytest.raises(KeyError, match="Missing required environment variable"):
+        github.get_github_client("ONS-Innovation")
