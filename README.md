@@ -10,8 +10,9 @@ A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage 
   - [Makefile](#makefile)
   - [Running the Project](#running-the-project)
     - [1. Setup environment](#1-setup-environment)
-    - [2. Run command](#2-run-command)
-    - [3. Payload summary](#3-payload-summary)
+    - [2. Set environment variables](#2-set-environment-variables)
+    - [3. Run command](#3-run-command)
+    - [4. Payload summary](#4-payload-summary)
       - [Repository Listing](#repository-listing)
       - [Organisation Team Listing](#organisation-team-listing)
       - [Check Handlers](#check-handlers)
@@ -51,17 +52,33 @@ make help
 python -m venv venv
 source venv/bin/activate
 poetry install
+```
+
+### 2. Set environment variables
+
+```bash
 export AWS_REGION=eu-west-2
 export GITHUB_APP_ID_SECRET_NAME=<your-app-id-secret-name>
 export GITHUB_PRIVATE_KEY_SECRET_NAME=<your-private-key-secret-name>
+export ENVIRONMENT=local
 ```
   
 `GITHUB_APP_ID_SECRET_NAME` should point to a secret containing a JSON object with the GitHub App ID under the `AppID` key (for example: `{"AppID":"123456"}`).
 `GITHUB_PRIVATE_KEY_SECRET_NAME` should point to a separate secret containing only the GitHub App private key as plain text (PEM), not a key-value JSON object.
+`ENVIRONMENT` controls output behaviour for `functions.store_output.handler`:
+
+- `local` (default): writes output JSON to `outputs/<owner>/` and does not call AWS S3.
+- `prod`: writes output JSON to S3 and requires `S3_BUCKET_NAME`.
 
 `boto3` uses the standard AWS credential provider chain. For local development, this can come from an AWS CLI SSO profile after running `aws sso login`. In Lambda, credentials are provided by the function's IAM execution role.
 
-### 2. Run command
+If running store output in `prod`, set:
+
+```bash
+export S3_BUCKET_NAME=<your-output-bucket>
+```
+
+### 3. Run command
 
 Use the helper script in `src/run_handler.py`:
 
@@ -87,6 +104,7 @@ Ready-to-use payload files are provided in `examples/`:
 - `examples/organisation_event.json`
 - `examples/dependabot_slo_event.json`
 - `examples/naming_convention_event.json`
+- `examples/store_output_event.json`
 - `examples/team_maintainer_event.json`
 
 To use these examples, run:
@@ -97,7 +115,7 @@ python src/run_handler.py functions.repository_checks.codeowners.handler example
 
 Some repository-scoped handlers can also accept optional repository metadata under `data` when they are invoked downstream of `functions.list_repositories.handler`. This allows the policy methods library to reuse fields already returned by the repository listing and avoid extra GitHub API calls.
 
-### 3. Payload summary
+### 4. Payload summary
 
 #### Repository Listing
 
@@ -119,7 +137,7 @@ Some repository-scoped handlers can also accept optional repository metadata und
 | Repository-scoped checks with optional passthrough data | `functions.repository_checks.inactivity.handler`, `functions.repository_checks.security_scanning.handler` | `{"owner":"<org>","repository_name":"<repo>"}` or `{"owner":"<org>","repository_name":"<repo>","data":{...}}` |
 | Secret scanning SLO | `functions.organisation_checks.secret_scanning_slo.handler` | `{"owner":"<org>"}` |
 | Dependabot SLO | `functions.organisation_checks.dependabot_slo.handler` | `{"owner":"<org>","levels":["critical","high"]}` (`levels` optional) |
-| Naming convention | `functions.repository_checks.naming_convention.handler` | `{"repository_name":"<repo>"}` |
+| Naming convention | `functions.repository_checks.naming_convention.handler` | `{"owner":"<org>","repository_name":"<repo>"}` |
 | Team maintainer | `functions.organisation_checks.team_maintainer.handler` | `{"owner":"<org>","team_slug":"<team>"}` |
 
 ## Deployment

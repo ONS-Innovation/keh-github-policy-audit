@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 from collections.abc import Callable
+from types import ModuleType
 
 import pytest
 
@@ -56,7 +57,7 @@ def _patch_handler_dependencies(
     module_name: str,
     check_fn_name: str,
     check_impl: Callable,
-) -> tuple[object, object]:
+) -> tuple[ModuleType, object]:
     module = importlib.import_module(module_name)
     client = object()
     monkeypatch.setattr(module, "get_github_client", lambda owner: client)

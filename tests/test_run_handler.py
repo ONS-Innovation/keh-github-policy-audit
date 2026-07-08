@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 import runpy
 from types import SimpleNamespace
 
@@ -17,7 +18,7 @@ def test_parse_event_from_inline_json() -> None:
     assert event == {"owner": "ONS-Innovation"}
 
 
-def test_parse_event_from_file(tmp_path: pytest.TempPathFactory) -> None:
+def test_parse_event_from_file(tmp_path: Path) -> None:
     """Parse JSON payloads from files."""
     payload_file = tmp_path / "payload.json"
     payload_file.write_text('{"repository_name": "keh-github-policy-audit"}')

@@ -36,6 +36,20 @@ types-requests = "^2.33.0.20260503"
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 
+[tool.mypy]
+python_version = "3.12"
+mypy_path = ["src"]
+namespace_packages = true
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["boto3", "boto3.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["policy_methods_library", "policy_methods_library.*"]
+ignore_missing_imports = true
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
