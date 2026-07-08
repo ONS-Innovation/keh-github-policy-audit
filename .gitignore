@@ -58,6 +58,7 @@ megalinter-reports/
 # Poetry Build Artifacts
 dist/
 build/
+tmp/
 
 # Cache files
 __pycache__/

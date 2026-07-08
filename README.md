@@ -19,6 +19,8 @@ A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage 
   - [Deployment](#deployment)
     - [Deployments with Concourse](#deployments-with-concourse)
     - [Manual Deployment](#manual-deployment)
+      - [Building the Lambda Functions](#building-the-lambda-functions)
+      - [Terraform Deployment](#terraform-deployment)
   - [Documentation](#documentation)
     - [GitHub Actions for Documentation](#github-actions-for-documentation)
     - [Local Development of Documentation](#local-development-of-documentation)
@@ -80,22 +82,22 @@ export S3_BUCKET_NAME=<your-output-bucket>
 
 ### 3. Run command
 
-Use the helper script in `src/run_handler.py`:
+Use the helper script in `github_policy_audit/run_handler.py`:
 
 ```bash
-python src/run_handler.py <handler-module> '<event-json>'
+python github_policy_audit/run_handler.py <handler-module> '<event-json>'
 ```
 
 Example:
 
 ```bash
-python src/run_handler.py functions.repository_checks.codeowners.handler '{"owner":"ONS-Innovation","repository_name":"keh-github-policy-audit"}'
+python github_policy_audit/run_handler.py functions.repository_checks.codeowners.handler '{"owner":"ONS-Innovation","repository_name":"keh-github-policy-audit"}'
 ```
 
 You can also pass a JSON file:
 
 ```bash
-python src/run_handler.py functions.repository_checks.codeowners.handler payload.json --event-file
+python github_policy_audit/run_handler.py functions.repository_checks.codeowners.handler payload.json --event-file
 ```
 
 Ready-to-use payload files are provided in `examples/`:
@@ -110,7 +112,7 @@ Ready-to-use payload files are provided in `examples/`:
 To use these examples, run:
 
 ```bash
-python src/run_handler.py functions.repository_checks.codeowners.handler examples/<example-file>.json --event-file
+python github_policy_audit/run_handler.py functions.repository_checks.codeowners.handler examples/<example-file>.json --event-file
 ```
 
 Some repository-scoped handlers can also accept optional repository metadata under `data` when they are invoked downstream of `functions.list_repositories.handler`. This allows the policy methods library to reuse fields already returned by the repository listing and avoid extra GitHub API calls.
@@ -148,11 +150,28 @@ Some repository-scoped handlers can also accept optional repository metadata und
 
 ### Manual Deployment
 
-<!-- Instructions for manually deploying the project go here. This can be copied from other KEH repositories. -->
+#### Building the Lambda Functions
+
+Before deploying the Lambda functions, they must be built and packaged. This can be done using the provided Makefile:
+
+```bash
+make build
+```
+
+This will create a `build` directory containing the packaged Lambda functions and the dependency layer.
+
+There are two scripts that handle the building process:
+
+- `scripts/build-dependency-layer.sh`: This script installs the required dependencies into a temporary directory and packages them into a zip file for the Lambda layer.
+- `scripts/build-lambda-functions.sh`: This script packages each Lambda function into its own zip file, ready for deployment.
+
+A dependency layer is used to reduce the size of the individual Lambda function packages and to share common dependencies across multiple functions. The dependency layer is built first, followed by the individual Lambda functions.
+
+#### Terraform Deployment
+
+TODO: Write and Document Terraform
 
 ## Documentation
-
-<!-- Add any additional information if needed -->
 
 This repository uses [MkDocs](https://www.mkdocs.org/) for documentation. The documentation source files are located in the `docs` directory.
 

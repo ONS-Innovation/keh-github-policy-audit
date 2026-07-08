@@ -1,8 +1,8 @@
 ---
-site_name: KEH Template Repository
-site_description: A template repository for all KEH repositories.
-repo_url: https://github.com/ONS-Innovation/keh-template-repo
-repo_name: KEH Template Repository
+site_name: GitHub Policy Audit
+site_description: A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage Policy.
+repo_url: https://github.com/ONS-Innovation/keh-github-policy-audit
+repo_name: GitHub Policy Audit
 nav:
   - Home: index.md
   - Documentation: documentation.md

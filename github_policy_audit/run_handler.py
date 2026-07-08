@@ -1,8 +1,8 @@
 """Run Lambda-style check handlers locally.
 
 Examples:
-python src/run_handler.py functions.repository_checks.codeowners.handler '{"owner":"ONS-Innovation","repository_name":"keh-github-policy-audit"}'
-python src/run_handler.py functions.repository_checks.codeowners.handler payload.json --event-file
+python github_policy_audit/run_handler.py functions.repository_checks.codeowners.handler '{"owner":"ONS-Innovation","repository_name":"keh-github-policy-audit"}'
+python github_policy_audit/run_handler.py functions.repository_checks.codeowners.handler payload.json --event-file
 """
 
 from __future__ import annotations

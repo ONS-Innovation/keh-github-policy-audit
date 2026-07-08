@@ -34,11 +34,11 @@ cryptography = "^48.0.0"
 types-requests = "^2.33.0.20260503"
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["github_policy_audit"]
 
 [tool.mypy]
 python_version = "3.12"
-mypy_path = ["src"]
+mypy_path = ["github_policy_audit"]
 namespace_packages = true
 explicit_package_bases = true
 
@@ -56,4 +56,3 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 repository = "http://github.com/ONS-Innovation/keh-github-policy-audit"
-package-mode = false
