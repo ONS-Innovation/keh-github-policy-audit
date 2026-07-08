@@ -1,8 +1,9 @@
 #!/bin/sh
 set -e
 
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-LOG_CONTEXT="DEPENDENCY_LAYER"
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+export LOG_CONTEXT="DEPENDENCY_LAYER"
+# shellcheck source=scripts/lib/logging.sh
 . "$SCRIPT_DIR/lib/logging.sh"
 
 setup_error_trap "rm -rf ./tmp"

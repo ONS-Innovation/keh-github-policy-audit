@@ -1,9 +1,10 @@
 #!/bin/sh
 set -e
 
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
-LOG_CONTEXT="LAMBDAS"
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+REPO_ROOT=$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)
+export LOG_CONTEXT="LAMBDAS"
+# shellcheck source=scripts/lib/logging.sh
 . "$SCRIPT_DIR/lib/logging.sh"
 
 FUNCTIONS_DIR="$REPO_ROOT/github_policy_audit/functions"
