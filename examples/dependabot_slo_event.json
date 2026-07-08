@@ -1,7 +1,4 @@
 {
   "owner": "ONS-Innovation",
-  "levels": [
-    "critical",
-    "high"
-  ]
+  "levels": ["critical", "high"]
 }

@@ -62,7 +62,7 @@ export GITHUB_APP_ID_SECRET_NAME=<your-app-id-secret-name>
 export GITHUB_PRIVATE_KEY_SECRET_NAME=<your-private-key-secret-name>
 export ENVIRONMENT=local
 ```
-  
+
 `GITHUB_APP_ID_SECRET_NAME` should point to a secret containing a JSON object with the GitHub App ID under the `AppID` key (for example: `{"AppID":"123456"}`).
 `GITHUB_PRIVATE_KEY_SECRET_NAME` should point to a separate secret containing only the GitHub App private key as plain text (PEM), not a key-value JSON object.
 `ENVIRONMENT` controls output behaviour for `functions.store_output.handler`:
@@ -119,26 +119,26 @@ Some repository-scoped handlers can also accept optional repository metadata und
 
 #### Repository Listing
 
-| Handler modules | Required event payload |
-| --- | --- |
-| `functions.list_repositories.handler` | `{"owner":"<org>"}` |
+| Handler modules                       | Required event payload |
+| ------------------------------------- | ---------------------- |
+| `functions.list_repositories.handler` | `{"owner":"<org>"}`    |
 
 #### Organisation Team Listing
 
-| Handler modules | Required event payload |
-| --- | --- |
-| `functions.list_teams.handler` | `{"owner":"<org>"}` |
+| Handler modules                | Required event payload |
+| ------------------------------ | ---------------------- |
+| `functions.list_teams.handler` | `{"owner":"<org>"}`    |
 
 #### Check Handlers
 
-| Checks | Handler modules | Required event payload |
-| --- | --- | --- |
-| Repository-scoped checks | `functions.repository_checks.codeowners.handler`, `functions.repository_checks.dependabot.handler`, `functions.repository_checks.external_pull_request.handler`, `functions.repository_checks.gitignore.handler`, `functions.repository_checks.license.handler`, `functions.repository_checks.pirr.handler`, `functions.repository_checks.readme.handler`, `functions.repository_checks.repository_access.handler` | `{"owner":"<org>","repository_name":"<repo>"}` |
-| Repository-scoped checks with optional passthrough data | `functions.repository_checks.inactivity.handler`, `functions.repository_checks.security_scanning.handler` | `{"owner":"<org>","repository_name":"<repo>"}` or `{"owner":"<org>","repository_name":"<repo>","data":{...}}` |
-| Secret scanning SLO | `functions.organisation_checks.secret_scanning_slo.handler` | `{"owner":"<org>"}` |
-| Dependabot SLO | `functions.organisation_checks.dependabot_slo.handler` | `{"owner":"<org>","levels":["critical","high"]}` (`levels` optional) |
-| Naming convention | `functions.repository_checks.naming_convention.handler` | `{"owner":"<org>","repository_name":"<repo>"}` |
-| Team maintainer | `functions.organisation_checks.team_maintainer.handler` | `{"owner":"<org>","team_slug":"<team>"}` |
+| Checks                                                  | Handler modules                                                                                                                                                                                                                                                                                                                                                                                                    | Required event payload                                                                                        |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Repository-scoped checks                                | `functions.repository_checks.codeowners.handler`, `functions.repository_checks.dependabot.handler`, `functions.repository_checks.external_pull_request.handler`, `functions.repository_checks.gitignore.handler`, `functions.repository_checks.license.handler`, `functions.repository_checks.pirr.handler`, `functions.repository_checks.readme.handler`, `functions.repository_checks.repository_access.handler` | `{"owner":"<org>","repository_name":"<repo>"}`                                                                |
+| Repository-scoped checks with optional passthrough data | `functions.repository_checks.inactivity.handler`, `functions.repository_checks.security_scanning.handler`                                                                                                                                                                                                                                                                                                          | `{"owner":"<org>","repository_name":"<repo>"}` or `{"owner":"<org>","repository_name":"<repo>","data":{...}}` |
+| Secret scanning SLO                                     | `functions.organisation_checks.secret_scanning_slo.handler`                                                                                                                                                                                                                                                                                                                                                        | `{"owner":"<org>"}`                                                                                           |
+| Dependabot SLO                                          | `functions.organisation_checks.dependabot_slo.handler`                                                                                                                                                                                                                                                                                                                                                             | `{"owner":"<org>","levels":["critical","high"]}` (`levels` optional)                                          |
+| Naming convention                                       | `functions.repository_checks.naming_convention.handler`                                                                                                                                                                                                                                                                                                                                                            | `{"owner":"<org>","repository_name":"<repo>"}`                                                                |
+| Team maintainer                                         | `functions.organisation_checks.team_maintainer.handler`                                                                                                                                                                                                                                                                                                                                                            | `{"owner":"<org>","team_slug":"<team>"}`                                                                      |
 
 ## Deployment
 
