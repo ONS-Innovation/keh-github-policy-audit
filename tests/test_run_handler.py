@@ -1,157 +1,151 @@
 """Tests for the local Lambda handler runner."""
 
-from __future__ import annotations
-
-from pathlib import Path
+import io
 import runpy
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
 import run_handler
 
 
-def test_parse_event_from_inline_json() -> None:
-    """Parse inline JSON payloads into dictionaries."""
-    event = run_handler.parse_event('{"owner": "ONS-Innovation"}', event_file=False)
-
-    assert event == {"owner": "ONS-Innovation"}
+# ---------------------------------------------------------------------------
+# parse_event
+# ---------------------------------------------------------------------------
 
 
-def test_parse_event_from_file(tmp_path: Path) -> None:
-    """Parse JSON payloads from files."""
-    payload_file = tmp_path / "payload.json"
-    payload_file.write_text('{"repository_name": "keh-github-policy-audit"}')
+class TestParseEvent:
+    def test_parse_event_from_inline_json(self):
+        """An inline JSON string should be parsed directly into a dict."""
+        event = run_handler.parse_event('{"owner": "ONS-Innovation"}', event_file=False)
+        assert event == {"owner": "ONS-Innovation"}
 
-    event = run_handler.parse_event(str(payload_file), event_file=True)
+    def test_parse_event_from_file(self):
+        """A file path should be read and its JSON contents parsed into a dict."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            payload_file = Path(tmp_dir) / "payload.json"
+            payload_file.write_text('{"repository_name": "keh-github-policy-audit"}')
+            event = run_handler.parse_event(str(payload_file), event_file=True)
+        assert event == {"repository_name": "keh-github-policy-audit"}
 
-    assert event == {"repository_name": "keh-github-policy-audit"}
-
-
-def test_parse_event_rejects_non_object_payload() -> None:
-    """Reject array payloads because handlers expect a JSON object."""
-    with pytest.raises(ValueError, match="Event payload must be a JSON object"):
-        run_handler.parse_event("[]", event_file=False)
-
-
-def test_main_runs_handler_and_prints_result(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Call the requested handler and print JSON output when successful."""
-
-    def fake_handler(event: dict[str, str], context: None) -> dict[str, object]:
-        return {"status": "PASS", "echo": event}
-
-    module = SimpleNamespace(handler=fake_handler)
-    monkeypatch.setattr(run_handler.importlib, "import_module", lambda _: module)
-    monkeypatch.setattr(
-        run_handler.sys,
-        "argv",
-        [
-            "run_handler.py",
-            "functions.repository_checks.codeowners.handler",
-            '{"owner":"ONS-Innovation"}',
-        ],
-    )
-
-    exit_code = run_handler.main()
-    captured = capsys.readouterr()
-
-    assert exit_code == 0
-    assert '"status": "PASS"' in captured.out
-    assert captured.err == ""
+    def test_parse_event_rejects_non_object_payload(self):
+        """A non-object JSON payload should raise a ValueError."""
+        with pytest.raises(ValueError, match="Event payload must be a JSON object"):
+            run_handler.parse_event("[]", event_file=False)
 
 
-def test_main_returns_error_for_non_callable_handler(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Fail cleanly if the selected attribute is not callable."""
-    module = SimpleNamespace(handler="not-callable")
-    monkeypatch.setattr(run_handler.importlib, "import_module", lambda _: module)
-    monkeypatch.setattr(
-        run_handler.sys,
-        "argv",
-        [
-            "run_handler.py",
-            "functions.repository_checks.codeowners.handler",
-            '{"owner":"ONS-Innovation"}',
-        ],
-    )
-
-    exit_code = run_handler.main()
-    captured = capsys.readouterr()
-
-    assert exit_code == 1
-    assert "is not callable" in captured.err
+# ---------------------------------------------------------------------------
+# main
+# ---------------------------------------------------------------------------
 
 
-def test_main_returns_error_when_handler_raises(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Surface handler runtime exceptions as a non-zero exit code."""
+class TestMain:
+    def test_runs_handler_and_prints_result(self):
+        """A successful handler invocation should print the result and return exit code 0."""
 
-    def failing_handler(event: dict[str, str], context: None) -> dict[str, str]:
-        raise RuntimeError("boom")
+        def fake_handler(event: dict, context: None) -> dict:
+            return {"status": "PASS", "echo": event}
 
-    module = SimpleNamespace(handler=failing_handler)
-    monkeypatch.setattr(run_handler.importlib, "import_module", lambda _: module)
-    monkeypatch.setattr(
-        run_handler.sys,
-        "argv",
-        [
-            "run_handler.py",
-            "functions.repository_checks.codeowners.handler",
-            '{"owner":"ONS-Innovation"}',
-        ],
-    )
+        module = SimpleNamespace(handler=fake_handler)
 
-    exit_code = run_handler.main()
-    captured = capsys.readouterr()
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "run_handler.py",
+                    "functions.repository_checks.codeowners.handler",
+                    '{"owner":"ONS-Innovation"}',
+                ],
+            ),
+            patch("sys.stdout", new_callable=io.StringIO) as mock_stdout,
+            patch("sys.stderr", new_callable=io.StringIO) as mock_stderr,
+            patch.object(run_handler.importlib, "import_module", return_value=module),
+        ):
+            exit_code = run_handler.main()
+            out = mock_stdout.getvalue()
+            err = mock_stderr.getvalue()
 
-    assert exit_code == 1
-    assert "Handler raised an exception: boom" in captured.err
+        assert exit_code == 0
+        assert '"status": "PASS"' in out
+        assert err == ""
 
+    def test_returns_error_for_non_callable_handler(self):
+        """A non-callable handler attribute should return exit code 1 with an error message."""
+        module = SimpleNamespace(handler="not-callable")
 
-def test_main_returns_error_for_invalid_json_event(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """Fail with parse errors for malformed inline JSON."""
-    monkeypatch.setattr(
-        run_handler.sys,
-        "argv",
-        [
-            "run_handler.py",
-            "functions.repository_checks.codeowners.handler",
-            "not-json",
-        ],
-    )
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "run_handler.py",
+                    "functions.repository_checks.codeowners.handler",
+                    '{"owner":"ONS-Innovation"}',
+                ],
+            ),
+            patch("sys.stdout", new_callable=io.StringIO),
+            patch("sys.stderr", new_callable=io.StringIO) as mock_stderr,
+            patch.object(run_handler.importlib, "import_module", return_value=module),
+        ):
+            exit_code = run_handler.main()
+            err = mock_stderr.getvalue()
 
-    exit_code = run_handler.main()
-    captured = capsys.readouterr()
+        assert exit_code == 1
+        assert "is not callable" in err
 
-    assert exit_code == 1
-    assert "Error:" in captured.err
+    def test_returns_error_when_handler_raises(self):
+        """An exception raised by the handler should return exit code 1 with an error message."""
 
+        def failing_handler(event: dict, context: None) -> dict:
+            raise RuntimeError("boom")
 
-def test_module_entrypoint_raises_system_exit(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Execute the module as __main__ so the entrypoint line is covered."""
-    monkeypatch.setattr(
-        run_handler.sys,
-        "argv",
-        [
-            "run_handler.py",
-            "json",
-            "{}",
-        ],
-    )
+        module = SimpleNamespace(handler=failing_handler)
 
-    with pytest.raises(SystemExit) as exc_info:
-        runpy.run_module("run_handler", run_name="__main__")
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "run_handler.py",
+                    "functions.repository_checks.codeowners.handler",
+                    '{"owner":"ONS-Innovation"}',
+                ],
+            ),
+            patch("sys.stdout", new_callable=io.StringIO),
+            patch("sys.stderr", new_callable=io.StringIO) as mock_stderr,
+            patch.object(run_handler.importlib, "import_module", return_value=module),
+        ):
+            exit_code = run_handler.main()
+            err = mock_stderr.getvalue()
 
-    assert exc_info.value.code == 1
+        assert exit_code == 1
+        assert "Handler raised an exception: boom" in err
+
+    def test_returns_error_for_invalid_json_event(self):
+        """An invalid JSON event string should return exit code 1 with an error message."""
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "run_handler.py",
+                    "functions.repository_checks.codeowners.handler",
+                    "not-json",
+                ],
+            ),
+            patch("sys.stdout", new_callable=io.StringIO),
+            patch("sys.stderr", new_callable=io.StringIO) as mock_stderr,
+        ):
+            exit_code = run_handler.main()
+            err = mock_stderr.getvalue()
+
+        assert exit_code == 1
+        assert "Error:" in err
+
+    def test_module_entrypoint_raises_system_exit(self):
+        """Running run_handler as __main__ should raise SystemExit on failure."""
+        with patch("sys.argv", ["run_handler.py", "json", "{}"]):
+            with pytest.raises(SystemExit) as exc_info:
+                runpy.run_module("run_handler", run_name="__main__")
+
+        assert exc_info.value.code == 1

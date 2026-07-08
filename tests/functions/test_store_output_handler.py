@@ -1,16 +1,13 @@
 """Unit tests for store_output Lambda handler."""
 
-from __future__ import annotations
-
 import importlib
 import json
+import os
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
-
-
-@pytest.fixture()
-def module():
-    return importlib.import_module("functions.store_output.handler")
 
 
 # ---------------------------------------------------------------------------
@@ -18,27 +15,31 @@ def module():
 # ---------------------------------------------------------------------------
 
 
-def test_is_pass_returns_true_for_pass_status(module) -> None:
-    assert module._is_pass({"status": "pass"}) is True
+class TestIsPass:
+    module = importlib.import_module("functions.store_output.handler")
 
+    def test_returns_true_for_pass_status(self):
+        """A dict with status 'pass' should be considered passing."""
+        assert self.module._is_pass({"status": "pass"})
 
-def test_is_pass_is_case_insensitive(module) -> None:
-    assert module._is_pass({"status": "PASS"}) is True
-    assert module._is_pass({"status": "Pass"}) is True
+    def test_is_case_insensitive(self):
+        """Status matching should be case-insensitive."""
+        assert self.module._is_pass({"status": "PASS"})
+        assert self.module._is_pass({"status": "Pass"})
 
+    def test_returns_false_for_fail_status(self):
+        """A dict with status 'fail' should not be considered passing."""
+        assert not self.module._is_pass({"status": "fail"})
 
-def test_is_pass_returns_false_for_fail_status(module) -> None:
-    assert module._is_pass({"status": "fail"}) is False
+    def test_returns_false_for_missing_status(self):
+        """A dict without a status key should not be considered passing."""
+        assert not self.module._is_pass({})
 
-
-def test_is_pass_returns_false_for_missing_status(module) -> None:
-    assert module._is_pass({}) is False
-
-
-def test_is_pass_returns_false_for_non_dict(module) -> None:
-    assert module._is_pass("pass") is False
-    assert module._is_pass(None) is False
-    assert module._is_pass(["pass"]) is False
+    def test_returns_false_for_non_dict(self):
+        """Non-dict values should not be considered passing."""
+        assert not self.module._is_pass("pass")
+        assert not self.module._is_pass(None)
+        assert not self.module._is_pass(["pass"])
 
 
 # ---------------------------------------------------------------------------
@@ -46,37 +47,39 @@ def test_is_pass_returns_false_for_non_dict(module) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_handler_raises_for_missing_owner(module) -> None:
-    with pytest.raises(ValueError, match="owner"):
-        module.handler({}, None)
+class TestHandlerValidation:
+    module = importlib.import_module("functions.store_output.handler")
 
+    def test_raises_for_missing_owner(self):
+        """A missing owner key in the event should raise a ValueError."""
+        with pytest.raises(ValueError, match="owner"):
+            self.module.handler({}, None)
 
-def test_handler_raises_for_empty_owner(module) -> None:
-    with pytest.raises(ValueError, match="owner"):
-        module.handler({"owner": ""}, None)
+    def test_raises_for_empty_owner(self):
+        """An empty owner value in the event should raise a ValueError."""
+        with pytest.raises(ValueError, match="owner"):
+            self.module.handler({"owner": ""}, None)
 
+    def test_raises_when_repositories_not_a_dict(self):
+        """A non-dict repositories value should raise a ValueError."""
+        with pytest.raises(ValueError, match="repositories"):
+            self.module.handler({"owner": "test-org", "repositories": ["repo1"]}, None)
 
-def test_handler_raises_when_repositories_not_a_dict(module) -> None:
-    with pytest.raises(ValueError, match="repositories"):
-        module.handler({"owner": "test-org", "repositories": ["repo1"]}, None)
+    def test_raises_when_teams_not_a_dict(self):
+        """A non-dict teams value should raise a ValueError."""
+        with pytest.raises(ValueError, match="teams"):
+            self.module.handler({"owner": "test-org", "teams": "bad"}, None)
 
+    def test_raises_when_organisation_checks_not_a_dict(self):
+        """A non-dict organisation_checks value should raise a ValueError."""
+        with pytest.raises(ValueError, match="organisation_checks"):
+            self.module.handler({"owner": "test-org", "organisation_checks": 42}, None)
 
-def test_handler_raises_when_teams_not_a_dict(module) -> None:
-    with pytest.raises(ValueError, match="teams"):
-        module.handler({"owner": "test-org", "teams": "bad"}, None)
-
-
-def test_handler_raises_when_organisation_checks_not_a_dict(module) -> None:
-    with pytest.raises(ValueError, match="organisation_checks"):
-        module.handler({"owner": "test-org", "organisation_checks": 42}, None)
-
-
-def test_handler_raises_for_invalid_environment(
-    module, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("ENVIRONMENT", "staging")
-    with pytest.raises(ValueError, match="ENVIRONMENT"):
-        module.handler({"owner": "test-org"}, None)
+    def test_raises_for_invalid_environment(self):
+        """An unrecognised ENVIRONMENT value should raise a ValueError."""
+        with patch.dict(os.environ, {"ENVIRONMENT": "staging"}):
+            with pytest.raises(ValueError, match="ENVIRONMENT"):
+                self.module.handler({"owner": "test-org"}, None)
 
 
 # ---------------------------------------------------------------------------
@@ -84,177 +87,172 @@ def test_handler_raises_for_invalid_environment(
 # ---------------------------------------------------------------------------
 
 
-def test_handler_local_writes_json_file(
-    module, monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
-    monkeypatch.setenv("ENVIRONMENT", "local")
-    monkeypatch.chdir(tmp_path)
+class TestHandlerLocal:
+    module = importlib.import_module("functions.store_output.handler")
 
-    event = {
-        "owner": "test-org",
-        "repositories": {
-            "repo-a": {"naming_convention": {"status": "pass"}},
-            "repo-b": {"naming_convention": {"status": "fail"}},
-        },
-        "teams": {},
-        "organisation_checks": {"dependabot_slo": {"status": "pass"}},
-    }
+    def setup_method(self):
+        self._tmp_dir = tempfile.TemporaryDirectory()
+        self.tmp_path = Path(self._tmp_dir.name)
+        self._original_cwd = os.getcwd()
+        os.chdir(self.tmp_path)
 
-    result = module.handler(event, None)
+    def teardown_method(self):
+        os.chdir(self._original_cwd)
+        self._tmp_dir.cleanup()
 
-    assert result["status"] == "success"
-    assert result["environment"] == "local"
-    assert result["bucket"] is None
-    assert result["owner"] == "test-org"
+    def test_writes_json_file(self):
+        """The handler should write a JSON output file in the local environment."""
+        event = {
+            "owner": "test-org",
+            "repositories": {
+                "repo-a": {"naming_convention": {"status": "pass"}},
+                "repo-b": {"naming_convention": {"status": "fail"}},
+            },
+            "teams": {},
+            "organisation_checks": {"dependabot_slo": {"status": "pass"}},
+        }
 
-    output_file = tmp_path / result["local_output_path"]
-    assert output_file.exists()
+        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+            result = self.module.handler(event, None)
 
-    written = json.loads(output_file.read_text())
-    assert written["owner"] == "test-org"
-    assert "timestamp" in written
-    assert "summary" in written
+        assert result["status"] == "success"
+        assert result["environment"] == "local"
+        assert result["bucket"] is None
+        assert result["owner"] == "test-org"
 
+        output_file = self.tmp_path / result["local_output_path"]
+        assert output_file.exists()
 
-def test_handler_local_summary_counts_compliant_repositories(
-    module, monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
-    monkeypatch.setenv("ENVIRONMENT", "local")
-    monkeypatch.chdir(tmp_path)
+        written = json.loads(output_file.read_text())
+        assert written["owner"] == "test-org"
+        assert "timestamp" in written
+        assert "summary" in written
 
-    event = {
-        "owner": "test-org",
-        "repositories": {
-            "repo-a": {"check_x": {"status": "pass"}, "check_y": {"status": "pass"}},
-            "repo-b": {"check_x": {"status": "pass"}, "check_y": {"status": "fail"}},
-            "repo-c": {"check_x": {"status": "pass"}, "check_y": {"status": "pass"}},
-        },
-    }
+    def test_summary_counts_compliant_repositories(self):
+        """The summary should count only repositories where all checks pass."""
+        event = {
+            "owner": "test-org",
+            "repositories": {
+                "repo-a": {
+                    "check_x": {"status": "pass"},
+                    "check_y": {"status": "pass"},
+                },
+                "repo-b": {
+                    "check_x": {"status": "pass"},
+                    "check_y": {"status": "fail"},
+                },
+                "repo-c": {
+                    "check_x": {"status": "pass"},
+                    "check_y": {"status": "pass"},
+                },
+            },
+        }
 
-    module.handler(event, None)
+        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+            self.module.handler(event, None)
 
-    # Re-read the written output to inspect summary
-    output_dir = tmp_path / "outputs" / "test-org"
-    files = list(output_dir.glob("*.json"))
-    assert len(files) == 1
-    written = json.loads(files[0].read_text())
+        output_dir = self.tmp_path / "outputs" / "test-org"
+        files = list(output_dir.glob("*.json"))
+        assert len(files) == 1
+        written = json.loads(files[0].read_text())
 
-    summary = written["summary"]
-    assert summary["total_repositories"] == 3
-    assert summary["compliant_repositories"] == 2
+        summary = written["summary"]
+        assert summary["total_repositories"] == 3
+        assert summary["compliant_repositories"] == 2
 
+    def test_skips_non_dict_repository_checks(self):
+        """Non-dict repository check values should be skipped when building the summary."""
+        event = {
+            "owner": "test-org",
+            "repositories": {
+                "repo-a": {"naming_convention": {"status": "pass"}},
+                "repo-b": "not-a-dict",
+            },
+        }
 
-def test_handler_local_skips_non_dict_repository_checks(
-    module, monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
-    monkeypatch.setenv("ENVIRONMENT", "local")
-    monkeypatch.chdir(tmp_path)
+        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+            self.module.handler(event, None)
 
-    event = {
-        "owner": "test-org",
-        "repositories": {
-            "repo-a": {"naming_convention": {"status": "pass"}},
-            "repo-b": "not-a-dict",
-        },
-    }
+        output_dir = self.tmp_path / "outputs" / "test-org"
+        files = list(output_dir.glob("*.json"))
+        written = json.loads(files[0].read_text())
 
-    module.handler(event, None)
+        check_summary = written["summary"]["repository_checks"]["naming_convention"]
+        assert check_summary["total"] == 1
+        assert check_summary["compliant"] == 1
 
-    output_dir = tmp_path / "outputs" / "test-org"
-    files = list(output_dir.glob("*.json"))
-    written = json.loads(files[0].read_text())
+    def test_summary_aggregates_repository_checks(self):
+        """The summary should aggregate pass/fail counts per check across all repositories."""
+        event = {
+            "owner": "test-org",
+            "repositories": {
+                "repo-a": {"naming_convention": {"status": "pass"}},
+                "repo-b": {"naming_convention": {"status": "fail"}},
+                "repo-c": {"naming_convention": {"status": "pass"}},
+            },
+        }
 
-    check_summary = written["summary"]["repository_checks"]["naming_convention"]
-    assert check_summary["total"] == 1
-    assert check_summary["compliant"] == 1
+        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+            self.module.handler(event, None)
 
+        output_dir = self.tmp_path / "outputs" / "test-org"
+        files = list(output_dir.glob("*.json"))
+        written = json.loads(files[0].read_text())
 
-def test_handler_local_summary_aggregates_repository_checks(
-    module, monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
-    monkeypatch.setenv("ENVIRONMENT", "local")
-    monkeypatch.chdir(tmp_path)
+        check_summary = written["summary"]["repository_checks"]["naming_convention"]
+        assert check_summary["total"] == 3
+        assert check_summary["compliant"] == 2
 
-    event = {
-        "owner": "test-org",
-        "repositories": {
-            "repo-a": {"naming_convention": {"status": "pass"}},
-            "repo-b": {"naming_convention": {"status": "fail"}},
-            "repo-c": {"naming_convention": {"status": "pass"}},
-        },
-    }
+    def test_summary_includes_organisation_checks(self):
+        """The summary should include organisation-level check compliance."""
+        event = {
+            "owner": "test-org",
+            "organisation_checks": {
+                "dependabot_slo": {"status": "pass"},
+                "secret_scanning_slo": {"status": "fail"},
+            },
+        }
 
-    module.handler(event, None)
+        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+            self.module.handler(event, None)
 
-    output_dir = tmp_path / "outputs" / "test-org"
-    files = list(output_dir.glob("*.json"))
-    written = json.loads(files[0].read_text())
+        output_dir = self.tmp_path / "outputs" / "test-org"
+        files = list(output_dir.glob("*.json"))
+        written = json.loads(files[0].read_text())
 
-    check_summary = written["summary"]["repository_checks"]["naming_convention"]
-    assert check_summary["total"] == 3
-    assert check_summary["compliant"] == 2
+        org_checks = written["summary"]["organisation_checks"]
+        assert org_checks["dependabot_slo"]["compliant"]
+        assert not org_checks["secret_scanning_slo"]["compliant"]
 
+    def test_summary_counts_compliant_teams(self):
+        """The summary should count only teams where all checks pass."""
+        event = {
+            "owner": "test-org",
+            "teams": {
+                "team-a": {"maintainer_check": {"status": "pass"}},
+                "team-b": {"maintainer_check": {"status": "fail"}},
+            },
+        }
 
-def test_handler_local_summary_includes_organisation_checks(
-    module, monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
-    monkeypatch.setenv("ENVIRONMENT", "local")
-    monkeypatch.chdir(tmp_path)
+        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+            self.module.handler(event, None)
 
-    event = {
-        "owner": "test-org",
-        "organisation_checks": {
-            "dependabot_slo": {"status": "pass"},
-            "secret_scanning_slo": {"status": "fail"},
-        },
-    }
+        output_dir = self.tmp_path / "outputs" / "test-org"
+        files = list(output_dir.glob("*.json"))
+        written = json.loads(files[0].read_text())
 
-    module.handler(event, None)
+        summary = written["summary"]
+        assert summary["total_teams"] == 2
+        assert summary["compliant_teams"] == 1
 
-    output_dir = tmp_path / "outputs" / "test-org"
-    files = list(output_dir.glob("*.json"))
-    written = json.loads(files[0].read_text())
+    def test_defaults_to_local_environment(self):
+        """The handler should default to the local environment when ENVIRONMENT is not set."""
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("ENVIRONMENT", None)
+            result = self.module.handler({"owner": "test-org"}, None)
 
-    org_checks = written["summary"]["organisation_checks"]
-    assert org_checks["dependabot_slo"]["compliant"] is True
-    assert org_checks["secret_scanning_slo"]["compliant"] is False
-
-
-def test_handler_local_summary_counts_compliant_teams(
-    module, monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
-    monkeypatch.setenv("ENVIRONMENT", "local")
-    monkeypatch.chdir(tmp_path)
-
-    event = {
-        "owner": "test-org",
-        "teams": {
-            "team-a": {"maintainer_check": {"status": "pass"}},
-            "team-b": {"maintainer_check": {"status": "fail"}},
-        },
-    }
-
-    module.handler(event, None)
-
-    output_dir = tmp_path / "outputs" / "test-org"
-    files = list(output_dir.glob("*.json"))
-    written = json.loads(files[0].read_text())
-
-    summary = written["summary"]
-    assert summary["total_teams"] == 2
-    assert summary["compliant_teams"] == 1
-
-
-def test_handler_local_defaults_to_local_environment(
-    module, monkeypatch: pytest.MonkeyPatch, tmp_path
-) -> None:
-    monkeypatch.delenv("ENVIRONMENT", raising=False)
-    monkeypatch.chdir(tmp_path)
-
-    result = module.handler({"owner": "test-org"}, None)
-
-    assert result["environment"] == "local"
-    assert result["local_output_path"] is not None
+        assert result["environment"] == "local"
+        assert result["local_output_path"] is not None
 
 
 # ---------------------------------------------------------------------------
@@ -262,44 +260,45 @@ def test_handler_local_defaults_to_local_environment(
 # ---------------------------------------------------------------------------
 
 
-def test_handler_prod_calls_s3_put_object(
-    module, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("ENVIRONMENT", "prod")
-    monkeypatch.setenv("S3_BUCKET_NAME", "my-audit-bucket")
+class TestHandlerProd:
+    module = importlib.import_module("functions.store_output.handler")
 
-    captured: dict[str, object] = {}
+    def test_calls_s3_put_object(self) -> None:
+        """In the prod environment the handler should upload the result to S3."""
+        captured: dict[str, object] = {}
 
-    class FakeS3Client:
-        def put_object(self, **kwargs):
-            captured.update(kwargs)
+        class FakeS3Client:
+            def put_object(self, **kwargs: object) -> None:
+                captured.update(kwargs)
 
-    monkeypatch.setattr(module.boto3, "client", lambda service: FakeS3Client())
+        event = {
+            "owner": "test-org",
+            "repositories": {"repo-a": {"check_x": {"status": "pass"}}},
+        }
 
-    event = {
-        "owner": "test-org",
-        "repositories": {"repo-a": {"check_x": {"status": "pass"}}},
-    }
+        with (
+            patch.dict(
+                os.environ,
+                {"ENVIRONMENT": "prod", "S3_BUCKET_NAME": "my-audit-bucket"},
+            ),
+            patch.object(self.module.boto3, "client", return_value=FakeS3Client()),
+        ):
+            result = self.module.handler(event, None)
 
-    result = module.handler(event, None)
+        assert result["status"] == "success"
+        assert result["environment"] == "prod"
+        assert result["bucket"] == "my-audit-bucket"
+        assert result["local_output_path"] is None
 
-    assert result["status"] == "success"
-    assert result["environment"] == "prod"
-    assert result["bucket"] == "my-audit-bucket"
-    assert result["local_output_path"] is None
+        assert captured["Bucket"] == "my-audit-bucket"
+        assert captured["ContentType"] == "application/json"
+        assert "audit-results/test-org/" in str(captured["Key"])
+        written = json.loads(str(captured["Body"]))
+        assert written["owner"] == "test-org"
 
-    assert captured["Bucket"] == "my-audit-bucket"
-    assert captured["ContentType"] == "application/json"
-    assert "audit-results/test-org/" in str(captured["Key"])
-    written = json.loads(str(captured["Body"]))
-    assert written["owner"] == "test-org"
-
-
-def test_handler_prod_raises_when_s3_bucket_name_missing(
-    module, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("ENVIRONMENT", "prod")
-    monkeypatch.delenv("S3_BUCKET_NAME", raising=False)
-
-    with pytest.raises(ValueError, match="S3_BUCKET_NAME"):
-        module.handler({"owner": "test-org"}, None)
+    def test_raises_when_s3_bucket_name_missing(self):
+        """A missing S3_BUCKET_NAME in prod should raise a ValueError."""
+        with patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=False):
+            os.environ.pop("S3_BUCKET_NAME", None)
+            with pytest.raises(ValueError, match="S3_BUCKET_NAME"):
+                self.module.handler({"owner": "test-org"}, None)

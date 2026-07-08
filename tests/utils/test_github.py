@@ -1,9 +1,9 @@
 """Tests for shared GitHub utilities."""
 
-from __future__ import annotations
-
 import json
+import os
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
@@ -22,119 +22,132 @@ class FakeSecretsManager:
         return {"SecretString": self.secrets_by_id[SecretId]}
 
 
-def test_get_github_client_returns_client_with_expected_values(
-    monkeypatch: pytest.MonkeyPatch,
-    rsa_private_key: str,
-) -> None:
-    """Construct a GitHub client with parsed app ID and plain-text private key."""
-    monkeypatch.setenv("GITHUB_APP_ID_SECRET_NAME", "app-id-secret")
-    monkeypatch.setenv("GITHUB_PRIVATE_KEY_SECRET_NAME", "private-key-secret")
+# ---------------------------------------------------------------------------
+# get_github_client
+# ---------------------------------------------------------------------------
 
-    fake_secrets_manager = FakeSecretsManager(
-        {
-            "app-id-secret": json.dumps({"AppID": "123456"}),
-            "private-key-secret": rsa_private_key,
+
+class TestGetGithubClient:
+    def test_returns_client_with_expected_values(self, rsa_private_key) -> None:
+        """A valid secrets manager configuration should produce a correctly wired client."""
+        fake_secrets_manager = FakeSecretsManager(
+            {
+                "app-id-secret": json.dumps({"AppID": "123456"}),
+                "private-key-secret": rsa_private_key,
+            }
+        )
+
+        captured_kwargs: dict[str, Any] = {}
+
+        def fake_github_rest_client(**kwargs: Any) -> dict[str, Any]:
+            captured_kwargs.update(kwargs)
+            return {"client": "ok"}
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "GITHUB_APP_ID_SECRET_NAME": "app-id-secret",
+                    "GITHUB_PRIVATE_KEY_SECRET_NAME": "private-key-secret",
+                },
+            ),
+            patch.object(github.boto3, "client", return_value=fake_secrets_manager),
+            patch.object(github, "GitHubRestClient", fake_github_rest_client),
+        ):
+            result = github.get_github_client("ONS-Innovation")
+
+        assert result == {"client": "ok"}
+        assert captured_kwargs == {
+            "owner": "ONS-Innovation",
+            "app_id": "123456",
+            "private_key": rsa_private_key,
         }
-    )
+        assert fake_secrets_manager.requested_ids == [
+            "app-id-secret",
+            "private-key-secret",
+        ]
 
-    monkeypatch.setattr(github.boto3, "client", lambda _: fake_secrets_manager)
+    def test_raises_for_non_json_app_id_secret(self, rsa_private_key) -> None:
+        """A non-JSON app ID secret should raise a ValueError."""
+        fake_secrets_manager = FakeSecretsManager(
+            {
+                "app-id-secret": "not-json",
+                "private-key-secret": rsa_private_key,
+            }
+        )
 
-    captured_kwargs: dict[str, Any] = {}
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "GITHUB_APP_ID_SECRET_NAME": "app-id-secret",
+                    "GITHUB_PRIVATE_KEY_SECRET_NAME": "private-key-secret",
+                },
+            ),
+            patch.object(github.boto3, "client", return_value=fake_secrets_manager),
+        ):
+            with pytest.raises(ValueError, match="not a valid JSON string"):
+                github.get_github_client("ONS-Innovation")
 
-    def fake_github_rest_client(**kwargs: Any) -> dict[str, Any]:
-        captured_kwargs.update(kwargs)
-        return {"client": "ok"}
+    def test_raises_when_app_id_missing(self, rsa_private_key) -> None:
+        """An app ID secret that lacks the expected key should raise a ValueError."""
+        fake_secrets_manager = FakeSecretsManager(
+            {
+                "app-id-secret": json.dumps({"wrong-key": "123456"}),
+                "private-key-secret": rsa_private_key,
+            }
+        )
 
-    monkeypatch.setattr(github, "GitHubRestClient", fake_github_rest_client)
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "GITHUB_APP_ID_SECRET_NAME": "app-id-secret",
+                    "GITHUB_PRIVATE_KEY_SECRET_NAME": "private-key-secret",
+                },
+            ),
+            patch.object(github.boto3, "client", return_value=fake_secrets_manager),
+        ):
+            with pytest.raises(ValueError, match="does not contain 'app_id'"):
+                github.get_github_client("ONS-Innovation")
 
-    result = github.get_github_client("ONS-Innovation")
+    def test_raises_when_private_key_empty(self) -> None:
+        """An empty private key secret should raise a ValueError."""
+        fake_secrets_manager = FakeSecretsManager(
+            {
+                "app-id-secret": json.dumps({"AppID": "123456"}),
+                "private-key-secret": "",
+            }
+        )
 
-    assert result == {"client": "ok"}
-    assert captured_kwargs == {
-        "owner": "ONS-Innovation",
-        "app_id": "123456",
-        "private_key": rsa_private_key,
-    }
-    assert fake_secrets_manager.requested_ids == [
-        "app-id-secret",
-        "private-key-secret",
-    ]
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "GITHUB_APP_ID_SECRET_NAME": "app-id-secret",
+                    "GITHUB_PRIVATE_KEY_SECRET_NAME": "private-key-secret",
+                },
+            ),
+            patch.object(github.boto3, "client", return_value=fake_secrets_manager),
+        ):
+            with pytest.raises(ValueError, match="is empty"):
+                github.get_github_client("ONS-Innovation")
 
-
-def test_get_github_client_raises_for_non_json_app_id_secret(
-    monkeypatch: pytest.MonkeyPatch,
-    rsa_private_key: str,
-) -> None:
-    """Reject app ID secrets that are not JSON."""
-    monkeypatch.setenv("GITHUB_APP_ID_SECRET_NAME", "app-id-secret")
-    monkeypatch.setenv("GITHUB_PRIVATE_KEY_SECRET_NAME", "private-key-secret")
-
-    fake_secrets_manager = FakeSecretsManager(
-        {
-            "app-id-secret": "not-json",
-            "private-key-secret": rsa_private_key,
-        }
-    )
-
-    monkeypatch.setattr(github.boto3, "client", lambda _: fake_secrets_manager)
-
-    with pytest.raises(ValueError, match="not a valid JSON string"):
-        github.get_github_client("ONS-Innovation")
-
-
-def test_get_github_client_raises_when_app_id_missing(
-    monkeypatch: pytest.MonkeyPatch,
-    rsa_private_key: str,
-) -> None:
-    """Reject app ID secrets that do not contain the required AppID key."""
-    monkeypatch.setenv("GITHUB_APP_ID_SECRET_NAME", "app-id-secret")
-    monkeypatch.setenv("GITHUB_PRIVATE_KEY_SECRET_NAME", "private-key-secret")
-
-    fake_secrets_manager = FakeSecretsManager(
-        {
-            "app-id-secret": json.dumps({"wrong-key": "123456"}),
-            "private-key-secret": rsa_private_key,
-        }
-    )
-
-    monkeypatch.setattr(github.boto3, "client", lambda _: fake_secrets_manager)
-
-    with pytest.raises(ValueError, match="does not contain 'app_id'"):
-        github.get_github_client("ONS-Innovation")
-
-
-def test_get_github_client_raises_when_private_key_empty(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Reject empty private-key secrets."""
-    monkeypatch.setenv("GITHUB_APP_ID_SECRET_NAME", "app-id-secret")
-    monkeypatch.setenv("GITHUB_PRIVATE_KEY_SECRET_NAME", "private-key-secret")
-
-    fake_secrets_manager = FakeSecretsManager(
-        {
-            "app-id-secret": json.dumps({"AppID": "123456"}),
-            "private-key-secret": "",
-        }
-    )
-
-    monkeypatch.setattr(github.boto3, "client", lambda _: fake_secrets_manager)
-
-    with pytest.raises(ValueError, match="is empty"):
-        github.get_github_client("ONS-Innovation")
-
-
-@pytest.mark.parametrize(
-    "missing_env_var",
-    ["GITHUB_APP_ID_SECRET_NAME", "GITHUB_PRIVATE_KEY_SECRET_NAME"],
-)
-def test_get_github_client_raises_for_missing_required_env_var(
-    monkeypatch: pytest.MonkeyPatch,
-    missing_env_var: str,
-) -> None:
-    """Raise a clear KeyError when required secret env vars are not set."""
-    monkeypatch.setenv("GITHUB_APP_ID_SECRET_NAME", "app-id-secret")
-    monkeypatch.setenv("GITHUB_PRIVATE_KEY_SECRET_NAME", "private-key-secret")
-    monkeypatch.delenv(missing_env_var)
-
-    with pytest.raises(KeyError, match="Missing required environment variable"):
-        github.get_github_client("ONS-Innovation")
+    def test_raises_for_missing_required_env_var(self) -> None:
+        """A missing required environment variable should raise a KeyError."""
+        for missing_env_var in [
+            "GITHUB_APP_ID_SECRET_NAME",
+            "GITHUB_PRIVATE_KEY_SECRET_NAME",
+        ]:
+            with patch.dict(
+                os.environ,
+                {
+                    "GITHUB_APP_ID_SECRET_NAME": "app-id-secret",
+                    "GITHUB_PRIVATE_KEY_SECRET_NAME": "private-key-secret",
+                },
+            ):
+                os.environ.pop(missing_env_var)
+                with pytest.raises(
+                    KeyError, match="Missing required environment variable"
+                ):
+                    github.get_github_client("ONS-Innovation")
