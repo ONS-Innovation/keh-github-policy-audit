@@ -186,72 +186,72 @@ Terraform in `terraform/` provisions:
 
 ##### Terraform file structure
 
-| File | Purpose |
-| --- | --- |
-| `providers.tf` | AWS provider config and default tags. |
-| `variables.tf` | Input variables for environment, runtime, schedule, and secrets. |
-| `data.tf` | AWS account/partition data sources used in IAM ARNs. |
-| `locals.tf` | Shared locals (Lambda package map, naming, repository check list). |
-| `storage.tf` | S3 bucket resources for audit output storage. |
-| `lambda.tf` | Lambda IAM role/policies, dependency layer, and all Lambda functions. |
-| `step_functions.tf` | Step Functions IAM role/policy and state machine definition. |
-| `eventbridge.tf` | EventBridge schedule rule/target and IAM role to start executions. |
-| `outputs.tf` | Useful deployment outputs (state machine ARN, Lambda names, bucket). |
+| File                | Purpose                                                               |
+| ------------------- | --------------------------------------------------------------------- |
+| `providers.tf`      | AWS provider config and default tags.                                 |
+| `variables.tf`      | Input variables for environment, runtime, schedule, and secrets.      |
+| `data.tf`           | AWS account/partition data sources used in IAM ARNs.                  |
+| `locals.tf`         | Shared locals (Lambda package map, naming, repository check list).    |
+| `storage.tf`        | S3 bucket resources for audit output storage.                         |
+| `lambda.tf`         | Lambda IAM role/policies, dependency layer, and all Lambda functions. |
+| `step_functions.tf` | Step Functions IAM role/policy and state machine definition.          |
+| `eventbridge.tf`    | EventBridge schedule rule/target and IAM role to start executions.    |
+| `outputs.tf`        | Useful deployment outputs (state machine ARN, Lambda names, bucket).  |
 
 ##### Terraform Deployment Steps
 
 1. Build the Lambda functions and dependency layer:
 
-    ```bash
-    make build
-    ```
+   ```bash
+   make build
+   ```
 
 2. Copy the example tfvars file for your target environment and fill in any secrets:
 
-    ```bash
-    cp terraform/env/dev/example_tfvars.txt terraform/env/dev/dev.tfvars
-    # edit dev.tfvars with real secret names
-    ```
+   ```bash
+   cp terraform/env/dev/example_tfvars.txt terraform/env/dev/dev.tfvars
+   # edit dev.tfvars with real secret names
+   ```
 
 3. Then run the standard Terraform workflow, pointing at the environment backend and vars:
 
-    ```bash
-    cd terraform
+   ```bash
+   cd terraform
 
-    # 1. Initialise with the environment-specific remote backend
-    terraform init -backend-config=env/dev/backend-dev.tfbackend -reconfigure
+   # 1. Initialise with the environment-specific remote backend
+   terraform init -backend-config=env/dev/backend-dev.tfbackend -reconfigure
 
-    # 2. Refresh state from the remote backend
-    terraform refresh -var-file=env/dev/dev.tfvars
+   # 2. Refresh state from the remote backend
+   terraform refresh -var-file=env/dev/dev.tfvars
 
-    # 3. Preview changes
-    terraform plan -var-file=env/dev/dev.tfvars
+   # 3. Preview changes
+   terraform plan -var-file=env/dev/dev.tfvars
 
-    # 4. Apply changes
-    terraform apply -var-file=env/dev/dev.tfvars
-    ```
+   # 4. Apply changes
+   terraform apply -var-file=env/dev/dev.tfvars
+   ```
 
-    Substitute `dev` with `prod` for production deployments.
+   Substitute `dev` with `prod` for production deployments.
 
 ##### Terraform Variables
 
-| Variable | Required | Default | Description |
-| --- | --- | --- | --- |
-| `env_name` | No | `sdp-dev` | Environment name. Controls bucket/resource naming (e.g. `sdp-dev`, `sdp-prod`). |
-| `region` | No | `eu-west-2` | AWS region to deploy into. |
-| `github_owner` | **Yes** | — | GitHub organisation name audited on each run. |
-| `github_app_id_secret_name` | **Yes** | — | Secrets Manager secret name for the GitHub App ID (`{"AppID":"..."}` JSON). |
-| `github_private_key_secret_name` | **Yes** | — | Secrets Manager secret name for the GitHub App private key (PEM, plain text). |
-| `lambda_runtime` | No | `python3.12` | Lambda runtime identifier. |
-| `lambda_timeout` | No | `120` | Lambda timeout in seconds. |
-| `lambda_memory_size` | No | `512` | Lambda memory in MB. |
-| `lambda_reserved_concurrent_executions` | No | `10` | Reserved concurrent executions per Lambda function. Set to `-1` for unreserved (not recommended). |
-| `lambda_log_retention_days` | No | `90` | CloudWatch log group retention period in days for Lambda functions. |
-| `step_function_log_retention_days` | No | `90` | CloudWatch log group retention period in days for the Step Functions state machine. |
-| `repository_map_max_concurrency` | No | `5` | Max parallel repositories processed in the repository checks map state. |
-| `team_map_max_concurrency` | No | `5` | Max parallel teams processed in the team maintainer map state. |
-| `dependabot_slo_levels` | No | `["critical","high","medium","low"]` | Dependabot alert severity levels included in the SLO check. |
-| `audit_schedule_expression` | No | `cron(0 8 ? * MON *)` | EventBridge schedule expression for the weekly audit trigger. |
+| Variable                                | Required | Default                              | Description                                                                                       |
+| --------------------------------------- | -------- | ------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `env_name`                              | No       | `sdp-dev`                            | Environment name. Controls bucket/resource naming (e.g. `sdp-dev`, `sdp-prod`).                   |
+| `region`                                | No       | `eu-west-2`                          | AWS region to deploy into.                                                                        |
+| `github_owner`                          | **Yes**  | —                                    | GitHub organisation name audited on each run.                                                     |
+| `github_app_id_secret_name`             | **Yes**  | —                                    | Secrets Manager secret name for the GitHub App ID (`{"AppID":"..."}` JSON).                       |
+| `github_private_key_secret_name`        | **Yes**  | —                                    | Secrets Manager secret name for the GitHub App private key (PEM, plain text).                     |
+| `lambda_runtime`                        | No       | `python3.12`                         | Lambda runtime identifier.                                                                        |
+| `lambda_timeout`                        | No       | `120`                                | Lambda timeout in seconds.                                                                        |
+| `lambda_memory_size`                    | No       | `512`                                | Lambda memory in MB.                                                                              |
+| `lambda_reserved_concurrent_executions` | No       | `10`                                 | Reserved concurrent executions per Lambda function. Set to `-1` for unreserved (not recommended). |
+| `lambda_log_retention_days`             | No       | `90`                                 | CloudWatch log group retention period in days for Lambda functions.                               |
+| `step_function_log_retention_days`      | No       | `90`                                 | CloudWatch log group retention period in days for the Step Functions state machine.               |
+| `repository_map_max_concurrency`        | No       | `5`                                  | Max parallel repositories processed in the repository checks map state.                           |
+| `team_map_max_concurrency`              | No       | `5`                                  | Max parallel teams processed in the team maintainer map state.                                    |
+| `dependabot_slo_levels`                 | No       | `["critical","high","medium","low"]` | Dependabot alert severity levels included in the SLO check.                                       |
+| `audit_schedule_expression`             | No       | `cron(0 8 ? * MON *)`                | EventBridge schedule expression for the weekly audit trigger.                                     |
 
 ## Documentation
 
@@ -327,12 +327,12 @@ Terraform tests use the native [`terraform test`](https://developer.hashicorp.co
 
 Tests live in `terraform/tests/` and are grouped by concern:
 
-| File | What it covers |
-| --- | --- |
-| `naming.tftest.hcl` | Resource names follow the `${env_name}-github-policy-audit-*` convention for dev and prod. |
-| `lambda.tftest.hcl` | All 17 Lambdas are defined, runtime/timeout/memory defaults, environment variables, handler paths, and the shared dependency layer. |
-| `storage.tftest.hcl` | S3 bucket name is derived from `env_name`, and all public access block settings are enforced. |
-| `state_machine.tftest.hcl` | All five required states are present, `MaxConcurrency` defaults and overrides, EventBridge schedule and input payload. |
+| File                       | What it covers                                                                                                                      |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `naming.tftest.hcl`        | Resource names follow the `${env_name}-github-policy-audit-*` convention for dev and prod.                                          |
+| `lambda.tftest.hcl`        | All 17 Lambdas are defined, runtime/timeout/memory defaults, environment variables, handler paths, and the shared dependency layer. |
+| `storage.tftest.hcl`       | S3 bucket name is derived from `env_name`, and all public access block settings are enforced.                                       |
+| `state_machine.tftest.hcl` | All five required states are present, `MaxConcurrency` defaults and overrides, EventBridge schedule and input payload.              |
 
 To run the Terraform tests locally:
 
