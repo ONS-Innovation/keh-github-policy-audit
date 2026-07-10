@@ -45,6 +45,16 @@ variables {
   github_private_key_secret_name = "test-private-key"
 }
 
+override_data {
+  target = data.terraform_remote_state.vpc
+  values = {
+    outputs = {
+      vpc_id          = "vpc-00000000000000000"
+      private_subnets = ["subnet-00000000000000001", "subnet-00000000000000002"]
+    }
+  }
+}
+
 run "bucket_name" {
   assert {
     condition     = aws_s3_bucket.audit_output.bucket == "sdp-dev-github-policy-audit"
