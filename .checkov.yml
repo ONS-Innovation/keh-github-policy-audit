@@ -9,3 +9,6 @@ skip-check:
   - CKV_AWS_144 # Bucket Cross-Region Replication is not needed since the data is reproducible.
   - CKV2_AWS_62 # Bucket event notifications not required.
   - CKV2_AWS_61 # TODO: Bucket Lifecycle is TBC
+
+  - CKV_AWS_158 # Default CloudWatch Encryption is fine. KMS not required since the logs are not sensitive.
+  - CKV_AWS_338 # 90 days retention is fine for the CloudWatch logs - organisational norm.
