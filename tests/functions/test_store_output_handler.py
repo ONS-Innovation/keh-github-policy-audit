@@ -91,6 +91,73 @@ class TestHandlerValidation:
 
 
 # ---------------------------------------------------------------------------
+# Normalise helpers — bad-input continue branches
+# ---------------------------------------------------------------------------
+
+
+class TestNormaliseRepositoryChecks:
+    module = importlib.import_module("functions.store_output.handler")
+
+    def test_skips_non_dict_repository_result_entries(self):
+        """Non-dict entries in repository_results should be silently skipped."""
+        result = self.module._normalise_repository_checks(
+            None,
+            ["not-a-dict", {"repository_name": "repo-a", "checks": []}],
+        )
+        assert result == {"repo-a": {}}
+
+    def test_skips_repository_result_with_missing_name(self):
+        """Entries without a repository_name should be silently skipped."""
+        result = self.module._normalise_repository_checks(
+            None,
+            [{"checks": [{"check_name": "readme", "status": "pass"}]}],
+        )
+        assert result == {}
+
+    def test_skips_non_dict_check_result_entries(self):
+        """Non-dict check entries within a repository result should be skipped."""
+        result = self.module._normalise_repository_checks(
+            None,
+            [
+                {
+                    "repository_name": "repo-a",
+                    "checks": [
+                        "not-a-dict",
+                        {"check_name": "readme", "status": "pass"},
+                    ],
+                }
+            ],
+        )
+        assert result == {
+            "repo-a": {"readme": {"check_name": "readme", "status": "pass"}}
+        }
+
+
+class TestNormaliseTeamChecks:
+    module = importlib.import_module("functions.store_output.handler")
+
+    def test_skips_non_dict_team_result_entries(self):
+        """Non-dict entries in team_results should be silently skipped."""
+        result = self.module._normalise_team_checks(
+            [{"slug": "team-a"}, {"slug": "team-b"}],
+            ["not-a-dict", {"check_name": "team_maintainer", "status": "pass"}],
+        )
+        assert result == {
+            "team-b": {
+                "team_maintainer": {"check_name": "team_maintainer", "status": "pass"}
+            }
+        }
+
+    def test_skips_team_result_with_missing_check_name(self):
+        """Team results without a check_name should be silently skipped."""
+        result = self.module._normalise_team_checks(
+            [{"slug": "team-a"}],
+            [{"status": "pass"}],
+        )
+        assert result == {}
+
+
+# ---------------------------------------------------------------------------
 # Local environment
 # ---------------------------------------------------------------------------
 

@@ -101,8 +101,6 @@ def _normalise_team_checks(teams, team_results) -> dict[str, dict]:
             else {}
         )
         team_key = team.get("slug") or team.get("name") or f"team-{index}"
-        if not isinstance(team_key, str) or not team_key:
-            continue
 
         check_name = team_result.get("check_name")
         if not isinstance(check_name, str) or not check_name:
@@ -128,13 +126,6 @@ def handler(event, context):
     organisation_checks = _normalise_organisation_checks(
         event.get("organisation_checks"), event.get("organisation_results")
     )
-
-    if not isinstance(repositories, dict):
-        raise ValueError("'repositories' must be a dictionary keyed by repository name")
-    if not isinstance(teams, dict):
-        raise ValueError("'teams' must be a dictionary keyed by team name")
-    if not isinstance(organisation_checks, dict):
-        raise ValueError("'organisation_checks' must be a dictionary")
 
     environment = os.environ.get("ENVIRONMENT", "local").lower()
     if environment not in {"local", "prod"}:
