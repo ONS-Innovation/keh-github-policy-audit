@@ -1,3 +1,23 @@
+resource "aws_security_group" "lambda_sg" {
+  name        = "${local.lambda_name_prefix}-sg"
+  description = "Security group for ${local.lambda_name_prefix} Lambda function"
+  vpc_id      = data.terraform_remote_state.vpc.outputs.vpc_id
+  ingress {
+    description = "Allow inbound HTTPS traffic from VPC"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"] // Allow HTTPS traffic within VPC
+  }
+  egress {
+    description = "Allow all outbound HTTPS traffic to any destination"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"] // Allow all outbound traffic
+  }
+}
+
 resource "aws_iam_role" "lambda_execution" {
   name = "${local.lambda_name_prefix}-lambda-role"
 
@@ -66,10 +86,20 @@ resource "aws_lambda_function" "audit" {
   handler       = each.value.handler
   filename      = each.value.zip_path
 
-  source_code_hash = filebase64sha256(each.value.zip_path)
-  timeout          = var.lambda_timeout
-  memory_size      = var.lambda_memory_size
-  layers           = [aws_lambda_layer_version.dependencies.arn]
+  source_code_hash               = filebase64sha256(each.value.zip_path)
+  timeout                        = var.lambda_timeout
+  memory_size                    = var.lambda_memory_size
+  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
+  layers                         = [aws_lambda_layer_version.dependencies.arn]
+
+  vpc_config {
+    subnet_ids         = data.terraform_remote_state.vpc.outputs.private_subnets
+    security_group_ids = [aws_security_group.lambda_sg.id] // Dedicated security group for Lambda function
+  }
+
+  tracing_config {
+    mode = "Active"
+  }
 
   environment {
     variables = {

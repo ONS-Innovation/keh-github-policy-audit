@@ -61,6 +61,12 @@ variable "lambda_memory_size" {
   default     = 512
 }
 
+variable "lambda_reserved_concurrent_executions" {
+  description = "Reserved concurrent executions per Lambda function. Set to -1 for unreserved (not recommended)."
+  type        = number
+  default     = 10
+}
+
 variable "repository_map_max_concurrency" {
   description = "MaxConcurrency for repository checks map state."
   type        = number
