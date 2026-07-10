@@ -34,15 +34,17 @@ resource "aws_iam_role_policy" "step_function_invoke_lambda" {
         Effect = "Allow"
         Action = [
           "logs:CreateLogDelivery",
-          "logs:PutLogEvents",
+          "logs:CreateLogStream",
           "logs:GetLogDelivery",
           "logs:UpdateLogDelivery",
           "logs:DeleteLogDelivery",
           "logs:ListLogDeliveries",
+          "logs:PutLogEvents",
           "logs:PutResourcePolicy",
           "logs:DescribeResourcePolicies",
           "logs:DescribeLogGroups",
         ]
+        # checkov:skip=CKV_AWS_290: All CloudWatch Logs actions for Step Functions require * per AWS documentation
         Resource = "*"
       },
     ]
