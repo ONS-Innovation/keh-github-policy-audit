@@ -45,6 +45,7 @@ resource "aws_iam_role_policy" "step_function_invoke_lambda" {
           "logs:DescribeLogGroups",
         ]
         # checkov:skip=CKV_AWS_290: All CloudWatch Logs actions for Step Functions require * per AWS documentation
+        # checkov:skip=CKV_AWS_355: ^ Same as above
         Resource = "*"
       },
     ]
