@@ -77,6 +77,13 @@ resource "aws_lambda_layer_version" "dependencies" {
   compatible_runtimes = [var.lambda_runtime]
 }
 
+resource "aws_cloudwatch_log_group" "audit" {
+  for_each = local.lambda_definitions
+
+  name              = "/aws/lambda/${local.lambda_name_prefix}-${replace(each.key, "_", "-")}"
+  retention_in_days = var.lambda_log_retention_days
+}
+
 resource "aws_lambda_function" "audit" {
   for_each = local.lambda_definitions
 
@@ -100,6 +107,8 @@ resource "aws_lambda_function" "audit" {
   tracing_config {
     mode = "Active"
   }
+
+  depends_on = [aws_cloudwatch_log_group.audit]
 
   environment {
     variables = {

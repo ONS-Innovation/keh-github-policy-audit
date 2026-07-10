@@ -67,6 +67,18 @@ variable "lambda_reserved_concurrent_executions" {
   default     = 10
 }
 
+variable "lambda_log_retention_days" {
+  description = "CloudWatch log group retention period in days for Lambda functions."
+  type        = number
+  default     = 90
+}
+
+variable "step_function_log_retention_days" {
+  description = "CloudWatch log group retention period in days for the Step Functions state machine."
+  type        = number
+  default     = 90
+}
+
 variable "repository_map_max_concurrency" {
   description = "MaxConcurrency for repository checks map state."
   type        = number

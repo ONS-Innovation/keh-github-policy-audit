@@ -28,9 +28,30 @@ resource "aws_iam_role_policy" "step_function_invoke_lambda" {
           "lambda:InvokeFunction",
         ]
         Resource = [for lambda in aws_lambda_function.audit : lambda.arn]
-      }
+      },
+      {
+        Sid    = "AllowCloudWatchLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogDelivery",
+          "logs:PutLogEvents",
+          "logs:GetLogDelivery",
+          "logs:UpdateLogDelivery",
+          "logs:DeleteLogDelivery",
+          "logs:ListLogDeliveries",
+          "logs:PutResourcePolicy",
+          "logs:DescribeResourcePolicies",
+          "logs:DescribeLogGroups",
+        ]
+        Resource = "*"
+      },
     ]
   })
+}
+
+resource "aws_cloudwatch_log_group" "step_function" {
+  name              = "/aws/states/${local.lambda_name_prefix}"
+  retention_in_days = var.step_function_log_retention_days
 }
 
 resource "aws_sfn_state_machine" "github_policy_audit" {
@@ -208,4 +229,14 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
       }
     }
   })
+
+  tracing_configuration {
+    enabled = true
+  }
+
+  logging_configuration {
+    level                  = "ALL"
+    include_execution_data = true
+    log_destination        = "${aws_cloudwatch_log_group.step_function.arn}:*"
+  }
 }

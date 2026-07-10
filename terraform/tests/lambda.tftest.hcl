@@ -108,11 +108,13 @@ run "lambda_env_vars" {
   }
 
   assert {
+    # checkov:skip=CKV_SECRET_6:False positive: This is a test for the correct secret name, not the secret value.
     condition     = aws_lambda_function.audit["store_output"].environment[0].variables["GITHUB_APP_ID_SECRET_NAME"] == "test-app-id"
     error_message = "Lambda GITHUB_APP_ID_SECRET_NAME should match the variable."
   }
 
   assert {
+    # checkov:skip=CKV_SECRET_6:False positive: This is a test for the correct secret name, not the secret value.
     condition     = aws_lambda_function.audit["store_output"].environment[0].variables["GITHUB_PRIVATE_KEY_SECRET_NAME"] == "test-private-key"
     error_message = "Lambda GITHUB_PRIVATE_KEY_SECRET_NAME should match the variable."
   }

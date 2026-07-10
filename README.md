@@ -246,6 +246,8 @@ Terraform in `terraform/` provisions:
 | `lambda_timeout` | No | `120` | Lambda timeout in seconds. |
 | `lambda_memory_size` | No | `512` | Lambda memory in MB. |
 | `lambda_reserved_concurrent_executions` | No | `10` | Reserved concurrent executions per Lambda function. Set to `-1` for unreserved (not recommended). |
+| `lambda_log_retention_days` | No | `90` | CloudWatch log group retention period in days for Lambda functions. |
+| `step_function_log_retention_days` | No | `90` | CloudWatch log group retention period in days for the Step Functions state machine. |
 | `repository_map_max_concurrency` | No | `5` | Max parallel repositories processed in the repository checks map state. |
 | `team_map_max_concurrency` | No | `5` | Max parallel teams processed in the team maintainer map state. |
 | `dependabot_slo_levels` | No | `["critical","high","medium","low"]` | Dependabot alert severity levels included in the SLO check. |
