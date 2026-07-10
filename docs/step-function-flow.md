@@ -53,7 +53,7 @@ flowchart TD
 ## Stage Summary
 
 | Stage | State Type | Lambdas |
-|---|---|---|
+| --- | --- | --- |
 | Initialise | `Parallel` | `list_repositories`, `list_teams` |
 | Organisation checks | `Parallel` + inner `Map` for teams | `dependabot_slo`, `secret_scanning_slo`, `team_maintainer` |
 | Repository checks | `Map` (MaxConcurrency=5) → inner `Parallel` | `codeowners`, `dependabot`, `external_pull_request`, `gitignore`, `inactivity`, `license`, `naming_convention`, `pirr`, `readme`, `repository_access`, `security_scanning` |

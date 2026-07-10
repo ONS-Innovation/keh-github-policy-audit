@@ -202,36 +202,36 @@ Terraform in `terraform/` provisions:
 
 1. Build the Lambda functions and dependency layer:
 
-```bash
-make build
-```
+    ```bash
+    make build
+    ```
 
 2. Copy the example tfvars file for your target environment and fill in any secrets:
 
-```bash
-cp terraform/env/dev/example_tfvars.txt terraform/env/dev/dev.tfvars
-# edit dev.tfvars with real secret names
-```
+    ```bash
+    cp terraform/env/dev/example_tfvars.txt terraform/env/dev/dev.tfvars
+    # edit dev.tfvars with real secret names
+    ```
 
 3. Then run the standard Terraform workflow, pointing at the environment backend and vars:
 
-```bash
-cd terraform
+    ```bash
+    cd terraform
 
-# 1. Initialise with the environment-specific remote backend
-terraform init -backend-config="env/dev/backend-dev.tfbackend" -reconfigure
+    # 1. Initialise with the environment-specific remote backend
+    terraform init -backend-config=env/dev/backend-dev.tfbackend -reconfigure
 
-# 2. Refresh state from the remote backend
-terraform refresh -var-file="env/dev/dev.tfvars"
+    # 2. Refresh state from the remote backend
+    terraform refresh -var-file=env/dev/dev.tfvars
 
-# 3. Preview changes
-terraform plan -var-file="env/dev/dev.tfvars"
+    # 3. Preview changes
+    terraform plan -var-file=env/dev/dev.tfvars
 
-# 4. Apply changes
-terraform apply -var-file="env/dev/dev.tfvars"
-```
+    # 4. Apply changes
+    terraform apply -var-file=env/dev/dev.tfvars
+    ```
 
-Substitute `dev` with `prod` for production deployments.
+    Substitute `dev` with `prod` for production deployments.
 
 ##### Terraform Variables
 
