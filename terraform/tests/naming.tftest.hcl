@@ -32,6 +32,11 @@ mock_provider "aws" {
       id  = "mock-bucket"
     }
   }
+  mock_resource "aws_cloudwatch_log_group" {
+    defaults = {
+      arn = "arn:aws:logs:eu-west-2:123456789012:log-group:mock-log-group"
+    }
+  }
 }
 
 variables {
@@ -95,6 +100,16 @@ run "dev_resource_naming" {
 run "prod_resource_naming" {
   variables {
     env_name = "sdp-prod"
+  }
+
+  override_data {
+    target = data.terraform_remote_state.vpc
+    values = {
+      outputs = {
+        vpc_id          = "vpc-00000000000000000"
+        private_subnets = ["subnet-00000000000000001", "subnet-00000000000000002"]
+      }
+    }
   }
 
   assert {

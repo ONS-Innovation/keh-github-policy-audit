@@ -32,6 +32,11 @@ mock_provider "aws" {
       id  = "mock-bucket"
     }
   }
+  mock_resource "aws_cloudwatch_log_group" {
+    defaults = {
+      arn = "arn:aws:logs:eu-west-2:123456789012:log-group:mock-log-group"
+    }
+  }
 }
 
 variables {
