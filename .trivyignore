@@ -1,0 +1,4 @@
+AVD-AWS-0017 # Cloudwatch encryption is not required since the logs are not sensitive.
+AVD-AWS-0104 # Functions egress to the internet is required for GitHub API access. Lots of work for a small security gain to restrict egress to GitHub IPs.
+AVD-AWS-0089 # S3 Bucket Access Logging is not needed since the bucket is not public.
+AVD-AWS-0132 # Default Bucket Encryption is fine over riding with a KMS key since the bucket is not public.

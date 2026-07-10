@@ -1,9 +1,0 @@
-ignores:
-  - id: AWS-0017
-    statement: Cloudwatch encryption is not required since the logs are not sensitive.
-  - id: AWS-0104
-    statement: Functions egress to the internet is required for GitHub API access. Lots of work for a small security gain to restrict egress to GitHub IPs.
-  - id: AWS-0089
-    statement: S3 Bucket Access Logging is not needed since the bucket is not public.
-  - id: AWS-0132
-    statement: Default Bucket Encryption is fine over riding with a KMS key since the bucket is not public.
