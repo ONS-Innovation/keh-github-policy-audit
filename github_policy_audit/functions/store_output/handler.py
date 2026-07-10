@@ -20,17 +20,114 @@ def _is_pass(check_output):
     )
 
 
+def _normalise_organisation_checks(
+    organisation_checks, organisation_results
+) -> dict[str, dict]:
+    """Return organisation checks as a dictionary keyed by check name."""
+    if isinstance(organisation_checks, dict):
+        return organisation_checks
+    if organisation_checks is not None:
+        raise ValueError("'organisation_checks' must be a dictionary")
+
+    if not isinstance(organisation_results, list):
+        return {}
+
+    checks: dict[str, dict] = {}
+    for result in organisation_results:
+        if not isinstance(result, dict):
+            continue
+        check_name = result.get("check_name")
+        if isinstance(check_name, str) and check_name:
+            checks[check_name] = result
+    return checks
+
+
+def _normalise_repository_checks(repositories, repository_results) -> dict[str, dict]:
+    """Return repository checks as {repository_name: {check_name: check_output}}."""
+    if isinstance(repositories, dict):
+        return repositories
+    if repositories is not None:
+        raise ValueError("'repositories' must be a dictionary keyed by repository name")
+
+    if not isinstance(repository_results, list):
+        return {}
+
+    repository_checks: dict[str, dict] = {}
+    for repository_result in repository_results:
+        if not isinstance(repository_result, dict):
+            continue
+
+        repository_name = repository_result.get("repository_name")
+        if not isinstance(repository_name, str) or not repository_name:
+            continue
+
+        checks_by_name: dict[str, dict] = {}
+        for check_result in repository_result.get("checks", []):
+            if not isinstance(check_result, dict):
+                continue
+            check_name = check_result.get("check_name")
+            if isinstance(check_name, str) and check_name:
+                checks_by_name[check_name] = check_result
+
+        repository_checks[repository_name] = checks_by_name
+
+    return repository_checks
+
+
+def _normalise_team_checks(teams, team_results) -> dict[str, dict]:
+    """Return team checks as {team_slug_or_name: {check_name: check_output}}."""
+    if isinstance(teams, dict):
+        return teams
+    if teams is None:
+        return {}
+
+    if not isinstance(teams, list):
+        raise ValueError(
+            "'teams' must be a dictionary, or a list when 'team_results' is provided"
+        )
+    if not isinstance(team_results, list):
+        raise ValueError(
+            "'team_results' must be provided as a list when 'teams' is a list"
+        )
+
+    checks_by_team: dict[str, dict] = {}
+    for index, team_result in enumerate(team_results):
+        if not isinstance(team_result, dict):
+            continue
+
+        team = (
+            teams[index]
+            if index < len(teams) and isinstance(teams[index], dict)
+            else {}
+        )
+        team_key = team.get("slug") or team.get("name") or f"team-{index}"
+        if not isinstance(team_key, str) or not team_key:
+            continue
+
+        check_name = team_result.get("check_name")
+        if not isinstance(check_name, str) or not check_name:
+            continue
+
+        checks_by_team[team_key] = {check_name: team_result}
+
+    return checks_by_team
+
+
 def handler(event, context):
-    """Step Function invokes with {"owner": "...", "repositories": {...}, "teams": {...}, "organisation_checks": {...}}."""
+    """Store output from either canonical maps or raw Step Function map/parallel arrays."""
     logger.info(f"Lambda invoked with event keys={sorted(event.keys())}")
 
     owner = event.get("owner")
     if not owner:
         raise ValueError("Event must include non-empty 'owner'")
 
-    repositories = event.get("repositories") or {}
-    teams = event.get("teams") or {}
-    organisation_checks = event.get("organisation_checks") or {}
+    repositories = _normalise_repository_checks(
+        event.get("repositories"), event.get("repository_results")
+    )
+    teams = _normalise_team_checks(event.get("teams"), event.get("team_results"))
+    organisation_checks = _normalise_organisation_checks(
+        event.get("organisation_checks"), event.get("organisation_results")
+    )
 
     if not isinstance(repositories, dict):
         raise ValueError("'repositories' must be a dictionary keyed by repository name")

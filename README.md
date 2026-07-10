@@ -21,6 +21,10 @@ A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage 
     - [Manual Deployment](#manual-deployment)
       - [Building the Lambda Functions](#building-the-lambda-functions)
       - [Terraform Deployment](#terraform-deployment)
+        - [What Terraform provisions](#what-terraform-provisions)
+        - [Terraform file structure](#terraform-file-structure)
+        - [Terraform Deployment Steps](#terraform-deployment-steps)
+        - [Terraform Variables](#terraform-variables)
   - [Documentation](#documentation)
     - [GitHub Actions for Documentation](#github-actions-for-documentation)
     - [Local Development of Documentation](#local-development-of-documentation)
@@ -169,7 +173,81 @@ A dependency layer is used to reduce the size of the individual Lambda function 
 
 #### Terraform Deployment
 
-TODO: Write and Document Terraform
+##### What Terraform provisions
+
+Terraform in `terraform/` provisions:
+
+- an S3 bucket for audit outputs
+- all Lambda functions from `build/lambdas/*.zip`
+- a shared Lambda dependency layer from `build/dependency-layer.zip`
+- a Step Functions state machine matching `docs/step-function-flow.md`
+- an EventBridge weekly schedule (`cron(0 8 ? * MON *)`) that starts execution
+
+##### Terraform file structure
+
+| File | Purpose |
+| --- | --- |
+| `providers.tf` | AWS provider config and default tags. |
+| `variables.tf` | Input variables for environment, runtime, schedule, and secrets. |
+| `data.tf` | AWS account/partition data sources used in IAM ARNs. |
+| `locals.tf` | Shared locals (Lambda package map, naming, repository check list). |
+| `storage.tf` | S3 bucket resources for audit output storage. |
+| `lambda.tf` | Lambda IAM role/policies, dependency layer, and all Lambda functions. |
+| `step_functions.tf` | Step Functions IAM role/policy and state machine definition. |
+| `eventbridge.tf` | EventBridge schedule rule/target and IAM role to start executions. |
+| `outputs.tf` | Useful deployment outputs (state machine ARN, Lambda names, bucket). |
+
+##### Terraform Deployment Steps
+
+1. Build the Lambda functions and dependency layer:
+
+```bash
+make build
+```
+
+2. Copy the example tfvars file for your target environment and fill in any secrets:
+
+```bash
+cp terraform/env/dev/example_tfvars.txt terraform/env/dev/dev.tfvars
+# edit dev.tfvars with real secret names
+```
+
+3. Then run the standard Terraform workflow, pointing at the environment backend and vars:
+
+```bash
+cd terraform
+
+# 1. Initialise with the environment-specific remote backend
+terraform init -backend-config="env/dev/backend-dev.tfbackend" -reconfigure
+
+# 2. Refresh state from the remote backend
+terraform refresh -var-file="env/dev/dev.tfvars"
+
+# 3. Preview changes
+terraform plan -var-file="env/dev/dev.tfvars"
+
+# 4. Apply changes
+terraform apply -var-file="env/dev/dev.tfvars"
+```
+
+Substitute `dev` with `prod` for production deployments.
+
+##### Terraform Variables
+
+| Variable | Required | Default | Description |
+| --- | --- | --- | --- |
+| `env_name` | No | `sdp-dev` | Environment name. Controls bucket/resource naming (e.g. `sdp-dev`, `sdp-prod`). |
+| `region` | No | `eu-west-2` | AWS region to deploy into. |
+| `github_owner` | **Yes** | — | GitHub organisation name audited on each run. |
+| `github_app_id_secret_name` | **Yes** | — | Secrets Manager secret name for the GitHub App ID (`{"AppID":"..."}` JSON). |
+| `github_private_key_secret_name` | **Yes** | — | Secrets Manager secret name for the GitHub App private key (PEM, plain text). |
+| `lambda_runtime` | No | `python3.12` | Lambda runtime identifier. |
+| `lambda_timeout` | No | `120` | Lambda timeout in seconds. |
+| `lambda_memory_size` | No | `512` | Lambda memory in MB. |
+| `repository_map_max_concurrency` | No | `5` | Max parallel repositories processed in the repository checks map state. |
+| `team_map_max_concurrency` | No | `5` | Max parallel teams processed in the team maintainer map state. |
+| `dependabot_slo_levels` | No | `["critical","high","medium","low"]` | Dependabot alert severity levels included in the SLO check. |
+| `audit_schedule_expression` | No | `cron(0 8 ? * MON *)` | EventBridge schedule expression for the weekly audit trigger. |
 
 ## Documentation
 

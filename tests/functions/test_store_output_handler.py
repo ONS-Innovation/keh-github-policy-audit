@@ -81,6 +81,14 @@ class TestHandlerValidation:
             with pytest.raises(ValueError, match="ENVIRONMENT"):
                 self.module.handler({"owner": "test-org"}, None)
 
+    def test_raises_when_teams_list_without_team_results(self):
+        """A teams list without team_results should raise a ValueError."""
+        with pytest.raises(ValueError, match="team_results"):
+            self.module.handler(
+                {"owner": "test-org", "teams": [{"slug": "team-a"}]},
+                None,
+            )
+
 
 # ---------------------------------------------------------------------------
 # Local environment
@@ -253,6 +261,71 @@ class TestHandlerLocal:
 
         assert result["environment"] == "local"
         assert result["local_output_path"] is not None
+
+    def test_normalises_step_function_raw_results(self):
+        """The handler should reshape Step Function array outputs into keyed dictionaries."""
+        event = {
+            "owner": "test-org",
+            "teams": [{"slug": "team-a"}, {"slug": "team-b"}],
+            "organisation_results": [
+                {"check_name": "dependabot_slo", "status": "pass"},
+                {"check_name": "secret_scanning_slo", "status": "fail"},
+                [
+                    {"check_name": "team_maintainer", "status": "pass"},
+                    {"check_name": "team_maintainer", "status": "fail"},
+                ],
+            ],
+            "repository_results": [
+                {
+                    "repository_name": "repo-a",
+                    "checks": [
+                        {"check_name": "codeowners", "status": "pass"},
+                        {"check_name": "readme", "status": "fail"},
+                    ],
+                },
+                {
+                    "repository_name": "repo-b",
+                    "checks": [{"check_name": "codeowners", "status": "pass"}],
+                },
+            ],
+            "team_results": [
+                {"check_name": "team_maintainer", "status": "pass"},
+                {"check_name": "team_maintainer", "status": "fail"},
+            ],
+        }
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+            result = self.module.handler(event, None)
+
+        output_file = self.tmp_path / result["local_output_path"]
+        written = json.loads(output_file.read_text())
+
+        assert written["repositories"] == {
+            "repo-a": {
+                "codeowners": {"check_name": "codeowners", "status": "pass"},
+                "readme": {"check_name": "readme", "status": "fail"},
+            },
+            "repo-b": {"codeowners": {"check_name": "codeowners", "status": "pass"}},
+        }
+        assert written["teams"] == {
+            "team-a": {
+                "team_maintainer": {"check_name": "team_maintainer", "status": "pass"}
+            },
+            "team-b": {
+                "team_maintainer": {"check_name": "team_maintainer", "status": "fail"}
+            },
+        }
+        assert written["organisation_checks"] == {
+            "dependabot_slo": {"check_name": "dependabot_slo", "status": "pass"},
+            "secret_scanning_slo": {
+                "check_name": "secret_scanning_slo",
+                "status": "fail",
+            },
+        }
+        assert written["summary"]["total_repositories"] == 2
+        assert written["summary"]["compliant_repositories"] == 1
+        assert written["summary"]["total_teams"] == 2
+        assert written["summary"]["compliant_teams"] == 1
 
 
 # ---------------------------------------------------------------------------
