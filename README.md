@@ -32,6 +32,7 @@ A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage 
     - [GitHub Actions](#github-actions)
     - [Running Tests and Linters Locally](#running-tests-and-linters-locally)
       - [Primary Language](#primary-language)
+      - [Terraform](#terraform)
       - [MegaLinter](#megalinter)
       - [Documentation linting and building](#documentation-linting-and-building)
 
@@ -289,6 +290,7 @@ To run the documentation locally:
 This repository has GitHub Actions workflows set up for linting and testing. The workflows are located at:
 
 - `.github/workflows/ci-fmt.yml` for linting and formatting checks (primary language).
+- `.github/workflows/ci-terraform.yml` for linting and testing the Terraform configuration.
 - `.github/workflows/ci-test.yml` for running automated tests.
 - `.github/workflows/ci-docs.yml` for checking that the documentation builds correctly and has no linting or formatting issues.
 - `.github/workflows/megalinter.yml` for running MegaLinter, which checks for linting and formatting issues across multiple languages and file types (this is a catch-all linter).
@@ -313,8 +315,29 @@ make fmt
 To run the tests locally, you can use:
 
 ```bash
-make test-unit
+make test
 ```
+
+#### Terraform
+
+Terraform tests use the native [`terraform test`](https://developer.hashicorp.com/terraform/language/tests) framework with mock providers — no AWS credentials are required.
+
+Tests live in `terraform/tests/` and are grouped by concern:
+
+| File | What it covers |
+| --- | --- |
+| `naming.tftest.hcl` | Resource names follow the `${env_name}-github-policy-audit-*` convention for dev and prod. |
+| `lambda.tftest.hcl` | All 17 Lambdas are defined, runtime/timeout/memory defaults, environment variables, handler paths, and the shared dependency layer. |
+| `storage.tftest.hcl` | S3 bucket name is derived from `env_name`, and all public access block settings are enforced. |
+| `state_machine.tftest.hcl` | All five required states are present, `MaxConcurrency` defaults and overrides, EventBridge schedule and input payload. |
+
+To run the Terraform tests locally:
+
+```bash
+make test-terraform
+```
+
+This will build the Lambda artefacts first (`make build`), then run `terraform test` against all test files.
 
 #### MegaLinter
 

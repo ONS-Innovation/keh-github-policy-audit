@@ -98,11 +98,31 @@ fmt:								## Run all formatters.
 
 ##
 
+# Terraform
+
+.PHONY: tf-validate
+tf-validate:			## Validate the Terraform configuration.
+	terraform -chdir=terraform validate
+
+.PHONY: tf-lint
+tf-lint:				## Lint the Terraform configuration.
+	terraform -chdir=terraform fmt -check -recursive
+
+.PHONY: tf-fmt
+tf-fmt:				## Format the Terraform configuration.
+	terraform -chdir=terraform fmt -recursive
+
+## 
+
 # Tests
 
 .PHONY: test
 test:							## Run all tests and check coverage.
 	poetry run pytest -n auto --cov=github_policy_audit --cov-report term-missing --cov-fail-under=80
+
+.PHONY: test-tf
+test-terraform: build			## Run Terraform tests (requires built Lambda artefacts).
+	terraform -chdir=terraform test
 
 ## 
 
