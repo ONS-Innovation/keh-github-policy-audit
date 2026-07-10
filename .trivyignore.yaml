@@ -1,0 +1,12 @@
+ignores:
+  # Duplicates CKV_AWS_158: Default CloudWatch Encryption is fine. KMS not required since the logs are not sensitive.
+  - id: AVD-AWS-0017
+
+  # Duplicates CKV_AWS_382: Functions egress to the internet is required for GitHub API access. Lots of work for a small security gain to restrict egress to GitHub IPs.
+  - id: AVD-AWS-0104
+
+  # Duplicates CKV_AWS_18: Bucket Access Logging is not needed since the bucket is not public.
+  - id: AVD-AWS-0089
+
+  # Duplicates CKV_AWS_145: Default Bucket Encryption is fine over riding with a KMS key since the bucket is not public.
+  - id: AVD-AWS-0132
