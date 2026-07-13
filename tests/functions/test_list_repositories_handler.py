@@ -23,7 +23,7 @@ class TestListRepositoriesHandler:
             check_client: object,
             endpoint: str,
             result_key: str,
-        ) -> list[dict[str, str]]:
+        ) -> list[dict[str, object]]:
             captured["client"] = check_client
             captured["endpoint"] = endpoint
             captured["result_key"] = result_key
@@ -44,7 +44,15 @@ class TestListRepositoriesHandler:
             "endpoint": "/orgs/ONS-Innovation/repos?per_page=100",
             "result_key": "repositories",
         }
-        assert result == [{"name": "keh-github-policy-audit"}]
+        assert result == [
+            {
+                "name": "keh-github-policy-audit",
+                "data": {
+                    "updated_at": None,
+                    "security_and_analysis": None,
+                },
+            }
+        ]
 
     def test_raises_for_missing_owner(self) -> None:
         """A missing owner key in the event should raise a KeyError."""

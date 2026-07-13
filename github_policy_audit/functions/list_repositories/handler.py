@@ -19,9 +19,20 @@ def handler(event, context):
     repositories = get_paginated_list(
         client, f"/orgs/{event['owner']}/repos?per_page=100", "repositories"
     )
+    repository_summaries = [
+        {
+            "name": repo["name"],
+            "data": {
+                "updated_at": repo.get("updated_at"),
+                "security_and_analysis": repo.get("security_and_analysis"),
+            },
+        }
+        for repo in repositories
+        if repo.get("name")
+    ]
 
     logger.info(
-        f"Lambda completed owner={event['owner']} repositories_count={len(repositories)}"
+        f"Lambda completed owner={event['owner']} repositories_count={len(repository_summaries)}"
     )
 
-    return repositories
+    return repository_summaries

@@ -195,7 +195,16 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                       Parameters = {
                         "owner.$"           = "$.owner"
                         "repository_name.$" = "$.repository.name"
-                        "data.$"            = "$.repository"
+                        "data.$"            = "$.repository.data"
+                      }
+                      # TODO: Assess best option here when getting within the Step Function limits.
+                      # For now, we only carry the check name, result and message forward to the next step, removing the details key.
+                      # We will need to assess if details is needed in the future, and if so, we will need to consider alternatives,
+                      # such as storing the details in S3 and passing the S3 key forward, or slimming down the details to only include the most important information.
+                      ResultSelector = {
+                        "check_name.$" = "$.check_name"
+                        "result.$"     = "$.result"
+                        "message.$"    = "$.message"
                       }
                       End = true
                     }
