@@ -282,6 +282,34 @@ class TestHandlerLocal:
         assert check_summary["total"] == 3
         assert check_summary["compliant"] == 2
 
+    def test_summary_repository_checks_excludes_is_compliant_key(self):
+        """Repository-level is_compliant should not be treated as a per-check summary entry."""
+        event = {
+            "owner": "test-org",
+            "repositories": {
+                "repo-a": {
+                    "naming_convention": {"result": "pass"},
+                    "is_compliant": True,
+                },
+                "repo-b": {
+                    "naming_convention": {"result": "fail"},
+                    "is_compliant": False,
+                },
+            },
+        }
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+            self.module.handler(event, None)
+
+        output_dir = self.tmp_path / "outputs" / "test-org"
+        files = list(output_dir.glob("*.json"))
+        written = json.loads(files[0].read_text())
+
+        repository_checks = written["summary"]["repository_checks"]
+        assert "is_compliant" not in repository_checks
+        assert repository_checks["naming_convention"]["total"] == 2
+        assert repository_checks["naming_convention"]["compliant"] == 1
+
     def test_summary_includes_organisation_checks(self):
         """The summary should include organisation-level check compliance."""
         event = {

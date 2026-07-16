@@ -240,15 +240,13 @@ def handler(event, context):
         "compliant_repositories": sum(
             1
             for repo_checks in repositories.values()
-            if isinstance(repo_checks, dict)
-            and repo_checks.get("is_compliant") is True
+            if isinstance(repo_checks, dict) and repo_checks.get("is_compliant") is True
         ),
         "total_teams": len(teams),
         "compliant_teams": sum(
             1
             for team_checks in teams.values()
-            if isinstance(team_checks, dict)
-            and team_checks.get("is_compliant") is True
+            if isinstance(team_checks, dict) and team_checks.get("is_compliant") is True
         ),
         "repository_checks": {},
         "organisation_checks": {},

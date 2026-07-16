@@ -13,21 +13,21 @@ import pytest
 class TestStoreRepositoryOutputValidation:
     module = importlib.import_module("functions.store_repository_output.handler")
 
-    def test_requires_owner(self):
+    def test_requires_owner(self) -> None:
         with pytest.raises(ValueError, match="owner"):
             self.module.handler({"run_id": "run-1", "repository_name": "repo-a"}, None)
 
-    def test_requires_run_id(self):
+    def test_requires_run_id(self) -> None:
         with pytest.raises(ValueError, match="run_id"):
             self.module.handler(
                 {"owner": "test-org", "repository_name": "repo-a"}, None
             )
 
-    def test_requires_repository_name(self):
+    def test_requires_repository_name(self) -> None:
         with pytest.raises(ValueError, match="repository_name"):
             self.module.handler({"owner": "test-org", "run_id": "run-1"}, None)
 
-    def test_raises_when_checks_not_dict_or_list(self):
+    def test_raises_when_checks_not_dict_or_list(self) -> None:
         with pytest.raises(ValueError, match="checks"):
             self.module.handler(
                 {
@@ -39,7 +39,7 @@ class TestStoreRepositoryOutputValidation:
                 None,
             )
 
-    def test_raises_for_invalid_environment(self):
+    def test_raises_for_invalid_environment(self) -> None:
         with patch.dict(os.environ, {"ENVIRONMENT": "staging"}):
             with pytest.raises(ValueError, match="ENVIRONMENT"):
                 self.module.handler(
@@ -52,7 +52,7 @@ class TestStoreRepositoryOutputValidation:
                     None,
                 )
 
-    def test_raises_in_prod_when_bucket_missing(self):
+    def test_raises_in_prod_when_bucket_missing(self) -> None:
         with patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=True):
             with pytest.raises(ValueError, match="output_bucket"):
                 self.module.handler(
@@ -69,17 +69,17 @@ class TestStoreRepositoryOutputValidation:
 class TestStoreRepositoryOutputLocal:
     module = importlib.import_module("functions.store_repository_output.handler")
 
-    def setup_method(self):
+    def setup_method(self) -> None:
         self._tmp_dir = tempfile.TemporaryDirectory()
         self.tmp_path = Path(self._tmp_dir.name)
         self._original_cwd = os.getcwd()
         os.chdir(self.tmp_path)
 
-    def teardown_method(self):
+    def teardown_method(self) -> None:
         os.chdir(self._original_cwd)
         self._tmp_dir.cleanup()
 
-    def test_writes_local_repository_file(self):
+    def test_writes_local_repository_file(self) -> None:
         event = {
             "owner": "test-org",
             "run_id": "run-123",
@@ -101,7 +101,7 @@ class TestStoreRepositoryOutputLocal:
         assert written["repository_name"] == "repo-a"
         assert set(written["checks"].keys()) == {"readme", "codeowners"}
 
-    def test_skips_non_dict_check_entries_in_list(self):
+    def test_skips_non_dict_check_entries_in_list(self) -> None:
         event = {
             "owner": "test-org",
             "run_id": "run-123",
@@ -125,11 +125,11 @@ class TestStoreRepositoryOutputLocal:
 class TestStoreRepositoryOutputProd:
     module = importlib.import_module("functions.store_repository_output.handler")
 
-    def test_puts_to_s3(self):
+    def test_puts_to_s3(self) -> None:
         captured: dict[str, object] = {}
 
         class FakeS3Client:
-            def put_object(self, **kwargs):
+            def put_object(self, **kwargs: object) -> None:
                 captured.update(kwargs)
 
         event = {
