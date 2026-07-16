@@ -282,7 +282,7 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
 
   logging_configuration {
     level                  = "ALL"
-    include_execution_data = false
+    include_execution_data = true
     log_destination        = "${aws_cloudwatch_log_group.step_function.arn}:*"
   }
 }

@@ -29,6 +29,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_output" {
       prefix = "audit-runs/"
     }
 
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
+
     expiration {
       days = var.audit_run_retention_days
     }
@@ -44,6 +48,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_output" {
 
     filter {
       prefix = "audit-results/"
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
     }
 
     expiration {
