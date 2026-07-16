@@ -19,4 +19,6 @@ def handler(event, context):
     logger.info(
         f"Lambda completed check={result['check_name']} result={result.get('result')}"
     )
+
+    result.pop("details", None)  # Remove details from the result to reduce payload size
     return result
