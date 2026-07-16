@@ -17,6 +17,6 @@ def handler(event, context):
     result = check_gitignore(client, event["repository_name"])
     result["check_name"] = "gitignore"
     logger.info(
-        f"Lambda completed check={result['check_name']} status={result.get('status')}"
+        f"Lambda completed check={result['check_name']} result={result.get('result')}"
     )
     return result
