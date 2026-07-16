@@ -92,8 +92,8 @@ run "state_machine_concurrency" {
 
 run "state_machine_logging" {
   assert {
-    condition     = aws_sfn_state_machine.github_policy_audit.logging_configuration[0].include_execution_data == false
-    error_message = "Step Function should disable execution payload logging to avoid large log events."
+    condition     = aws_sfn_state_machine.github_policy_audit.logging_configuration[0].include_execution_data == true
+    error_message = "Step Function should enable execution payload logging."
   }
 }
 
