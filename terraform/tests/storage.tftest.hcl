@@ -86,8 +86,13 @@ run "public_access_block_enabled" {
 
 run "lifecycle_rules_configured" {
   assert {
-    condition     = length(aws_s3_bucket_lifecycle_configuration.audit_output.rule) == 2
-    error_message = "Expected two lifecycle rules on audit output bucket."
+    condition     = length(aws_s3_bucket_lifecycle_configuration.audit_output.rule) == 3
+    error_message = "Expected three lifecycle rules on audit output bucket (including global abort rule)."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.audit_output.rule[0].id == "expire-audit-runs"
+    error_message = "First lifecycle rule should be expire-audit-runs."
   }
 
   assert {
@@ -101,6 +106,11 @@ run "lifecycle_rules_configured" {
   }
 
   assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.audit_output.rule[1].id == "expire-audit-summaries"
+    error_message = "Second lifecycle rule should be expire-audit-summaries."
+  }
+
+  assert {
     condition     = aws_s3_bucket_lifecycle_configuration.audit_output.rule[1].filter[0].prefix == "audit-results/"
     error_message = "Second lifecycle rule should target audit-results/."
   }
@@ -108,5 +118,15 @@ run "lifecycle_rules_configured" {
   assert {
     condition     = aws_s3_bucket_lifecycle_configuration.audit_output.rule[1].expiration[0].days == 365
     error_message = "audit-results/ lifecycle rule should default to 365 days."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.audit_output.rule[2].id == "abort-incomplete-multipart-uploads"
+    error_message = "Third lifecycle rule should be the global abort rule."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.audit_output.rule[2].abort_incomplete_multipart_upload[0].days_after_initiation == 1
+    error_message = "Global abort rule should set days_after_initiation to 1."
   }
 }

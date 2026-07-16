@@ -29,10 +29,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_output" {
       prefix = "audit-runs/"
     }
 
-    abort_incomplete_multipart_upload {
-      days_after_initiation = 1
-    }
-
     expiration {
       days = var.audit_run_retention_days
     }
@@ -50,16 +46,23 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_output" {
       prefix = "audit-results/"
     }
 
-    abort_incomplete_multipart_upload {
-      days_after_initiation = 1
-    }
-
     expiration {
       days = var.audit_summary_retention_days
     }
 
     noncurrent_version_expiration {
       noncurrent_days = var.audit_summary_retention_days
+    }
+  }
+
+  rule {
+    id     = "abort-incomplete-multipart-uploads"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
     }
   }
 }
