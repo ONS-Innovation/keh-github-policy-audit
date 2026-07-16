@@ -68,6 +68,10 @@ locals {
       zip_path = "${local.lambda_source_root}/repository_checks-security_scanning.zip"
       handler  = "functions.repository_checks.security_scanning.handler.handler"
     }
+    store_repository_output = {
+      zip_path = "${local.lambda_source_root}/store_repository_output.zip"
+      handler  = "functions.store_repository_output.handler.handler"
+    }
     store_output = {
       zip_path = "${local.lambda_source_root}/store_output.zip"
       handler  = "functions.store_output.handler.handler"

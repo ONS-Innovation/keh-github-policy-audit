@@ -83,3 +83,30 @@ run "public_access_block_enabled" {
     error_message = "restrict_public_buckets should be true."
   }
 }
+
+run "lifecycle_rules_configured" {
+  assert {
+    condition     = length(aws_s3_bucket_lifecycle_configuration.audit_output.rule) == 2
+    error_message = "Expected two lifecycle rules on audit output bucket."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.audit_output.rule[0].filter[0].prefix == "audit-runs/"
+    error_message = "First lifecycle rule should target audit-runs/."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.audit_output.rule[0].expiration[0].days == 30
+    error_message = "audit-runs/ lifecycle rule should default to 30 days."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.audit_output.rule[1].filter[0].prefix == "audit-results/"
+    error_message = "Second lifecycle rule should target audit-results/."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.audit_output.rule[1].expiration[0].days == 365
+    error_message = "audit-results/ lifecycle rule should default to 365 days."
+  }
+}

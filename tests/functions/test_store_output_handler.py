@@ -403,6 +403,152 @@ class TestHandlerLocal:
 class TestHandlerProd:
     module = importlib.import_module("functions.store_output.handler")
 
+    def test_s3_loader_skips_non_dict_payload_and_handles_fallback_paths(self) -> None:
+        """Loader should skip non-dict payloads, fallback repo name from key, and allow empty checks payloads."""
+
+        class FakeBody:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def read(self):
+                return json.dumps(self.payload)
+
+        class FakePaginator:
+            def paginate(self, **kwargs):
+                del kwargs
+                return [
+                    {
+                        "Contents": [
+                            {
+                                "Key": "audit-runs/test-org/run-123/repositories/repo-a.json"
+                            },
+                            {
+                                "Key": "audit-runs/test-org/run-123/repositories/repo-b.json"
+                            },
+                            {
+                                "Key": "audit-runs/test-org/run-123/repositories/repo-c.json"
+                            },
+                            {"Key": "audit-runs/test-org/run-123/repositories/.json"},
+                        ]
+                    }
+                ]
+
+        class FakeS3Client:
+            def get_paginator(self, operation_name):
+                assert operation_name == "list_objects_v2"
+                return FakePaginator()
+
+            def get_object(self, **kwargs):
+                key = kwargs["Key"]
+                if key.endswith("repo-a.json"):
+                    return {
+                        "Body": FakeBody(
+                            {
+                                "checks": {
+                                    "readme": {
+                                        "check_name": "readme",
+                                        "status": "pass",
+                                    }
+                                }
+                            }
+                        )
+                    }
+                if key.endswith("repo-b.json"):
+                    return {
+                        "Body": FakeBody(
+                            {
+                                "repository_name": "repo-b",
+                                "checks": "unexpected-type",
+                            }
+                        )
+                    }
+                if key.endswith("repo-c.json"):
+                    return {"Body": FakeBody("not-a-dict")}
+                # Empty filename fallback (/.json) should be ignored.
+                return {"Body": FakeBody({})}
+
+        result = self.module._load_repository_checks_from_s3(
+            s3_client=FakeS3Client(),
+            bucket_name="bucket",
+            owner="test-org",
+            run_id="run-123",
+        )
+
+        assert result == {
+            "repo-a": {"readme": {"check_name": "readme", "status": "pass"}},
+            "repo-b": {},
+        }
+
+    def test_loads_repository_results_from_run_prefix(self) -> None:
+        """When run_id is provided, repository results should be loaded from audit-runs S3 objects."""
+
+        class FakeBody:
+            def __init__(self, payload: dict):
+                self.payload = payload
+
+            def read(self):
+                return json.dumps(self.payload)
+
+        captured: dict[str, object] = {}
+
+        class FakePaginator:
+            def paginate(self, **kwargs):
+                captured["prefix"] = kwargs.get("Prefix")
+                return [
+                    {
+                        "Contents": [
+                            {
+                                "Key": "audit-runs/test-org/run-123/repositories/repo-a.json",
+                            },
+                        ],
+                    }
+                ]
+
+        class FakeS3Client:
+            def get_paginator(self, operation_name):
+                assert operation_name == "list_objects_v2"
+                return FakePaginator()
+
+            def get_object(self, **kwargs):
+                assert kwargs["Key"].endswith("repo-a.json")
+                return {
+                    "Body": FakeBody(
+                        {
+                            "repository_name": "repo-a",
+                            "checks": {
+                                "readme": {
+                                    "check_name": "readme",
+                                    "status": "pass",
+                                }
+                            },
+                        }
+                    )
+                }
+
+            def put_object(self, **kwargs):
+                captured.update(kwargs)
+
+        event = {
+            "owner": "test-org",
+            "run_id": "run-123",
+            "output_bucket": "my-audit-bucket",
+        }
+
+        with (
+            patch.dict(
+                os.environ,
+                {"ENVIRONMENT": "prod", "S3_BUCKET_NAME": "my-audit-bucket"},
+            ),
+            patch.object(self.module.boto3, "client", return_value=FakeS3Client()),
+        ):
+            result = self.module.handler(event, None)
+
+        assert result["status"] == "success"
+        assert captured["prefix"] == "audit-runs/test-org/run-123/repositories/"
+        written = json.loads(str(captured["Body"]))
+        assert written["summary"]["total_repositories"] == 1
+        assert written["summary"]["compliant_repositories"] == 1
+
     def test_calls_s3_put_object(self) -> None:
         """In the prod environment the handler should upload the result to S3."""
         captured: dict[str, object] = {}
@@ -442,3 +588,10 @@ class TestHandlerProd:
             os.environ.pop("S3_BUCKET_NAME", None)
             with pytest.raises(ValueError, match="S3_BUCKET_NAME"):
                 self.module.handler({"owner": "test-org"}, None)
+
+    def test_raises_when_run_id_provided_in_prod_without_bucket(self):
+        """Prod run_id aggregation requires an explicit output bucket."""
+        event = {"owner": "test-org", "run_id": "run-123"}
+        with patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=True):
+            with pytest.raises(ValueError, match="required in prod when using run_id"):
+                self.module.handler(event, None)

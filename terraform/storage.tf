@@ -17,3 +17,41 @@ resource "aws_s3_bucket_versioning" "audit_output" {
     status = "Enabled"
   }
 }
+
+resource "aws_s3_bucket_lifecycle_configuration" "audit_output" {
+  bucket = aws_s3_bucket.audit_output.id
+
+  rule {
+    id     = "expire-audit-runs"
+    status = "Enabled"
+
+    filter {
+      prefix = "audit-runs/"
+    }
+
+    expiration {
+      days = var.audit_run_retention_days
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = var.audit_run_retention_days
+    }
+  }
+
+  rule {
+    id     = "expire-audit-summaries"
+    status = "Enabled"
+
+    filter {
+      prefix = "audit-results/"
+    }
+
+    expiration {
+      days = var.audit_summary_retention_days
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = var.audit_summary_retention_days
+    }
+  }
+}

@@ -16,6 +16,7 @@ A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage 
       - [Repository Listing](#repository-listing)
       - [Organisation Team Listing](#organisation-team-listing)
       - [Check Handlers](#check-handlers)
+      - [Output Handlers](#output-handlers)
   - [Deployment](#deployment)
     - [Deployments with Concourse](#deployments-with-concourse)
     - [Manual Deployment](#manual-deployment)
@@ -72,7 +73,7 @@ export ENVIRONMENT=local
 
 `GITHUB_APP_ID_SECRET_NAME` should point to a secret containing a JSON object with the GitHub App ID under the `AppID` key (for example: `{"AppID":"123456"}`).
 `GITHUB_PRIVATE_KEY_SECRET_NAME` should point to a separate secret containing only the GitHub App private key as plain text (PEM), not a key-value JSON object.
-`ENVIRONMENT` controls output behaviour for `functions.store_output.handler`:
+`ENVIRONMENT` controls output behaviour for `functions.store_repository_output.handler` and `functions.store_output.handler`:
 
 - `local` (default): writes output JSON to `outputs/<owner>/` and does not call AWS S3.
 - `prod`: writes output JSON to S3 and requires `S3_BUCKET_NAME`.
@@ -112,6 +113,7 @@ Ready-to-use payload files are provided in `examples/`:
 - `examples/dependabot_slo_event.json`
 - `examples/naming_convention_event.json`
 - `examples/store_output_event.json`
+- `examples/store_repository_output_event.json`
 - `examples/team_maintainer_event.json`
 
 To use these examples, run:
@@ -146,6 +148,15 @@ Some repository-scoped handlers can also accept optional repository metadata und
 | Dependabot SLO                                          | `functions.organisation_checks.dependabot_slo.handler`                                                                                                                                                                                                                                                                                                                                                             | `{"owner":"<org>","levels":["critical","high"]}` (`levels` optional)                                          |
 | Naming convention                                       | `functions.repository_checks.naming_convention.handler`                                                                                                                                                                                                                                                                                                                                                            | `{"owner":"<org>","repository_name":"<repo>"}`                                                                |
 | Team maintainer                                         | `functions.organisation_checks.team_maintainer.handler`                                                                                                                                                                                                                                                                                                                                                            | `{"owner":"<org>","team_slug":"<team>"}`                                                                      |
+
+#### Output Handlers
+
+| Handler modules                                   | Required event payload                                                                                                                   |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `functions.store_repository_output.handler`       | `{"owner":"<org>","run_id":"<execution-id>","repository_name":"<repo>","checks":[{"check_name":"readme","status":"pass"}]}`              |
+| `functions.store_output.handler` (S3 aggregation) | `{"owner":"<org>","run_id":"<execution-id>","output_bucket":"<bucket>","organisation_results":[...],"teams":[...],"team_results":[...]}` |
+
+The scalable production flow stores one repository JSON file at a time under `audit-runs/<owner>/<run_id>/repositories/`, then `store_output` aggregates that prefix and writes the final summary to `audit-results/<owner>/<run_id>.json`.
 
 ## Deployment
 
@@ -252,6 +263,8 @@ Terraform in `terraform/` provisions:
 | `team_map_max_concurrency`              | No       | `5`                                  | Max parallel teams processed in the team maintainer map state.                                    |
 | `dependabot_slo_levels`                 | No       | `["critical","high","medium","low"]` | Dependabot alert severity levels included in the SLO check.                                       |
 | `audit_schedule_expression`             | No       | `cron(0 8 ? * MON *)`                | EventBridge schedule expression for the weekly audit trigger.                                     |
+| `audit_run_retention_days`              | No       | `30`                                 | Days to retain per-repository run artifacts under `audit-runs/`.                                  |
+| `audit_summary_retention_days`          | No       | `365`                                | Days to retain aggregated summary outputs under `audit-results/`.                                 |
 
 ## Documentation
 
@@ -330,9 +343,9 @@ Tests live in `terraform/tests/` and are grouped by concern:
 | File                       | What it covers                                                                                                                      |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `naming.tftest.hcl`        | Resource names follow the `${env_name}-github-policy-audit-*` convention for dev and prod.                                          |
-| `lambda.tftest.hcl`        | All 17 Lambdas are defined, runtime/timeout/memory defaults, environment variables, handler paths, and the shared dependency layer. |
-| `storage.tftest.hcl`       | S3 bucket name is derived from `env_name`, and all public access block settings are enforced.                                       |
-| `state_machine.tftest.hcl` | All five required states are present, `MaxConcurrency` defaults and overrides, EventBridge schedule and input payload.              |
+| `lambda.tftest.hcl`        | All 18 Lambdas are defined, runtime/timeout/memory defaults, environment variables, handler paths, and the shared dependency layer. |
+| `storage.tftest.hcl`       | S3 bucket naming, public access block settings, and lifecycle rules for run artifacts and summaries.                                |
+| `state_machine.tftest.hcl` | Required states are present, repository map distribution/concurrency, logging config, and EventBridge schedule/input payload.       |
 
 To run the Terraform tests locally:
 

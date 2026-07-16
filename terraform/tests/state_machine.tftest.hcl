@@ -80,8 +80,20 @@ run "state_machine_concurrency" {
   }
 
   assert {
+    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.RepositoryChecksMap.ItemProcessor.ProcessorConfig.Mode == "DISTRIBUTED"
+    error_message = "RepositoryChecksMap should run in DISTRIBUTED mode for scalability."
+  }
+
+  assert {
     condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.OrganisationChecks.Branches[2].States.TeamMaintainerMap.MaxConcurrency == 5
     error_message = "TeamMaintainerMap MaxConcurrency should default to 5."
+  }
+}
+
+run "state_machine_logging" {
+  assert {
+    condition     = aws_sfn_state_machine.github_policy_audit.logging_configuration[0].include_execution_data == false
+    error_message = "Step Function should disable execution payload logging to avoid large log events."
   }
 }
 

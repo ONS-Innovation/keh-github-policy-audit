@@ -30,6 +30,18 @@ resource "aws_iam_role_policy" "step_function_invoke_lambda" {
         Resource = [for lambda in aws_lambda_function.audit : lambda.arn]
       },
       {
+        Sid    = "AllowDistributedMapChildExecutions"
+        Effect = "Allow"
+        Action = [
+          "states:StartExecution",
+          "states:DescribeExecution",
+        ]
+        Resource = [
+          "arn:${data.aws_partition.current.partition}:states:${var.region}:${data.aws_caller_identity.current.account_id}:stateMachine:${local.lambda_name_prefix}-state-machine",
+          "arn:${data.aws_partition.current.partition}:states:${var.region}:${data.aws_caller_identity.current.account_id}:execution:${local.lambda_name_prefix}-state-machine:*",
+        ]
+      },
+      {
         Sid    = "AllowCloudWatchLogs"
         Effect = "Allow"
         Action = [
@@ -97,6 +109,8 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
         Parameters = {
           "owner.$"        = "$.owner"
           "levels.$"       = "$.levels"
+          "run_id.$"       = "$$.Execution.Name"
+          "output_bucket"  = aws_s3_bucket.audit_output.bucket
           "repositories.$" = "$.initial_data[0]"
           "teams.$"        = "$.initial_data[1]"
         }
@@ -174,12 +188,15 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
         ItemsPath      = "$.repositories"
         MaxConcurrency = var.repository_map_max_concurrency
         ItemSelector = {
-          "owner.$"      = "$.owner"
-          "repository.$" = "$$.Map.Item.Value"
+          "owner.$"         = "$.owner"
+          "run_id.$"        = "$.run_id"
+          "output_bucket.$" = "$.output_bucket"
+          "repository.$"    = "$$.Map.Item.Value"
         }
         ItemProcessor = {
           ProcessorConfig = {
-            Mode = "INLINE"
+            Mode          = "DISTRIBUTED"
+            ExecutionType = "STANDARD"
           }
           StartAt = "RepositoryChecksParallel"
           States = {
@@ -217,24 +234,41 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
             FormatRepositoryChecks = {
               Type = "Pass"
               Parameters = {
+                "owner.$"           = "$.owner"
+                "run_id.$"          = "$.run_id"
+                "output_bucket.$"   = "$.output_bucket"
                 "repository_name.$" = "$.repository.name"
                 "checks.$"          = "$.check_results"
               }
-              End = true
+              Next = "store_repository_output"
+            }
+            store_repository_output = {
+              Type     = "Task"
+              Resource = aws_lambda_function.audit["store_repository_output"].arn
+              Parameters = {
+                "owner.$"           = "$.owner"
+                "run_id.$"          = "$.run_id"
+                "output_bucket.$"   = "$.output_bucket"
+                "repository_name.$" = "$.repository_name"
+                "checks.$"          = "$.checks"
+              }
+              ResultPath = null
+              End        = true
             }
           }
         }
-        ResultPath = "$.repository_results"
+        ResultPath = null
         Next       = "store_output"
       }
       store_output = {
         Type     = "Task"
         Resource = aws_lambda_function.audit["store_output"].arn
         Parameters = {
+          "run_id.$"               = "$.run_id"
+          "output_bucket.$"        = "$.output_bucket"
           "owner.$"                = "$.owner"
           "teams.$"                = "$.teams"
           "organisation_results.$" = "$.organisation_results"
-          "repository_results.$"   = "$.repository_results"
           "team_results.$"         = "$.organisation_results[2]"
         }
         End = true
@@ -248,7 +282,7 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
 
   logging_configuration {
     level                  = "ALL"
-    include_execution_data = true
+    include_execution_data = false
     log_destination        = "${aws_cloudwatch_log_group.step_function.arn}:*"
   }
 }

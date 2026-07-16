@@ -102,3 +102,15 @@ variable "audit_schedule_expression" {
   type        = string
   default     = "cron(0 8 ? * MON *)"
 }
+
+variable "audit_run_retention_days" {
+  description = "Days to retain per-repository run artifacts under audit-runs/."
+  type        = number
+  default     = 30
+}
+
+variable "audit_summary_retention_days" {
+  description = "Days to retain aggregated audit summaries under audit-results/."
+  type        = number
+  default     = 365
+}

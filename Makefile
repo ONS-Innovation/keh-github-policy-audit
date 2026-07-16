@@ -19,13 +19,13 @@
 ## 
 
 .PHONY: help
-help:							## This help message.
+help:				## This help message.
 	@sed -ne '/@sed/!s/## //p' $(MAKEFILE_LIST)
 
 ## 
 
 .PHONY: clean
-clean: 						## Clean the temporary files.
+clean: 				## Clean the temporary files.
 	rm -rf megalinter-reports
 	rm -rf site
 	rm -rf dist
@@ -49,7 +49,7 @@ install-dev: 			## Install the development dependencies.
 # Build Commands
 
 .PHONY: build
-build:							## Build the lambdas.
+build:				## Build the lambdas.
 	@sh scripts/build-dependency-layer.sh
 	@sh scripts/build-lambda-functions.sh
 
@@ -58,24 +58,24 @@ build:							## Build the lambdas.
 # MkDocs
 
 .PHONY: docs-install
-docs-install: 						## Install the dependencies for MkDocs.
+docs-install: 			## Install the dependencies for MkDocs.
 	poetry install --only docs
 
 .PHONY: docs-serve
-docs-serve: docs-install 		## Serve the documentation locally.
+docs-serve: docs-install 	## Serve the documentation locally.
 	poetry run mkdocs serve
 
 .PHONY: docs-build
-docs-build: docs-install 		## Build the documentation.
+docs-build: docs-install 	## Build the documentation.
 	poetry run mkdocs build --site-dir site
 
 .PHONY: docs-lint
-docs-lint: 						## Install and run the documentation linter (Markdownlint).
+docs-lint: 			## Install and run the documentation linter (Markdownlint).
 	npm install -g markdownlint-cli
 	markdownlint .
 
 .PHONY: docs-fix
-docs-fix: 						## Install and run the documentation linter with auto-fix (Markdownlint).
+docs-fix: 			## Install and run the documentation linter with auto-fix (Markdownlint).
 	npm install -g markdownlint-cli
 	markdownlint . --fix
 
@@ -86,13 +86,13 @@ docs-fix: 						## Install and run the documentation linter with auto-fix (Markd
 # Primary Linting
 
 .PHONY: lint
-lint:							## Run all linters.
+lint:				## Run all linters.
 	poetry run ruff check github_policy_audit tests
 	poetry run ruff format github_policy_audit tests --check
 	poetry run mypy github_policy_audit tests
 
 .PHONY: fmt
-fmt:								## Run all formatters.
+fmt:				## Run all formatters.
 	poetry run ruff check github_policy_audit tests --fix
 	poetry run ruff format github_policy_audit tests
 
@@ -105,7 +105,7 @@ tf-validate:			## Validate the Terraform configuration.
 	terraform -chdir=terraform validate
 
 .PHONY: tf-lint
-tf-lint:				## Lint the Terraform configuration.
+tf-lint:			## Lint the Terraform configuration.
 	terraform -chdir=terraform fmt -check -recursive
 
 .PHONY: tf-fmt
@@ -117,11 +117,11 @@ tf-fmt:				## Format the Terraform configuration.
 # Tests
 
 .PHONY: test
-test:							## Run all tests and check coverage.
+test:				## Run all tests and check coverage.
 	poetry run pytest -n auto --cov=github_policy_audit --cov-report term-missing --cov-fail-under=80
 
 .PHONY: test-tf
-test-terraform: build			## Run Terraform tests (requires built Lambda artefacts).
+test-terraform: build		## Run Terraform tests (requires built Lambda artefacts).
 	terraform -chdir=terraform test
 
 ## 

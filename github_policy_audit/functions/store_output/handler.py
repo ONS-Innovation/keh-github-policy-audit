@@ -74,6 +74,54 @@ def _normalise_repository_checks(repositories, repository_results) -> dict[str, 
     return repository_checks
 
 
+def _load_repository_checks_from_s3(
+    *,
+    s3_client,
+    bucket_name: str,
+    owner: str,
+    run_id: str,
+) -> dict[str, dict]:
+    """Load per-repository results from S3 and return keyed repository checks.
+
+    Flow:
+    1. List all JSON objects for the run prefix.
+    2. Iterate object keys.
+    3. Read each object body.
+    4. Normalise checks payload and build repository map.
+    """
+    prefix = f"audit-runs/{owner}/{run_id}/repositories/"
+    repository_checks: dict[str, dict] = {}
+    repository_keys: list[str] = []
+
+    paginator = s3_client.get_paginator("list_objects_v2")
+    for response in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+        for obj in response.get("Contents", []):
+            key = obj.get("Key")
+            if isinstance(key, str) and key.endswith(".json"):
+                repository_keys.append(key)
+
+    for key in repository_keys:
+        raw_body = s3_client.get_object(Bucket=bucket_name, Key=key)["Body"].read()
+        payload = json.loads(raw_body)
+        if not isinstance(payload, dict):
+            continue
+
+        # Prefer explicit field, fallback to filename for resilience.
+        repository_name = payload.get("repository_name")
+        if not isinstance(repository_name, str) or not repository_name:
+            repository_name = key.rsplit("/", 1)[-1].removesuffix(".json")
+        if not repository_name:
+            continue
+
+        checks_payload = payload.get("checks")
+        if isinstance(checks_payload, dict):
+            repository_checks[repository_name] = checks_payload
+        else:
+            repository_checks[repository_name] = {}
+
+    return repository_checks
+
+
 def _normalise_team_checks(teams, team_results) -> dict[str, dict]:
     """Return team checks as {team_slug_or_name: {check_name: check_output}}."""
     if isinstance(teams, dict):
@@ -119,17 +167,32 @@ def handler(event, context):
     if not owner:
         raise ValueError("Event must include non-empty 'owner'")
 
+    environment = os.environ.get("ENVIRONMENT", "local").lower()
+    if environment not in {"local", "prod"}:
+        raise ValueError("ENVIRONMENT must be either 'local' or 'prod'")
+
+    bucket_name = event.get("output_bucket") or os.environ.get("S3_BUCKET_NAME")
+    run_id = event.get("run_id")
+
     repositories = _normalise_repository_checks(
         event.get("repositories"), event.get("repository_results")
     )
+    if not repositories and isinstance(run_id, str) and run_id:
+        if environment == "prod":
+            if not bucket_name:
+                raise ValueError(
+                    "output_bucket (or S3_BUCKET_NAME) is required in prod when using run_id"
+                )
+            repositories = _load_repository_checks_from_s3(
+                s3_client=boto3.client("s3"),
+                bucket_name=bucket_name,
+                owner=owner,
+                run_id=run_id,
+            )
     teams = _normalise_team_checks(event.get("teams"), event.get("team_results"))
     organisation_checks = _normalise_organisation_checks(
         event.get("organisation_checks"), event.get("organisation_results")
     )
-
-    environment = os.environ.get("ENVIRONMENT", "local").lower()
-    if environment not in {"local", "prod"}:
-        raise ValueError("ENVIRONMENT must be either 'local' or 'prod'")
 
     now = datetime.now(timezone.utc)
 
@@ -176,13 +239,19 @@ def handler(event, context):
         "timestamp": now.isoformat(),
     }
 
-    key = f"audit-results/{owner}/{now.strftime('%Y-%m-%d/%H-%M-%S')}.json"
+    result_file_suffix = (
+        run_id
+        if isinstance(run_id, str) and run_id
+        else now.strftime("%Y-%m-%d/%H-%M-%S")
+    )
+    key = f"audit-results/{owner}/{result_file_suffix}.json"
     local_output_path = None
 
     if environment == "prod":
-        bucket_name = os.environ.get("S3_BUCKET_NAME")
         if not bucket_name:
-            raise ValueError("S3_BUCKET_NAME environment variable not set")
+            raise ValueError(
+                "output_bucket (or S3_BUCKET_NAME) environment variable not set"
+            )
 
         logger.info(f"Storing results to s3://{bucket_name}/{key}")
         boto3.client("s3").put_object(
@@ -217,4 +286,5 @@ def handler(event, context):
         "key": key,
         "local_output_path": local_output_path,
         "owner": owner,
+        "run_id": run_id,
     }

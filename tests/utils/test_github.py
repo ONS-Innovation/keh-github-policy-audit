@@ -6,9 +6,17 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+from requests import Response
 from requests.exceptions import HTTPError
 
 from utils import github
+
+
+def _response_with_status(status_code: int) -> Response:
+    """Return a requests.Response configured with the provided status code."""
+    response = Response()
+    response.status_code = status_code
+    return response
 
 
 class FakeSecretsManager:
@@ -238,16 +246,13 @@ class TestGetGithubClient:
             }
         )
 
-        class FakeResponse:
-            status_code = 403
-
         call_count = {"value": 0}
 
         def flaky_github_rest_client(**kwargs: Any) -> dict[str, Any]:
             del kwargs
             call_count["value"] += 1
             if call_count["value"] < 2:
-                raise HTTPError("Forbidden", response=FakeResponse())
+                raise HTTPError("Forbidden", response=_response_with_status(403))
             return {"client": "ok"}
 
         with (
@@ -277,9 +282,6 @@ class TestGetGithubClient:
             }
         )
 
-        class FakeResponse:
-            status_code = 401
-
         with (
             patch.dict(
                 os.environ,
@@ -292,7 +294,9 @@ class TestGetGithubClient:
             patch.object(
                 github,
                 "GitHubRestClient",
-                side_effect=HTTPError("Unauthorized", response=FakeResponse()),
+                side_effect=HTTPError(
+                    "Unauthorized", response=_response_with_status(401)
+                ),
             ),
         ):
             with pytest.raises(HTTPError, match="Unauthorized"):
@@ -309,16 +313,13 @@ class TestGetGithubClient:
             }
         )
 
-        class FakeResponse:
-            status_code = 403
-
         call_count = {"value": 0}
 
         def eventually_successful_client(**kwargs: Any) -> dict[str, Any]:
             del kwargs
             call_count["value"] += 1
             if call_count["value"] <= 3:
-                raise HTTPError("Forbidden", response=FakeResponse())
+                raise HTTPError("Forbidden", response=_response_with_status(403))
             return {"client": "ok-final"}
 
         with (

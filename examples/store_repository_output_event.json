@@ -1,0 +1,23 @@
+{
+  "owner": "ONS-Innovation",
+  "run_id": "manual-test-run-2026-07-16",
+  "output_bucket": "sdp-dev-github-policy-audit",
+  "repository_name": "keh-github-policy-audit",
+  "checks": [
+    {
+      "check_name": "readme",
+      "status": "pass",
+      "message": "README file exists"
+    },
+    {
+      "check_name": "codeowners",
+      "status": "fail",
+      "message": "CODEOWNERS file missing"
+    },
+    {
+      "check_name": "security_scanning",
+      "status": "pass",
+      "message": "Security scanning is enabled"
+    }
+  ]
+}
