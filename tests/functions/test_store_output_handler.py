@@ -104,7 +104,7 @@ class TestNormaliseRepositoryChecks:
             None,
             ["not-a-dict", {"repository_name": "repo-a", "checks": []}],
         )
-        assert result == {"repo-a": {}}
+        assert result == {"repo-a": {"is_compliant": True}}
 
     def test_skips_repository_result_with_missing_name(self):
         """Entries without a repository_name should be silently skipped."""
@@ -129,7 +129,10 @@ class TestNormaliseRepositoryChecks:
             ],
         )
         assert result == {
-            "repo-a": {"readme": {"check_name": "readme", "result": "pass"}}
+            "repo-a": {
+                "readme": {"check_name": "readme", "result": "pass"},
+                "is_compliant": True,
+            }
         }
 
 
@@ -144,7 +147,8 @@ class TestNormaliseTeamChecks:
         )
         assert result == {
             "team-b": {
-                "team_maintainer": {"check_name": "team_maintainer", "result": "pass"}
+                "team_maintainer": {"check_name": "team_maintainer", "result": "pass"},
+                "is_compliant": True,
             }
         }
 
@@ -320,6 +324,43 @@ class TestHandlerLocal:
         assert summary["total_teams"] == 2
         assert summary["compliant_teams"] == 1
 
+    def test_summary_derives_compliance_from_check_results(self):
+        """Summary counts should derive compliance from check results."""
+        event = {
+            "owner": "test-org",
+            "repositories": {
+                "repo-a": {
+                    "naming_convention": {"result": "pass"},
+                    "is_compliant": True,
+                },
+                "repo-b": {
+                    "naming_convention": {"result": "fail"},
+                    "is_compliant": False,
+                },
+            },
+            "teams": {
+                "team-a": {
+                    "maintainer_check": {"result": "pass"},
+                    "is_compliant": True,
+                },
+                "team-b": {
+                    "maintainer_check": {"result": "fail"},
+                    "is_compliant": False,
+                },
+            },
+        }
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+            self.module.handler(event, None)
+
+        output_dir = self.tmp_path / "outputs" / "test-org"
+        files = list(output_dir.glob("*.json"))
+        written = json.loads(files[0].read_text())
+
+        summary = written["summary"]
+        assert summary["compliant_repositories"] == 1
+        assert summary["compliant_teams"] == 1
+
     def test_defaults_to_local_environment(self):
         """The handler should default to the local environment when ENVIRONMENT is not set."""
         with patch.dict(os.environ, {}, clear=False):
@@ -371,15 +412,21 @@ class TestHandlerLocal:
             "repo-a": {
                 "codeowners": {"check_name": "codeowners", "result": "pass"},
                 "readme": {"check_name": "readme", "result": "fail"},
+                "is_compliant": False,
             },
-            "repo-b": {"codeowners": {"check_name": "codeowners", "result": "pass"}},
+            "repo-b": {
+                "codeowners": {"check_name": "codeowners", "result": "pass"},
+                "is_compliant": True,
+            },
         }
         assert written["teams"] == {
             "team-a": {
-                "team_maintainer": {"check_name": "team_maintainer", "result": "pass"}
+                "team_maintainer": {"check_name": "team_maintainer", "result": "pass"},
+                "is_compliant": True,
             },
             "team-b": {
-                "team_maintainer": {"check_name": "team_maintainer", "result": "fail"}
+                "team_maintainer": {"check_name": "team_maintainer", "result": "fail"},
+                "is_compliant": False,
             },
         }
         assert written["organisation_checks"] == {
@@ -475,8 +522,11 @@ class TestHandlerProd:
         )
 
         assert result == {
-            "repo-a": {"readme": {"check_name": "readme", "result": "pass"}},
-            "repo-b": {},
+            "repo-a": {
+                "readme": {"check_name": "readme", "result": "pass"},
+                "is_compliant": True,
+            },
+            "repo-b": {"is_compliant": False},
         }
 
     def test_loads_repository_results_from_run_prefix(self) -> None:
