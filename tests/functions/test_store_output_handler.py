@@ -18,21 +18,21 @@ import pytest
 class TestIsPass:
     module = importlib.import_module("functions.store_output.handler")
 
-    def test_returns_true_for_pass_status(self):
-        """A dict with status 'pass' should be considered passing."""
-        assert self.module._is_pass({"status": "pass"})
+    def test_returns_true_for_pass_result(self):
+        """A dict with result 'pass' should be considered passing."""
+        assert self.module._is_pass({"result": "pass"})
 
     def test_is_case_insensitive(self):
-        """Status matching should be case-insensitive."""
-        assert self.module._is_pass({"status": "PASS"})
-        assert self.module._is_pass({"status": "Pass"})
+        """Result matching should be case-insensitive."""
+        assert self.module._is_pass({"result": "PASS"})
+        assert self.module._is_pass({"result": "Pass"})
 
-    def test_returns_false_for_fail_status(self):
-        """A dict with status 'fail' should not be considered passing."""
-        assert not self.module._is_pass({"status": "fail"})
+    def test_returns_false_for_fail_result(self):
+        """A dict with result 'fail' should not be considered passing."""
+        assert not self.module._is_pass({"result": "fail"})
 
-    def test_returns_false_for_missing_status(self):
-        """A dict without a status key should not be considered passing."""
+    def test_returns_false_for_missing_result(self):
+        """A dict without a result key should not be considered passing."""
         assert not self.module._is_pass({})
 
     def test_returns_false_for_non_dict(self):
@@ -110,7 +110,7 @@ class TestNormaliseRepositoryChecks:
         """Entries without a repository_name should be silently skipped."""
         result = self.module._normalise_repository_checks(
             None,
-            [{"checks": [{"check_name": "readme", "status": "pass"}]}],
+            [{"checks": [{"check_name": "readme", "result": "pass"}]}],
         )
         assert result == {}
 
@@ -123,13 +123,13 @@ class TestNormaliseRepositoryChecks:
                     "repository_name": "repo-a",
                     "checks": [
                         "not-a-dict",
-                        {"check_name": "readme", "status": "pass"},
+                        {"check_name": "readme", "result": "pass"},
                     ],
                 }
             ],
         )
         assert result == {
-            "repo-a": {"readme": {"check_name": "readme", "status": "pass"}}
+            "repo-a": {"readme": {"check_name": "readme", "result": "pass"}}
         }
 
 
@@ -140,11 +140,11 @@ class TestNormaliseTeamChecks:
         """Non-dict entries in team_results should be silently skipped."""
         result = self.module._normalise_team_checks(
             [{"slug": "team-a"}, {"slug": "team-b"}],
-            ["not-a-dict", {"check_name": "team_maintainer", "status": "pass"}],
+            ["not-a-dict", {"check_name": "team_maintainer", "result": "pass"}],
         )
         assert result == {
             "team-b": {
-                "team_maintainer": {"check_name": "team_maintainer", "status": "pass"}
+                "team_maintainer": {"check_name": "team_maintainer", "result": "pass"}
             }
         }
 
@@ -152,7 +152,7 @@ class TestNormaliseTeamChecks:
         """Team results without a check_name should be silently skipped."""
         result = self.module._normalise_team_checks(
             [{"slug": "team-a"}],
-            [{"status": "pass"}],
+            [{"result": "pass"}],
         )
         assert result == {}
 
@@ -180,11 +180,11 @@ class TestHandlerLocal:
         event = {
             "owner": "test-org",
             "repositories": {
-                "repo-a": {"naming_convention": {"status": "pass"}},
-                "repo-b": {"naming_convention": {"status": "fail"}},
+                "repo-a": {"naming_convention": {"result": "pass"}},
+                "repo-b": {"naming_convention": {"result": "fail"}},
             },
             "teams": {},
-            "organisation_checks": {"dependabot_slo": {"status": "pass"}},
+            "organisation_checks": {"dependabot_slo": {"result": "pass"}},
         }
 
         with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
@@ -209,16 +209,16 @@ class TestHandlerLocal:
             "owner": "test-org",
             "repositories": {
                 "repo-a": {
-                    "check_x": {"status": "pass"},
-                    "check_y": {"status": "pass"},
+                    "check_x": {"result": "pass"},
+                    "check_y": {"result": "pass"},
                 },
                 "repo-b": {
-                    "check_x": {"status": "pass"},
-                    "check_y": {"status": "fail"},
+                    "check_x": {"result": "pass"},
+                    "check_y": {"result": "fail"},
                 },
                 "repo-c": {
-                    "check_x": {"status": "pass"},
-                    "check_y": {"status": "pass"},
+                    "check_x": {"result": "pass"},
+                    "check_y": {"result": "pass"},
                 },
             },
         }
@@ -240,7 +240,7 @@ class TestHandlerLocal:
         event = {
             "owner": "test-org",
             "repositories": {
-                "repo-a": {"naming_convention": {"status": "pass"}},
+                "repo-a": {"naming_convention": {"result": "pass"}},
                 "repo-b": "not-a-dict",
             },
         }
@@ -261,9 +261,9 @@ class TestHandlerLocal:
         event = {
             "owner": "test-org",
             "repositories": {
-                "repo-a": {"naming_convention": {"status": "pass"}},
-                "repo-b": {"naming_convention": {"status": "fail"}},
-                "repo-c": {"naming_convention": {"status": "pass"}},
+                "repo-a": {"naming_convention": {"result": "pass"}},
+                "repo-b": {"naming_convention": {"result": "fail"}},
+                "repo-c": {"naming_convention": {"result": "pass"}},
             },
         }
 
@@ -283,8 +283,8 @@ class TestHandlerLocal:
         event = {
             "owner": "test-org",
             "organisation_checks": {
-                "dependabot_slo": {"status": "pass"},
-                "secret_scanning_slo": {"status": "fail"},
+                "dependabot_slo": {"result": "pass"},
+                "secret_scanning_slo": {"result": "fail"},
             },
         }
 
@@ -304,8 +304,8 @@ class TestHandlerLocal:
         event = {
             "owner": "test-org",
             "teams": {
-                "team-a": {"maintainer_check": {"status": "pass"}},
-                "team-b": {"maintainer_check": {"status": "fail"}},
+                "team-a": {"maintainer_check": {"result": "pass"}},
+                "team-b": {"maintainer_check": {"result": "fail"}},
             },
         }
 
@@ -335,29 +335,29 @@ class TestHandlerLocal:
             "owner": "test-org",
             "teams": [{"slug": "team-a"}, {"slug": "team-b"}],
             "organisation_results": [
-                {"check_name": "dependabot_slo", "status": "pass"},
-                {"check_name": "secret_scanning_slo", "status": "fail"},
+                {"check_name": "dependabot_slo", "result": "pass"},
+                {"check_name": "secret_scanning_slo", "result": "fail"},
                 [
-                    {"check_name": "team_maintainer", "status": "pass"},
-                    {"check_name": "team_maintainer", "status": "fail"},
+                    {"check_name": "team_maintainer", "result": "pass"},
+                    {"check_name": "team_maintainer", "result": "fail"},
                 ],
             ],
             "repository_results": [
                 {
                     "repository_name": "repo-a",
                     "checks": [
-                        {"check_name": "codeowners", "status": "pass"},
-                        {"check_name": "readme", "status": "fail"},
+                        {"check_name": "codeowners", "result": "pass"},
+                        {"check_name": "readme", "result": "fail"},
                     ],
                 },
                 {
                     "repository_name": "repo-b",
-                    "checks": [{"check_name": "codeowners", "status": "pass"}],
+                    "checks": [{"check_name": "codeowners", "result": "pass"}],
                 },
             ],
             "team_results": [
-                {"check_name": "team_maintainer", "status": "pass"},
-                {"check_name": "team_maintainer", "status": "fail"},
+                {"check_name": "team_maintainer", "result": "pass"},
+                {"check_name": "team_maintainer", "result": "fail"},
             ],
         }
 
@@ -369,24 +369,24 @@ class TestHandlerLocal:
 
         assert written["repositories"] == {
             "repo-a": {
-                "codeowners": {"check_name": "codeowners", "status": "pass"},
-                "readme": {"check_name": "readme", "status": "fail"},
+                "codeowners": {"check_name": "codeowners", "result": "pass"},
+                "readme": {"check_name": "readme", "result": "fail"},
             },
-            "repo-b": {"codeowners": {"check_name": "codeowners", "status": "pass"}},
+            "repo-b": {"codeowners": {"check_name": "codeowners", "result": "pass"}},
         }
         assert written["teams"] == {
             "team-a": {
-                "team_maintainer": {"check_name": "team_maintainer", "status": "pass"}
+                "team_maintainer": {"check_name": "team_maintainer", "result": "pass"}
             },
             "team-b": {
-                "team_maintainer": {"check_name": "team_maintainer", "status": "fail"}
+                "team_maintainer": {"check_name": "team_maintainer", "result": "fail"}
             },
         }
         assert written["organisation_checks"] == {
-            "dependabot_slo": {"check_name": "dependabot_slo", "status": "pass"},
+            "dependabot_slo": {"check_name": "dependabot_slo", "result": "pass"},
             "secret_scanning_slo": {
                 "check_name": "secret_scanning_slo",
-                "status": "fail",
+                "result": "fail",
             },
         }
         assert written["summary"]["total_repositories"] == 2
@@ -447,7 +447,7 @@ class TestHandlerProd:
                                 "checks": {
                                     "readme": {
                                         "check_name": "readme",
-                                        "status": "pass",
+                                        "result": "pass",
                                     }
                                 }
                             }
@@ -475,7 +475,7 @@ class TestHandlerProd:
         )
 
         assert result == {
-            "repo-a": {"readme": {"check_name": "readme", "status": "pass"}},
+            "repo-a": {"readme": {"check_name": "readme", "result": "pass"}},
             "repo-b": {},
         }
 
@@ -518,7 +518,7 @@ class TestHandlerProd:
                             "checks": {
                                 "readme": {
                                     "check_name": "readme",
-                                    "status": "pass",
+                                    "result": "pass",
                                 }
                             },
                         }
@@ -559,7 +559,7 @@ class TestHandlerProd:
 
         event = {
             "owner": "test-org",
-            "repositories": {"repo-a": {"check_x": {"status": "pass"}}},
+            "repositories": {"repo-a": {"check_x": {"result": "pass"}}},
         }
 
         with (

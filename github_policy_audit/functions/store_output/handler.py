@@ -13,10 +13,10 @@ logger.setLevel(logging.INFO)
 
 
 def _is_pass(check_output):
-    """Return True when a check result reports a passing status."""
+    """Return True when a check result reports a passing result."""
     return (
         isinstance(check_output, dict)
-        and str(check_output.get("status", "")).lower() == "pass"
+        and str(check_output.get("result", "")).lower() == "pass"
     )
 
 
