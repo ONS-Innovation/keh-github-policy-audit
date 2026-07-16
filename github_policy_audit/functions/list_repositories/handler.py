@@ -24,6 +24,7 @@ def handler(event, context):
             "name": repo["name"],
             "data": {
                 "updated_at": repo.get("updated_at"),
+                "visibility": repo.get("visibility"),
                 "security_and_analysis": repo.get("security_and_analysis"),
             },
         }

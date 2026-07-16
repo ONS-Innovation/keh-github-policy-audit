@@ -49,6 +49,7 @@ class TestListRepositoriesHandler:
                 "name": "keh-github-policy-audit",
                 "data": {
                     "updated_at": None,
+                    "visibility": None,
                     "security_and_analysis": None,
                 },
             }
