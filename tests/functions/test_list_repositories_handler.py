@@ -59,3 +59,18 @@ class TestListRepositoriesHandler:
         """A missing owner key in the event should raise a KeyError."""
         with pytest.raises(KeyError, match="owner"):
             self.module.handler({}, None)
+
+    def test_excludes_archived_repositories(self) -> None:
+        """Archived repositories should not be returned by the handler."""
+        repositories = [
+            {"name": "active-repo", "archived": False},
+            {"name": "archived-repo", "archived": True},
+        ]
+
+        with (
+            patch.object(self.module, "get_github_client", return_value=object()),
+            patch.object(self.module, "get_paginated_list", return_value=repositories),
+        ):
+            result = self.module.handler({"owner": "ONS-Innovation"}, None)
+
+        assert [repo["name"] for repo in result] == ["active-repo"]

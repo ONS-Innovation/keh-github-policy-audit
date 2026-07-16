@@ -124,6 +124,8 @@ python github_policy_audit/run_handler.py functions.repository_checks.codeowners
 
 Some repository-scoped handlers can also accept optional repository metadata under `data` when they are invoked downstream of `functions.list_repositories.handler`. This allows the policy methods library to reuse fields already returned by the repository listing and avoid extra GitHub API calls.
 
+`functions.list_repositories.handler` returns only non-archived repositories.
+
 ### 4. Payload summary
 
 #### Repository Listing

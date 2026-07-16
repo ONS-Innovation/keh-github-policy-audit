@@ -100,6 +100,8 @@ EventBridge injects the initial execution input:
 
 The `Initialise` parallel state fans out to `list_repositories` and `list_teams`, each receiving only `owner` and `levels` from the parent state.
 
+`list_repositories` returns only non-archived repositories.
+
 ### 2. Initialise → PrepareInput
 
 The parallel branches return their results as an array under `$.initial_data`:
