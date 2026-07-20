@@ -4,12 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - src/**
+      - github_policy_audit/**
       - tests/**
   pull_request:
     branches: [main]
     paths:
-      - src/**
+      - github_policy_audit/**
       - tests/**
 permissions:
   contents: read

@@ -9,6 +9,8 @@ license = {text = "MIT"}
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "policy-methods-library @ git+https://github.com/ONS-Innovation/keh-policy-methods-library.git",
+    "boto3 (>=1.43.40,<2.0.0)"
 ]
 
 [tool.poetry.group.docs]
@@ -32,7 +34,21 @@ cryptography = "^48.0.0"
 types-requests = "^2.33.0.20260503"
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["github_policy_audit"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = ["github_policy_audit"]
+namespace_packages = true
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["boto3", "boto3.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["policy_methods_library", "policy_methods_library.*"]
+ignore_missing_imports = true
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
@@ -40,4 +56,3 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 repository = "http://github.com/ONS-Innovation/keh-github-policy-audit"
-package-mode = false
