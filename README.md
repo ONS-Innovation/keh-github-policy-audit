@@ -112,9 +112,9 @@ Ready-to-use payload files are provided in `examples/`:
 - `examples/organisation_event.json`
 - `examples/dependabot_slo_event.json`
 - `examples/naming_convention_event.json`
+- `examples/team_maintainer_event.json`
 - `examples/store_output_event.json`
 - `examples/store_repository_output_event.json`
-- `examples/team_maintainer_event.json`
 
 To use these examples, run:
 

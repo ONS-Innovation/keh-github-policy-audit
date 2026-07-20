@@ -37,6 +37,8 @@ clean: 				## Clean the temporary files.
 	rm -rf .pytest_cache
 	rm -rf .coverage
 	find . -type d -name '__pycache__' -exec rm -rf {} +
+	rm -rf build
+	rm -rf tmp
 
 ## 
 
