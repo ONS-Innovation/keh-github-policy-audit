@@ -1,0 +1,37 @@
+{
+  "owner": "ONS-Innovation",
+  "run_id": "manual-test-run-2026-07-16",
+  "output_bucket": "sdp-dev-github-policy-audit",
+  "teams": [
+    {
+      "slug": "knowledge-exchange-hub",
+      "name": "Knowledge Exchange Hub"
+    }
+  ],
+  "organisation_results": [
+    {
+      "check_name": "dependabot_slo",
+      "status": "pass",
+      "message": "Dependabot meets SLO"
+    },
+    {
+      "check_name": "secret_scanning_slo",
+      "status": "pass",
+      "message": "Secret scanning meets SLO"
+    },
+    [
+      {
+        "check_name": "team_maintainer",
+        "status": "pass",
+        "message": "Team has maintainers"
+      }
+    ]
+  ],
+  "team_results": [
+    {
+      "check_name": "team_maintainer",
+      "status": "pass",
+      "message": "Team has maintainers"
+    }
+  ]
+}

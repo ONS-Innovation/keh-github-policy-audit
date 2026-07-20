@@ -21,6 +21,6 @@ def handler(event, context):
     )
     result["check_name"] = "security_scanning"
     logger.info(
-        f"Lambda completed check={result['check_name']} status={result.get('status')}"
+        f"Lambda completed check={result['check_name']} result={result.get('result')}"
     )
     return result

@@ -16,11 +16,16 @@ A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage 
       - [Repository Listing](#repository-listing)
       - [Organisation Team Listing](#organisation-team-listing)
       - [Check Handlers](#check-handlers)
+      - [Output Handlers](#output-handlers)
   - [Deployment](#deployment)
     - [Deployments with Concourse](#deployments-with-concourse)
     - [Manual Deployment](#manual-deployment)
       - [Building the Lambda Functions](#building-the-lambda-functions)
       - [Terraform Deployment](#terraform-deployment)
+        - [What Terraform provisions](#what-terraform-provisions)
+        - [Terraform file structure](#terraform-file-structure)
+        - [Terraform Deployment Steps](#terraform-deployment-steps)
+        - [Terraform Variables](#terraform-variables)
   - [Documentation](#documentation)
     - [GitHub Actions for Documentation](#github-actions-for-documentation)
     - [Local Development of Documentation](#local-development-of-documentation)
@@ -28,6 +33,7 @@ A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage 
     - [GitHub Actions](#github-actions)
     - [Running Tests and Linters Locally](#running-tests-and-linters-locally)
       - [Primary Language](#primary-language)
+      - [Terraform](#terraform)
       - [MegaLinter](#megalinter)
       - [Documentation linting and building](#documentation-linting-and-building)
 
@@ -67,7 +73,7 @@ export ENVIRONMENT=local
 
 `GITHUB_APP_ID_SECRET_NAME` should point to a secret containing a JSON object with the GitHub App ID under the `AppID` key (for example: `{"AppID":"123456"}`).
 `GITHUB_PRIVATE_KEY_SECRET_NAME` should point to a separate secret containing only the GitHub App private key as plain text (PEM), not a key-value JSON object.
-`ENVIRONMENT` controls output behaviour for `functions.store_output.handler`:
+`ENVIRONMENT` controls output behaviour for `functions.store_repository_output.handler` and `functions.store_output.handler`:
 
 - `local` (default): writes output JSON to `outputs/<owner>/` and does not call AWS S3.
 - `prod`: writes output JSON to S3 and requires `S3_BUCKET_NAME`.
@@ -106,8 +112,9 @@ Ready-to-use payload files are provided in `examples/`:
 - `examples/organisation_event.json`
 - `examples/dependabot_slo_event.json`
 - `examples/naming_convention_event.json`
-- `examples/store_output_event.json`
 - `examples/team_maintainer_event.json`
+- `examples/store_output_event.json`
+- `examples/store_repository_output_event.json`
 
 To use these examples, run:
 
@@ -116,6 +123,8 @@ python github_policy_audit/run_handler.py functions.repository_checks.codeowners
 ```
 
 Some repository-scoped handlers can also accept optional repository metadata under `data` when they are invoked downstream of `functions.list_repositories.handler`. This allows the policy methods library to reuse fields already returned by the repository listing and avoid extra GitHub API calls.
+
+`functions.list_repositories.handler` returns only non-archived repositories.
 
 ### 4. Payload summary
 
@@ -141,6 +150,15 @@ Some repository-scoped handlers can also accept optional repository metadata und
 | Dependabot SLO                                          | `functions.organisation_checks.dependabot_slo.handler`                                                                                                                                                                                                                                                                                                                                                             | `{"owner":"<org>","levels":["critical","high"]}` (`levels` optional)                                          |
 | Naming convention                                       | `functions.repository_checks.naming_convention.handler`                                                                                                                                                                                                                                                                                                                                                            | `{"owner":"<org>","repository_name":"<repo>"}`                                                                |
 | Team maintainer                                         | `functions.organisation_checks.team_maintainer.handler`                                                                                                                                                                                                                                                                                                                                                            | `{"owner":"<org>","team_slug":"<team>"}`                                                                      |
+
+#### Output Handlers
+
+| Handler modules                                   | Required event payload                                                                                                                   |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `functions.store_repository_output.handler`       | `{"owner":"<org>","run_id":"<execution-id>","repository_name":"<repo>","checks":[{"check_name":"readme","status":"pass"}]}`              |
+| `functions.store_output.handler` (S3 aggregation) | `{"owner":"<org>","run_id":"<execution-id>","output_bucket":"<bucket>","organisation_results":[...],"teams":[...],"team_results":[...]}` |
+
+The scalable production flow stores one repository JSON file at a time under `audit-runs/<owner>/<run_id>/repositories/`, then `store_output` aggregates that prefix and writes the final summary to `audit-results/<owner>/<run_id>.json`.
 
 ## Deployment
 
@@ -169,7 +187,86 @@ A dependency layer is used to reduce the size of the individual Lambda function 
 
 #### Terraform Deployment
 
-TODO: Write and Document Terraform
+##### What Terraform provisions
+
+Terraform in `terraform/` provisions:
+
+- an S3 bucket for audit outputs
+- all Lambda functions from `build/lambdas/*.zip`
+- a shared Lambda dependency layer from `build/dependency-layer.zip`
+- a Step Functions state machine matching `docs/step-function-flow.md`
+- an EventBridge weekly schedule (`cron(0 8 ? * MON *)`) that starts execution
+
+##### Terraform file structure
+
+| File                | Purpose                                                               |
+| ------------------- | --------------------------------------------------------------------- |
+| `providers.tf`      | AWS provider config and default tags.                                 |
+| `variables.tf`      | Input variables for environment, runtime, schedule, and secrets.      |
+| `data.tf`           | AWS account/partition data sources used in IAM ARNs.                  |
+| `locals.tf`         | Shared locals (Lambda package map, naming, repository check list).    |
+| `storage.tf`        | S3 bucket resources for audit output storage.                         |
+| `lambda.tf`         | Lambda IAM role/policies, dependency layer, and all Lambda functions. |
+| `step_functions.tf` | Step Functions IAM role/policy and state machine definition.          |
+| `eventbridge.tf`    | EventBridge schedule rule/target and IAM role to start executions.    |
+| `outputs.tf`        | Useful deployment outputs (state machine ARN, Lambda names, bucket).  |
+
+##### Terraform Deployment Steps
+
+1. Build the Lambda functions and dependency layer:
+
+   ```bash
+   make build
+   ```
+
+2. Copy the example tfvars file for your target environment and fill in any secrets:
+
+   ```bash
+   cp terraform/env/dev/example_tfvars.txt terraform/env/dev/dev.tfvars
+   # edit dev.tfvars with real secret names
+   ```
+
+3. Then run the standard Terraform workflow, pointing at the environment backend and vars:
+
+   ```bash
+   cd terraform
+
+   # 1. Initialise with the environment-specific remote backend
+   terraform init -backend-config=env/dev/backend-dev.tfbackend -reconfigure
+
+   # 2. Refresh state from the remote backend
+   terraform refresh -var-file=env/dev/dev.tfvars
+
+   # 3. Preview changes
+   terraform plan -var-file=env/dev/dev.tfvars
+
+   # 4. Apply changes
+   terraform apply -var-file=env/dev/dev.tfvars
+   ```
+
+   Substitute `dev` with `prod` for production deployments.
+
+##### Terraform Variables
+
+| Variable                                | Required | Default                              | Description                                                                                       |
+| --------------------------------------- | -------- | ------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `env_name`                              | No       | `sdp-dev`                            | Environment name. Controls bucket/resource naming (e.g. `sdp-dev`, `sdp-prod`).                   |
+| `region`                                | No       | `eu-west-2`                          | AWS region to deploy into.                                                                        |
+| `github_owner`                          | **Yes**  | —                                    | GitHub organisation name audited on each run.                                                     |
+| `github_app_id_secret_name`             | **Yes**  | —                                    | Secrets Manager secret name for the GitHub App ID (`{"AppID":"..."}` JSON).                       |
+| `github_private_key_secret_name`        | **Yes**  | —                                    | Secrets Manager secret name for the GitHub App private key (PEM, plain text).                     |
+| `lambda_runtime`                        | No       | `python3.12`                         | Lambda runtime identifier.                                                                        |
+| `lambda_timeout`                        | No       | `120`                                | Lambda timeout in seconds.                                                                        |
+| `lambda_memory_size`                    | No       | `512`                                | Lambda memory in MB.                                                                              |
+| `lambda_reserved_concurrent_executions` | No       | `10`                                 | Reserved concurrent executions per Lambda function. Set to `-1` for unreserved (not recommended). |
+| `lambda_log_retention_days`             | No       | `90`                                 | CloudWatch log group retention period in days for Lambda functions.                               |
+| `step_function_log_retention_days`      | No       | `90`                                 | CloudWatch log group retention period in days for the Step Functions state machine.               |
+| `repository_map_max_concurrency`        | No       | `5`                                  | Max parallel repositories processed in the repository checks map state.                           |
+| `team_map_max_concurrency`              | No       | `5`                                  | Max parallel teams processed in the team maintainer map state.                                    |
+| `dependabot_slo_levels`                 | No       | `["critical","high","medium","low"]` | Dependabot alert severity levels included in the SLO check.                                       |
+| `audit_schedule_expression`             | No       | `cron(0 8 ? * MON *)`                | EventBridge schedule expression for the weekly audit trigger.                                     |
+| `audit_run_retention_days`              | No       | `30`                                 | Days to retain per-repository run artifacts under `audit-runs/`.                                  |
+| `audit_summary_retention_days`          | No       | `365`                                | Days to retain aggregated summary outputs under `audit-results/`.                                 |
 
 ## Documentation
 
@@ -211,6 +308,7 @@ To run the documentation locally:
 This repository has GitHub Actions workflows set up for linting and testing. The workflows are located at:
 
 - `.github/workflows/ci-fmt.yml` for linting and formatting checks (primary language).
+- `.github/workflows/ci-terraform.yml` for linting and testing the Terraform configuration.
 - `.github/workflows/ci-test.yml` for running automated tests.
 - `.github/workflows/ci-docs.yml` for checking that the documentation builds correctly and has no linting or formatting issues.
 - `.github/workflows/megalinter.yml` for running MegaLinter, which checks for linting and formatting issues across multiple languages and file types (this is a catch-all linter).
@@ -235,8 +333,29 @@ make fmt
 To run the tests locally, you can use:
 
 ```bash
-make test-unit
+make test
 ```
+
+#### Terraform
+
+Terraform tests use the native [`terraform test`](https://developer.hashicorp.com/terraform/language/tests) framework with mock providers — no AWS credentials are required.
+
+Tests live in `terraform/tests/` and are grouped by concern:
+
+| File                       | What it covers                                                                                                                      |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `naming.tftest.hcl`        | Resource names follow the `${env_name}-github-policy-audit-*` convention for dev and prod.                                          |
+| `lambda.tftest.hcl`        | All 18 Lambdas are defined, runtime/timeout/memory defaults, environment variables, handler paths, and the shared dependency layer. |
+| `storage.tftest.hcl`       | S3 bucket naming, public access block settings, and lifecycle rules for run artifacts and summaries.                                |
+| `state_machine.tftest.hcl` | Required states are present, repository map distribution/concurrency, logging config, and EventBridge schedule/input payload.       |
+
+To run the Terraform tests locally:
+
+```bash
+make test-terraform
+```
+
+This will build the Lambda artefacts first (`make build`), then run `terraform test` against all test files.
 
 #### MegaLinter
 

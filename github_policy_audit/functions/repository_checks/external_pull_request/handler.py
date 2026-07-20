@@ -19,6 +19,6 @@ def handler(event, context):
     result = check_external_pull_request(client, event["repository_name"])
     result["check_name"] = "external_pull_request"
     logger.info(
-        f"Lambda completed check={result['check_name']} status={result.get('status')}"
+        f"Lambda completed check={result['check_name']} result={result.get('result')}"
     )
     return result

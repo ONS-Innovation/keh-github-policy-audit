@@ -17,6 +17,8 @@ def handler(event, context):
     result = check_team_maintainer(client, event["team_slug"])
     result["check_name"] = "team_maintainer"
     logger.info(
-        f"Lambda completed check={result['check_name']} status={result.get('status')}"
+        f"Lambda completed check={result['check_name']} result={result.get('result')}"
     )
+
+    result.pop("details", None)  # Remove details from the result to reduce payload size
     return result

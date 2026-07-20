@@ -1,0 +1,14 @@
+skip-check:
+  - CKV_AWS_116 # DLQ is not applicable since lambdas are triggered synchronously by Step Functions.
+  - CKV_AWS_173 # KMS encryption for env vars not needed since the env vars are not sensitive.
+  - CKV_AWS_272 # Code Signing not needed since the zip files are built in a controlled environment and not downloaded from the internet.
+  - CKV_AWS_382 # Functions egress to the internet is required for GitHub API access. Lots of work for a small security gain to restrict egress to GitHub IPs.
+
+  - CKV_AWS_145 # Default Bucket Encryption is fine over riding with a KMS key since the bucket is not public.
+  - CKV_AWS_18 # Bucket Access Logging is not needed since the bucket is not public.
+  - CKV_AWS_144 # Bucket Cross-Region Replication is not needed since the data is reproducible.
+  - CKV2_AWS_62 # Bucket event notifications not required.
+  - CKV2_AWS_61 # TODO: Bucket Lifecycle is TBC
+
+  - CKV_AWS_158 # Default CloudWatch Encryption is fine. KMS not required since the logs are not sensitive.
+  - CKV_AWS_338 # 90 days retention is fine for the CloudWatch logs - organisational norm.

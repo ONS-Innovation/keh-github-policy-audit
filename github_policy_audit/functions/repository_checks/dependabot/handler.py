@@ -17,6 +17,6 @@ def handler(event, context):
     result = check_dependabot(client, event["repository_name"])
     result["check_name"] = "dependabot"
     logger.info(
-        f"Lambda completed check={result['check_name']} status={result.get('status')}"
+        f"Lambda completed check={result['check_name']} result={result.get('result')}"
     )
     return result
