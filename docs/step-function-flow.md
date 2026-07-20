@@ -22,8 +22,7 @@ flowchart TD
     end
 
     INIT_PARALLEL --> PREP[PrepareInput\nextract S3 ref + teams from initial_data]
-    PREP --> LRS[LoadRepositories\nload_repositories\nreads repositories-list.json from S3]
-    LRS --> ORG_PARALLEL
+    PREP --> ORG_PARALLEL
 
     subgraph ORG_PARALLEL[" Parallel — Organisation Checks "]
         DS[dependabot_slo]
@@ -33,7 +32,7 @@ flowchart TD
 
     ORG_PARALLEL --> REPO_MAP
 
-    subgraph REPO_MAP[" Distributed Map over repositories\nMaxConcurrency = 5 "]
+    subgraph REPO_MAP[" Distributed Map over repositories\nItemReader reads repositories-list.json from S3\nMaxConcurrency = 5 "]
         subgraph REPO_PARALLEL[" Parallel — Per-repository Checks "]
             RC1[codeowners]
             RC2[dependabot]
@@ -62,7 +61,6 @@ flowchart TD
 | Prepare initial input  | `Pass`                                                    | None (injects `run_id` and `output_bucket` into `$.initial_input`)                                                                                                         |
 | Initialise             | `Parallel`                                                | `list_repositories` (writes to S3, returns reference), `list_teams`                                                                                                        |
 | Prepare input          | `Pass`                                                    | None (reshapes state; promotes S3 ref and teams)                                                                                                                           |
-| Load repositories      | `Task`                                                    | `load_repositories` (reads repository list from S3)                                                                                                                        |
 | Organisation checks    | `Parallel` + inner `Map` for teams                        | `dependabot_slo`, `secret_scanning_slo`, `team_maintainer`                                                                                                                 |
 | Repository checks      | `Map` (Mode=`DISTRIBUTED`, MaxConcurrency=5) + `Parallel` | `codeowners`, `dependabot`, `external_pull_request`, `gitignore`, `inactivity`, `license`, `naming_convention`, `pirr`, `readme`, `repository_access`, `security_scanning` |
 | Repo output write      | `Task`                                                    | `store_repository_output`                                                                                                                                                  |
@@ -147,7 +145,7 @@ The parallel branches return their results as an array under `$.initial_data`:
 
 > The repository list is written to S3 rather than held in Step Function state because large organisations (3 000+ repos) would otherwise exceed the 256 KB state-size limit.
 
-### 3. PrepareInput → LoadRepositories → OrganisationChecks
+### 3. PrepareInput → OrganisationChecks
 
 `PrepareInput` is a Pass state that reshapes the execution state, extracting `owner`, `levels`, `run_id`, and `output_bucket` from `$.initial_input`, the S3 reference from `initial_data[0]`, and `teams` from `initial_data[1]`:
 
@@ -162,18 +160,7 @@ The parallel branches return their results as an array under `$.initial_data`:
 }
 ```
 
-`LoadRepositories` then calls the `load_repositories` Lambda with `s3_bucket` and `s3_key` from `repositories_s3_ref`. It reads `repositories-list.json` from S3 and writes the full array into `$.repositories`. After this step, the state available to all downstream stages is:
-
-```json
-{
-    "owner": "ONS-Innovation",
-    "levels": ["critical", "high", "medium", "low"],
-    "run_id": "<sfn-execution-name>",
-    "output_bucket": "<s3-bucket-name>",
-    "repositories": [{ "name": "repo-a", "data": { "updated_at": "...", "security_and_analysis": {} } }],
-    "teams": [{ "name": "team-a", "slug": "team-a" }]
-}
-```
+The `repositories_s3_ref` is carried through `OrganisationChecks` unchanged and consumed later by the `RepositoryChecksMap` `ItemReader`.
 
 ### 4. OrganisationChecks
 
@@ -203,7 +190,9 @@ All other top-level keys (`owner`, `levels`, `run_id`, `output_bucket`, `reposit
 
 ### 5. RepositoryChecksMap (Distributed Map)
 
-Each item in `$.repositories` spawns a child execution. The item selector passes only what each child needs:
+The map uses an `ItemReader` to fetch `repositories-list.json` directly from S3 and iterate over the `$.repositories` array, without loading any data into Step Function state. This avoids the 256 KB state-size limit entirely and allows the map to scale to thousands of repositories.
+
+Each item in the array spawns a child execution. The item selector passes only what each child needs:
 
 ```json
 {

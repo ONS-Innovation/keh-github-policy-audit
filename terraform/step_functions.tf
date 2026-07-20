@@ -30,6 +30,14 @@ resource "aws_iam_role_policy" "step_function_invoke_lambda" {
         Resource = [for lambda in aws_lambda_function.audit : lambda.arn]
       },
       {
+        Sid    = "AllowReadRepositoryList"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+        ]
+        Resource = "${aws_s3_bucket.audit_output.arn}/audit-runs/*/repositories-list.json"
+      },
+      {
         Sid    = "AllowDistributedMapChildExecutions"
         Effect = "Allow"
         Action = [
@@ -134,16 +142,6 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
           "teams.$"               = "$.initial_data[1]"
         }
         ResultPath = "$"
-        Next       = "LoadRepositories"
-      }
-      LoadRepositories = {
-        Type     = "Task"
-        Resource = aws_lambda_function.audit["load_repositories"].arn
-        Parameters = {
-          "s3_bucket.$" = "$.repositories_s3_ref.s3_bucket"
-          "s3_key.$"    = "$.repositories_s3_ref.s3_key"
-        }
-        ResultPath = "$.repositories"
         Next       = "OrganisationChecks"
       }
       OrganisationChecks = {
@@ -214,8 +212,18 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
       }
       RepositoryChecksMap = {
         Type           = "Map"
-        ItemsPath      = "$.repositories"
         MaxConcurrency = var.repository_map_max_concurrency
+        ItemReader = {
+          Resource = "arn:${data.aws_partition.current.partition}:states:::s3:getObject"
+          ReaderConfig = {
+            InputType = "JSON"
+            JSONPath  = "$.repositories"
+          }
+          Parameters = {
+            "Bucket.$" = "$.repositories_s3_ref.s3_bucket"
+            "Key.$"    = "$.repositories_s3_ref.s3_key"
+          }
+        }
         ItemSelector = {
           "owner.$"         = "$.owner"
           "run_id.$"        = "$.run_id"
