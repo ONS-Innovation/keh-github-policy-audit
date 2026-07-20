@@ -186,11 +186,11 @@ Their combined outputs are collected into `$.organisation_results` as a three-el
 }
 ```
 
-All other top-level keys (`owner`, `levels`, `run_id`, `output_bucket`, `repositories`, `teams`) are preserved unchanged.
+All other top-level keys (`owner`, `levels`, `run_id`, `output_bucket`, `repositories_s3_ref`, `teams`) are preserved unchanged.
 
 ### 5. RepositoryChecksMap (Distributed Map)
 
-The map uses an `ItemReader` to fetch `repositories-list.json` directly from S3 and iterate over the `$.repositories` array, without loading any data into Step Function state. This avoids the 256 KB state-size limit entirely and allows the map to scale to thousands of repositories.
+The map uses a native `ItemReader` to fetch `repositories-list.json` directly from S3 and iterate over it, without loading any data into Step Function state. The file is written as a bare JSON array by `list_repositories`, which is what `InputType: JSON` requires. This avoids the 256 KB state-size limit entirely and allows the map to scale to thousands of repositories.
 
 Each item in the array spawns a child execution. The item selector passes only what each child needs:
 

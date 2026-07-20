@@ -108,7 +108,7 @@ resource "aws_lambda_function" "audit" {
   filename      = each.value.zip_path
 
   source_code_hash               = filebase64sha256(each.value.zip_path)
-  timeout                        = var.lambda_timeout
+  timeout                        = try(each.value.timeout, var.lambda_timeout)
   memory_size                    = var.lambda_memory_size
   reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
   layers                         = [aws_lambda_layer_version.dependencies.arn]

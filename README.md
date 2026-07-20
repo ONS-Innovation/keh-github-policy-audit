@@ -130,9 +130,9 @@ Some repository-scoped handlers can also accept optional repository metadata und
 
 #### Repository Listing
 
-| Handler modules                       | Required event payload |
-| ------------------------------------- | ---------------------- |
-| `functions.list_repositories.handler` | `{"owner":"<org>"}`    |
+| Handler modules                       | Required event payload                                                                           |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `functions.list_repositories.handler` | `{"owner":"<org>","run_id":"<id>","output_bucket":"<bucket>"}` — writes a bare JSON array of repository summaries to `s3://<bucket>/audit-runs/<owner>/<run_id>/repositories-list.json` and returns an S3 reference. In the step function the `run_id` and `output_bucket` are injected automatically. |
 
 #### Organisation Team Listing
 
@@ -256,7 +256,7 @@ Terraform in `terraform/` provisions:
 | `github_app_id_secret_name`             | **Yes**  | —                                    | Secrets Manager secret name for the GitHub App ID (`{"AppID":"..."}` JSON).                       |
 | `github_private_key_secret_name`        | **Yes**  | —                                    | Secrets Manager secret name for the GitHub App private key (PEM, plain text).                     |
 | `lambda_runtime`                        | No       | `python3.12`                         | Lambda runtime identifier.                                                                        |
-| `lambda_timeout`                        | No       | `120`                                | Lambda timeout in seconds.                                                                        |
+| `lambda_timeout`                        | No       | `120`                                | Default Lambda timeout in seconds. This can be overridden per Lambda function in `locals.tf`.     |
 | `lambda_memory_size`                    | No       | `512`                                | Lambda memory in MB.                                                                              |
 | `lambda_reserved_concurrent_executions` | No       | `10`                                 | Reserved concurrent executions per Lambda function. Set to `-1` for unreserved (not recommended). |
 | `lambda_log_retention_days`             | No       | `90`                                 | CloudWatch log group retention period in days for Lambda functions.                               |

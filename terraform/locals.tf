@@ -7,6 +7,7 @@ locals {
     list_repositories = {
       zip_path = "${local.lambda_source_root}/list_repositories.zip"
       handler  = "functions.list_repositories.handler.handler"
+      timeout  = 600
     }
     list_teams = {
       zip_path = "${local.lambda_source_root}/list_teams.zip"
@@ -15,10 +16,12 @@ locals {
     dependabot_slo = {
       zip_path = "${local.lambda_source_root}/organisation_checks-dependabot_slo.zip"
       handler  = "functions.organisation_checks.dependabot_slo.handler.handler"
+      timeout  = 300
     }
     secret_scanning_slo = {
       zip_path = "${local.lambda_source_root}/organisation_checks-secret_scanning_slo.zip"
       handler  = "functions.organisation_checks.secret_scanning_slo.handler.handler"
+      timeout  = 300
     }
     team_maintainer = {
       zip_path = "${local.lambda_source_root}/organisation_checks-team_maintainer.zip"

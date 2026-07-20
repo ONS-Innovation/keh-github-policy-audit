@@ -8,6 +8,46 @@ import pytest
 
 
 # ---------------------------------------------------------------------------
+# _slim_security_and_analysis
+# ---------------------------------------------------------------------------
+
+
+class TestSlimSecurityAndAnalysis:
+    module = importlib.import_module("functions.list_repositories.handler")
+
+    def test_retains_only_status_per_feature(self) -> None:
+        """Each feature should be reduced to {"status": ...}, dropping all other keys."""
+        raw = {
+            "secret_scanning": {"status": "enabled", "url": "https://example.com"},
+            "secret_scanning_push_protection": {"status": "enabled"},
+            "dependabot_security_updates": {"status": "disabled"},
+            "secret_scanning_ai_detection": {"status": "disabled", "extra": "noise"},
+        }
+        result = self.module._slim_security_and_analysis(raw)
+        assert result == {
+            "secret_scanning": {"status": "enabled"},
+            "secret_scanning_push_protection": {"status": "enabled"},
+            "dependabot_security_updates": {"status": "disabled"},
+            "secret_scanning_ai_detection": {"status": "disabled"},
+        }
+
+    def test_drops_features_without_status(self) -> None:
+        """Features that have no 'status' key should be excluded."""
+        raw = {
+            "secret_scanning": {"status": "enabled"},
+            "broken_feature": {"url": "https://example.com"},
+        }
+        result = self.module._slim_security_and_analysis(raw)
+        assert result == {"secret_scanning": {"status": "enabled"}}
+
+    def test_returns_none_for_none_input(self) -> None:
+        assert self.module._slim_security_and_analysis(None) is None
+
+    def test_returns_input_unchanged_for_non_dict(self) -> None:
+        assert self.module._slim_security_and_analysis("unexpected") == "unexpected"
+
+
+# ---------------------------------------------------------------------------
 # handler
 # ---------------------------------------------------------------------------
 
@@ -78,8 +118,8 @@ class TestListRepositoriesHandler:
         with open(result["local_output_path"], encoding="utf-8") as output_file:
             stored_data = self.module.json.load(output_file)
 
-        assert stored_data["repository_count"] == 1
-        assert stored_data["repositories"][0]["name"] == "keh-github-policy-audit"
+        assert len(stored_data) == 1
+        assert stored_data[0]["name"] == "keh-github-policy-audit"
 
     def test_fetches_paginated_repositories_and_writes_to_s3(self) -> None:
         """The handler should fetch repositories, write to S3, and return S3 reference."""
@@ -178,5 +218,5 @@ class TestListRepositoriesHandler:
         import json
 
         stored_data = json.loads(call_kwargs["Body"])
-        assert len(stored_data["repositories"]) == 1
-        assert stored_data["repositories"][0]["name"] == "active-repo"
+        assert len(stored_data) == 1
+        assert stored_data[0]["name"] == "active-repo"

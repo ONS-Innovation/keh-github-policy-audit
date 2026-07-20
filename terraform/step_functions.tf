@@ -217,7 +217,6 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
           Resource = "arn:${data.aws_partition.current.partition}:states:::s3:getObject"
           ReaderConfig = {
             InputType = "JSON"
-            JSONPath  = "$.repositories"
           }
           Parameters = {
             "Bucket.$" = "$.repositories_s3_ref.s3_bucket"
