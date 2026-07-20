@@ -202,9 +202,7 @@ def handler(event, context):
     """Store output from either canonical maps or raw Step Function map/parallel arrays."""
     logger.info(f"Lambda invoked with event keys={sorted(event.keys())}")
 
-    owner = event.get("owner")
-    if not owner:
-        raise ValueError("Event must include non-empty 'owner'")
+    owner = event["owner"]
 
     environment = os.environ.get("ENVIRONMENT", "local").lower()
     if environment not in {"local", "prod"}:
@@ -253,8 +251,6 @@ def handler(event, context):
     }
 
     for _, checks in repositories.items():
-        if not isinstance(checks, dict):
-            continue
         for check_name, check_output in checks.items():
             if check_name == "is_compliant":
                 continue

@@ -14,17 +14,17 @@ class TestStoreRepositoryOutputValidation:
     module = importlib.import_module("functions.store_repository_output.handler")
 
     def test_requires_owner(self) -> None:
-        with pytest.raises(ValueError, match="owner"):
+        with pytest.raises(KeyError):
             self.module.handler({"run_id": "run-1", "repository_name": "repo-a"}, None)
 
     def test_requires_run_id(self) -> None:
-        with pytest.raises(ValueError, match="run_id"):
+        with pytest.raises(KeyError):
             self.module.handler(
                 {"owner": "test-org", "repository_name": "repo-a"}, None
             )
 
     def test_requires_repository_name(self) -> None:
-        with pytest.raises(ValueError, match="repository_name"):
+        with pytest.raises(KeyError):
             self.module.handler({"owner": "test-org", "run_id": "run-1"}, None)
 
     def test_raises_when_checks_not_dict_or_list(self) -> None:

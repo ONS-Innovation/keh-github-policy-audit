@@ -51,14 +51,9 @@ class TestHandlerValidation:
     module = importlib.import_module("functions.store_output.handler")
 
     def test_raises_for_missing_owner(self):
-        """A missing owner key in the event should raise a ValueError."""
-        with pytest.raises(ValueError, match="owner"):
+        """A missing owner key in the event should raise a KeyError."""
+        with pytest.raises(KeyError):
             self.module.handler({}, None)
-
-    def test_raises_for_empty_owner(self):
-        """An empty owner value in the event should raise a ValueError."""
-        with pytest.raises(ValueError, match="owner"):
-            self.module.handler({"owner": ""}, None)
 
     def test_raises_when_repositories_not_a_dict(self):
         """A non-dict repositories value should raise a ValueError."""
@@ -239,8 +234,8 @@ class TestHandlerLocal:
         assert summary["total_repositories"] == 3
         assert summary["compliant_repositories"] == 2
 
-    def test_skips_non_dict_repository_checks(self):
-        """Non-dict repository check values should be skipped when building the summary."""
+    def test_non_dict_repository_checks_normalised_to_non_compliant(self):
+        """Non-dict repository check values are normalised to {is_compliant: False}."""
         event = {
             "owner": "test-org",
             "repositories": {
@@ -256,7 +251,10 @@ class TestHandlerLocal:
         files = list(output_dir.glob("*.json"))
         written = json.loads(files[0].read_text())
 
-        check_summary = written["summary"]["repository_checks"]["naming_convention"]
+        summary = written["summary"]
+        assert summary["total_repositories"] == 2
+        assert summary["compliant_repositories"] == 1
+        check_summary = summary["repository_checks"]["naming_convention"]
         assert check_summary["total"] == 1
         assert check_summary["compliant"] == 1
 

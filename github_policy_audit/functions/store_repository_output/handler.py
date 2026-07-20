@@ -36,17 +36,9 @@ def handler(event, context):
     """Store a repository-level result object and return an S3 pointer."""
     logger.info("Lambda invoked with event keys=%s", sorted(event.keys()))
 
-    owner = event.get("owner")
-    if not isinstance(owner, str) or not owner:
-        raise ValueError("Event must include non-empty 'owner'")
-
-    repository_name = event.get("repository_name")
-    if not isinstance(repository_name, str) or not repository_name:
-        raise ValueError("Event must include non-empty 'repository_name'")
-
-    run_id = event.get("run_id")
-    if not isinstance(run_id, str) or not run_id:
-        raise ValueError("Event must include non-empty 'run_id'")
+    owner = event["owner"]
+    repository_name = event["repository_name"]
+    run_id = event["run_id"]
 
     checks = _normalise_checks(event.get("checks", []))
 
