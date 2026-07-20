@@ -66,7 +66,7 @@ def get_github_client(owner: str) -> GitHubRestClient:
 
     if not app_id:
         raise ValueError(
-            f"Secret '{app_id_secret_name}' does not contain 'app_id'. Please ensure the secret is key/value formatted."
+            f"Secret '{app_id_secret_name}' does not contain 'AppID'. Please ensure the secret is key/value formatted."
         )
 
     if not private_key_secret:
