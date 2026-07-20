@@ -117,7 +117,7 @@ class TestGetGithubClient:
             ),
             patch.object(github.boto3, "client", return_value=fake_secrets_manager),
         ):
-            with pytest.raises(ValueError, match="does not contain 'app_id'"):
+            with pytest.raises(ValueError, match="does not contain 'AppID'"):
                 github.get_github_client("ONS-Innovation")
 
     def test_raises_when_private_key_empty(self) -> None:
