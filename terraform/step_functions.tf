@@ -98,9 +98,9 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                 Type     = "Task"
                 Resource = aws_lambda_function.audit["list_repositories"].arn
                 Parameters = {
-                  "owner.$"        = "$.owner"
-                  "run_id.$"       = "$.run_id"
-                  "output_bucket.$" = "$.output_bucket"
+                  "owner.$"         = "$.initial_input.owner"
+                  "run_id.$"        = "$.initial_input.run_id"
+                  "output_bucket.$" = "$.initial_input.output_bucket"
                 }
                 End = true
               }
@@ -113,7 +113,7 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                 Type     = "Task"
                 Resource = aws_lambda_function.audit["list_teams"].arn
                 Parameters = {
-                  "owner.$" = "$.owner"
+                  "owner.$" = "$.initial_input.owner"
                 }
                 End = true
               }
