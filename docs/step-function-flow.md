@@ -13,15 +13,17 @@ The Step Function is triggered weekly by an EventBridge schedule and orchestrate
 flowchart TD
     EB([EventBridge\nWeekly Schedule\ncron 0 8 MON]) -->|owner: org-name| SF_START([Start Execution])
 
-    SF_START --> INIT_PARALLEL
+    SF_START --> PII[PrepareInitialInput\nPass — inject run_id + output_bucket\ninto $.initial_input]
+    PII --> INIT_PARALLEL
 
     subgraph INIT_PARALLEL[" Parallel — Initialise "]
-        LR[list_repositories]
+        LR[list_repositories\nwrites repositories-list.json to S3\nreturns S3 reference]
         LT[list_teams]
     end
 
-    INIT_PARALLEL --> PREP[PrepareInput\nset run_id + output_bucket]
-    PREP --> ORG_PARALLEL
+    INIT_PARALLEL --> PREP[PrepareInput\nextract S3 ref + teams from initial_data]
+    PREP --> LRS[LoadRepositories\nload_repositories\nreads repositories-list.json from S3]
+    LRS --> ORG_PARALLEL
 
     subgraph ORG_PARALLEL[" Parallel — Organisation Checks "]
         DS[dependabot_slo]
@@ -55,14 +57,16 @@ flowchart TD
 
 ## Stage Summary
 
-| Stage               | State Type                                                | Lambdas                                                                                                                                                                    |
-| ------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Initialise          | `Parallel`                                                | `list_repositories`, `list_teams`                                                                                                                                          |
-| Prepare input       | `Pass`                                                    | None (injects `run_id` and `output_bucket`)                                                                                                                                |
-| Organisation checks | `Parallel` + inner `Map` for teams                        | `dependabot_slo`, `secret_scanning_slo`, `team_maintainer`                                                                                                                 |
-| Repository checks   | `Map` (Mode=`DISTRIBUTED`, MaxConcurrency=5) + `Parallel` | `codeowners`, `dependabot`, `external_pull_request`, `gitignore`, `inactivity`, `license`, `naming_convention`, `pirr`, `readme`, `repository_access`, `security_scanning` |
-| Repo output write   | `Task`                                                    | `store_repository_output`                                                                                                                                                  |
-| Final aggregation   | `Task`                                                    | `store_output`                                                                                                                                                             |
+| Stage                  | State Type                                                | Lambdas                                                                                                                                                                    |
+| ---------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prepare initial input  | `Pass`                                                    | None (injects `run_id` and `output_bucket` into `$.initial_input`)                                                                                                         |
+| Initialise             | `Parallel`                                                | `list_repositories` (writes to S3, returns reference), `list_teams`                                                                                                        |
+| Prepare input          | `Pass`                                                    | None (reshapes state; promotes S3 ref and teams)                                                                                                                           |
+| Load repositories      | `Task`                                                    | `load_repositories` (reads repository list from S3)                                                                                                                        |
+| Organisation checks    | `Parallel` + inner `Map` for teams                        | `dependabot_slo`, `secret_scanning_slo`, `team_maintainer`                                                                                                                 |
+| Repository checks      | `Map` (Mode=`DISTRIBUTED`, MaxConcurrency=5) + `Parallel` | `codeowners`, `dependabot`, `external_pull_request`, `gitignore`, `inactivity`, `license`, `naming_convention`, `pirr`, `readme`, `repository_access`, `security_scanning` |
+| Repo output write      | `Task`                                                    | `store_repository_output`                                                                                                                                                  |
+| Final aggregation      | `Task`                                                    | `store_output`                                                                                                                                                             |
 
 ## Storage and Lifecycle
 
@@ -87,7 +91,7 @@ The 11 per-repository checks run in parallel within each repository item, but St
 
 ## Data Flow
 
-### 1. EventBridge → Initialise
+### 1. EventBridge → PrepareInitialInput
 
 EventBridge injects the initial execution input:
 
@@ -98,11 +102,35 @@ EventBridge injects the initial execution input:
 }
 ```
 
-The `Initialise` parallel state fans out to `list_repositories` and `list_teams`, each receiving only `owner` and `levels` from the parent state.
+`PrepareInitialInput` is a Pass state that injects the execution name as `run_id` and the audit S3 bucket as `output_bucket`. It writes these into `$.initial_input` using `ResultPath`, preserving the original top-level keys:
 
-`list_repositories` returns only non-archived repositories.
+```json
+{
+    "owner": "ONS-Innovation",
+    "levels": ["critical", "high", "medium", "low"],
+    "initial_input": {
+        "owner": "ONS-Innovation",
+        "levels": ["critical", "high", "medium", "low"],
+        "run_id": "<sfn-execution-name>",
+        "output_bucket": "<s3-bucket-name>"
+    }
+}
+```
+
+The `Initialise` parallel state then fans out to `list_repositories` and `list_teams`, both reading from `$.initial_input.*`.
 
 ### 2. Initialise → PrepareInput
+
+`list_repositories` receives `owner`, `run_id`, and `output_bucket` from `$.initial_input`. It fetches all non-archived repositories, writes the full list as `repositories-list.json` to S3, and returns a lightweight reference:
+
+```json
+{
+    "s3_bucket": "<s3-bucket-name>",
+    "s3_key": "audit-runs/ONS-Innovation/<run_id>/repositories-list.json",
+    "repository_count": 42,
+    "environment": "prod"
+}
+```
 
 The parallel branches return their results as an array under `$.initial_data`:
 
@@ -111,15 +139,30 @@ The parallel branches return their results as an array under `$.initial_data`:
     "owner": "ONS-Innovation",
     "levels": ["critical", "high", "medium", "low"],
     "initial_data": [
-        [{ "name": "repo-a", "data": { "updated_at": "...", "security_and_analysis": {} } }],
+        { "s3_bucket": "<s3-bucket-name>", "s3_key": "audit-runs/ONS-Innovation/<run_id>/repositories-list.json", "repository_count": 42 },
         [{ "name": "team-a", "slug": "team-a" }]
     ]
 }
 ```
 
-### 3. PrepareInput → OrganisationChecks
+> The repository list is written to S3 rather than held in Step Function state because large organisations (3 000+ repos) would otherwise exceed the 256 KB state-size limit.
 
-The `PrepareInput` pass state reshapes the input, injecting `run_id` (from the execution name) and `output_bucket`, and promoting `initial_data[0]` and `initial_data[1]` to `repositories` and `teams`, respectively. This data structure is used by all downstream stages:
+### 3. PrepareInput → LoadRepositories → OrganisationChecks
+
+`PrepareInput` is a Pass state that reshapes the execution state, extracting `owner`, `levels`, `run_id`, and `output_bucket` from `$.initial_input`, the S3 reference from `initial_data[0]`, and `teams` from `initial_data[1]`:
+
+```json
+{
+    "owner": "ONS-Innovation",
+    "levels": ["critical", "high", "medium", "low"],
+    "run_id": "<sfn-execution-name>",
+    "output_bucket": "<s3-bucket-name>",
+    "repositories_s3_ref": { "s3_bucket": "<s3-bucket-name>", "s3_key": "audit-runs/ONS-Innovation/<run_id>/repositories-list.json", "repository_count": 42 },
+    "teams": [{ "name": "team-a", "slug": "team-a" }]
+}
+```
+
+`LoadRepositories` then calls the `load_repositories` Lambda with `s3_bucket` and `s3_key` from `repositories_s3_ref`. It reads `repositories-list.json` from S3 and writes the full array into `$.repositories`. After this step, the state available to all downstream stages is:
 
 ```json
 {
