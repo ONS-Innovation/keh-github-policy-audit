@@ -27,7 +27,7 @@ class TestListTeamsHandler:
             captured["client"] = check_client
             captured["endpoint"] = endpoint
             captured["result_key"] = result_key
-            return [{"slug": "keh-dev"}]
+            return [{"slug": "keh-dev", "name": "KEH Developers"}]
 
         mock_paginated = create_autospec(
             self.module.get_paginated_list, side_effect=fake_get_paginated_list
@@ -44,7 +44,7 @@ class TestListTeamsHandler:
             "endpoint": "/orgs/ONS-Innovation/teams?per_page=100",
             "result_key": "teams",
         }
-        assert result == [{"slug": "keh-dev"}]
+        assert result == [{"slug": "keh-dev", "name": "KEH Developers"}]
 
     def test_raises_for_missing_owner(self) -> None:
         """A missing owner key in the event should raise a KeyError."""

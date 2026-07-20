@@ -20,6 +20,9 @@ def handler(event, context):
         client, f"/orgs/{event['owner']}/teams?per_page=100", "teams"
     )
 
+    # Downsize team objects to only include the slug and name, to reduce the size of the output.
+    teams = [{"slug": team["slug"], "name": team["name"]} for team in teams]
+
     logger.info(f"Lambda completed owner={event['owner']} teams_count={len(teams)}")
 
     return teams

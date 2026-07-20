@@ -75,8 +75,19 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
 
   definition = jsonencode({
     Comment = "Weekly GitHub organisation policy audit."
-    StartAt = "Initialise"
+    StartAt = "PrepareInitialInput"
     States = {
+      PrepareInitialInput = {
+        Type = "Pass"
+        Parameters = {
+          "owner.$"       = "$.owner"
+          "levels.$"      = "$.levels"
+          "run_id.$"      = "$$.Execution.Name"
+          "output_bucket" = aws_s3_bucket.audit_output.bucket
+        }
+        ResultPath = "$.initial_input"
+        Next       = "Initialise"
+      }
       Initialise = {
         Type = "Parallel"
         Branches = [
@@ -86,7 +97,12 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
               list_repositories = {
                 Type     = "Task"
                 Resource = aws_lambda_function.audit["list_repositories"].arn
-                End      = true
+                Parameters = {
+                  "owner.$"        = "$.owner"
+                  "run_id.$"       = "$.run_id"
+                  "output_bucket.$" = "$.output_bucket"
+                }
+                End = true
               }
             }
           },
@@ -96,7 +112,10 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
               list_teams = {
                 Type     = "Task"
                 Resource = aws_lambda_function.audit["list_teams"].arn
-                End      = true
+                Parameters = {
+                  "owner.$" = "$.owner"
+                }
+                End = true
               }
             }
           },
@@ -107,14 +126,24 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
       PrepareInput = {
         Type = "Pass"
         Parameters = {
-          "owner.$"        = "$.owner"
-          "levels.$"       = "$.levels"
-          "run_id.$"       = "$$.Execution.Name"
-          "output_bucket"  = aws_s3_bucket.audit_output.bucket
-          "repositories.$" = "$.initial_data[0]"
-          "teams.$"        = "$.initial_data[1]"
+          "owner.$"               = "$.initial_input.owner"
+          "levels.$"              = "$.initial_input.levels"
+          "run_id.$"              = "$.initial_input.run_id"
+          "output_bucket"         = aws_s3_bucket.audit_output.bucket
+          "repositories_s3_ref.$" = "$.initial_data[0]"
+          "teams.$"               = "$.initial_data[1]"
         }
         ResultPath = "$"
+        Next       = "LoadRepositories"
+      }
+      LoadRepositories = {
+        Type     = "Task"
+        Resource = aws_lambda_function.audit["load_repositories"].arn
+        Parameters = {
+          "s3_bucket.$" = "$.repositories_s3_ref.s3_bucket"
+          "s3_key.$"    = "$.repositories_s3_ref.s3_key"
+        }
+        ResultPath = "$.repositories"
         Next       = "OrganisationChecks"
       }
       OrganisationChecks = {
