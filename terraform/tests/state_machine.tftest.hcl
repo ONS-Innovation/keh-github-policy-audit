@@ -57,7 +57,7 @@ override_data {
 
 run "state_machine_states" {
   assert {
-    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).StartAt == "Initialise"
+    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).StartAt == "PrepareInitialInput"
     error_message = "State machine must start at the Initialise state."
   }
 
