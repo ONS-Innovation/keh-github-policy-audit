@@ -19,6 +19,13 @@ def _response_with_status(status_code: int) -> Response:
     return response
 
 
+def _rate_limited_response() -> Response:
+    """Return a 403 response carrying a rate-limit signal."""
+    response = _response_with_status(403)
+    response.headers["X-RateLimit-Remaining"] = "0"
+    return response
+
+
 class FakeSecretsManager:
     """Simple fake Secrets Manager client for unit tests."""
 
@@ -238,7 +245,7 @@ class TestGetGithubClient:
     def test_retries_transient_http_error_during_client_init(
         self, rsa_private_key
     ) -> None:
-        """Transient HTTP errors should be retried before succeeding."""
+        """Rate-limited 403 responses should be retried before succeeding."""
         fake_secrets_manager = FakeSecretsManager(
             {
                 "app-id-secret": json.dumps({"AppID": "123456"}),
@@ -252,7 +259,7 @@ class TestGetGithubClient:
             del kwargs
             call_count["value"] += 1
             if call_count["value"] < 2:
-                raise HTTPError("Forbidden", response=_response_with_status(403))
+                raise HTTPError("Forbidden", response=_rate_limited_response())
             return {"client": "ok"}
 
         with (
@@ -305,7 +312,7 @@ class TestGetGithubClient:
     def test_attempts_final_client_init_after_exhausting_retries(
         self, rsa_private_key
     ) -> None:
-        """After retry loop exhaustion, get_github_client should perform one final init attempt."""
+        """After retry loop exhaustion for rate limits, perform one final init attempt."""
         fake_secrets_manager = FakeSecretsManager(
             {
                 "app-id-secret": json.dumps({"AppID": "123456"}),
@@ -319,7 +326,7 @@ class TestGetGithubClient:
             del kwargs
             call_count["value"] += 1
             if call_count["value"] <= 3:
-                raise HTTPError("Forbidden", response=_response_with_status(403))
+                raise HTTPError("Forbidden", response=_rate_limited_response())
             return {"client": "ok-final"}
 
         with (
@@ -339,3 +346,72 @@ class TestGetGithubClient:
         assert result == {"client": "ok-final"}
         assert call_count["value"] == 4
         assert mocked_sleep.call_count == 3
+
+    def test_does_not_retry_non_rate_limited_403(self, rsa_private_key) -> None:
+        """A plain 403 should fail fast (likely auth/permission issue)."""
+        fake_secrets_manager = FakeSecretsManager(
+            {
+                "app-id-secret": json.dumps({"AppID": "123456"}),
+                "private-key-secret": rsa_private_key,
+            }
+        )
+
+        call_count = {"value": 0}
+
+        def forbidden_client(**kwargs: Any) -> dict[str, Any]:
+            del kwargs
+            call_count["value"] += 1
+            raise HTTPError("Forbidden", response=_response_with_status(403))
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "GITHUB_APP_ID_SECRET_NAME": "app-id-secret",
+                    "GITHUB_PRIVATE_KEY_SECRET_NAME": "private-key-secret",
+                },
+            ),
+            patch.object(github.boto3, "client", return_value=fake_secrets_manager),
+            patch.object(github, "GitHubRestClient", forbidden_client),
+            patch.object(github.time, "sleep") as mocked_sleep,
+        ):
+            with pytest.raises(HTTPError, match="Forbidden"):
+                github.get_github_client("ONS-Innovation")
+
+        assert call_count["value"] == 1
+        mocked_sleep.assert_not_called()
+
+    def test_logs_error_context_for_non_retryable_error(self, rsa_private_key) -> None:
+        """Non-retryable errors should log URL and body snippet for diagnostics."""
+        fake_secrets_manager = FakeSecretsManager(
+            {
+                "app-id-secret": json.dumps({"AppID": "123456"}),
+                "private-key-secret": rsa_private_key,
+            }
+        )
+
+        forbidden_response = _response_with_status(403)
+
+        def forbidden_with_context(**kwargs: Any) -> dict[str, Any]:
+            del kwargs
+            error = HTTPError("Forbidden", response=forbidden_response)
+            error.request = type(
+                "Request",
+                (),
+                {"url": "https://api.github.com/app/installations/123/access_tokens"},
+            )()
+            raise error
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "GITHUB_APP_ID_SECRET_NAME": "app-id-secret",
+                    "GITHUB_PRIVATE_KEY_SECRET_NAME": "private-key-secret",
+                },
+            ),
+            patch.object(github.boto3, "client", return_value=fake_secrets_manager),
+            patch.object(github, "GitHubRestClient", forbidden_with_context),
+        ):
+            with pytest.raises(HTTPError):
+                github.get_github_client("ONS-Innovation")

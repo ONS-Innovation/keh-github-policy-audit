@@ -31,8 +31,49 @@ def _normalise_owner(owner: str) -> str:
 
 
 def _is_retryable_http_error(error: HTTPError) -> bool:
-    status_code = getattr(error.response, "status_code", None)
-    return status_code in _RETRYABLE_STATUS_CODES
+    response = getattr(error, "response", None)
+    status_code = getattr(response, "status_code", None)
+    if status_code not in _RETRYABLE_STATUS_CODES:
+        return False
+
+    # Most 403s here are permanent auth/permission issues and should fail fast.
+    # Retry 403 only for clear rate-limit signals.
+    if status_code == 403:
+        headers = getattr(response, "headers", {}) or {}
+        rate_limit_remaining = headers.get("X-RateLimit-Remaining")
+        if rate_limit_remaining == "0":
+            return True
+
+        retry_after = headers.get("Retry-After")
+        if retry_after:
+            return True
+
+        response_body = ""
+        try:
+            text = getattr(response, "text", "")
+            response_body = (text or "").lower()
+        except Exception:  # pragma: no cover
+            response_body = ""
+
+        return "rate limit" in response_body
+
+    return True
+
+
+def _http_error_context(error: HTTPError) -> tuple[str, str]:
+    """Return URL and a short response body snippet for diagnostic logging."""
+    response = getattr(error, "response", None)
+    url = getattr(getattr(error, "request", None), "url", "unknown")
+
+    body_snippet = ""
+    if response is not None:
+        try:
+            text = getattr(response, "text", "")
+            body_snippet = (text or "")[:300].replace("\n", " ")
+        except Exception:  # pragma: no cover
+            body_snippet = ""
+
+    return url, body_snippet
 
 
 def get_github_client(owner: str) -> GitHubRestClient:
@@ -85,16 +126,30 @@ def get_github_client(owner: str) -> GitHubRestClient:
             return GitHubRestClient(**client_kwargs)
         except HTTPError as error:
             if not _is_retryable_http_error(error):
+                status_code = getattr(error.response, "status_code", "unknown")
+                url, body_snippet = _http_error_context(error)
+                logger.error(
+                    "GitHub client initialisation failed owner=%s status=%s url=%s app_id_secret=%s private_key_secret=%s body=%s",
+                    owner,
+                    status_code,
+                    url,
+                    app_id_secret_name,
+                    private_key_secret_name,
+                    body_snippet,
+                )
                 raise
 
             status_code = getattr(error.response, "status_code", "unknown")
+            url, body_snippet = _http_error_context(error)
             logger.warning(
-                "Transient GitHub client initialisation error for owner=%s status=%s attempt=%s/%s. Retrying in %.1fs.",
+                "Transient GitHub client initialisation error for owner=%s status=%s url=%s attempt=%s/%s. Retrying in %.1fs. body=%s",
                 owner,
                 status_code,
+                url,
                 attempt,
                 len(_CLIENT_INIT_RETRY_DELAYS_SECONDS),
                 delay,
+                body_snippet,
             )
             time.sleep(delay)
 
