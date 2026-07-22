@@ -73,10 +73,16 @@ class TestSerialisePayload:
 
         with patch.dict("os.environ", {"APP_LOG_FORMAT": "JSON"}):
             with patch.object(logger, "info") as mock_log:
-                log_info(logger, "github_rate_limit", phase="end", remaining=123)
+                log_info(
+                    logger,
+                    "github_rate_limit_checkpoint",
+                    checkpoint="rate-limit-end",
+                    remaining=123,
+                )
 
         mock_log.assert_called_once_with(
-            "github_rate_limit", extra={"phase": "end", "remaining": 123}
+            "github_rate_limit_checkpoint",
+            extra={"checkpoint": "rate-limit-end", "remaining": 123},
         )
 
     def test_normalises_nested_fields_in_lambda_json_mode(self) -> None:

@@ -10,7 +10,7 @@ import boto3
 from requests.exceptions import HTTPError
 
 from policy_methods_library.github.clients import GitHubRestClient
-from utils.structured_logging import log_error, log_info, log_warning
+from utils.structured_logging import log_error, log_warning
 
 
 logger = logging.getLogger(__name__)
@@ -76,59 +76,6 @@ def _http_error_context(error: HTTPError) -> tuple[str, str]:
             body_snippet = ""
 
     return url, body_snippet
-
-
-def _extract_rate_limit_fields(rate_limit_payload: Any) -> tuple[Any, Any]:
-    """Extract remaining and reset values from a GitHub /rate_limit payload."""
-    if hasattr(rate_limit_payload, "json") and callable(rate_limit_payload.json):
-        try:
-            rate_limit_payload = rate_limit_payload.json()
-        except ValueError:
-            return None, None
-
-    if not isinstance(rate_limit_payload, dict):
-        return None, None
-
-    resources = rate_limit_payload.get("resources")
-    if not isinstance(resources, dict):
-        return None, None
-
-    core = resources.get("core")
-    if not isinstance(core, dict):
-        return None, None
-
-    return core.get("remaining"), core.get("reset")
-
-
-def log_step_rate_limit(
-    github_client: GitHubRestClient, phase: str, step_name: str
-) -> None:
-    """Log the GitHub API rate limit at a step boundary.
-
-    This helper must never raise, to avoid masking handler failures.
-    """
-    if phase not in {"start", "end"}:
-        raise ValueError("phase must be either 'start' or 'end'")
-
-    try:
-        rate_limit_payload = github_client.make_request("GET", "/rate_limit")
-        remaining, reset = _extract_rate_limit_fields(rate_limit_payload)
-        log_info(
-            logger,
-            "github_rate_limit",
-            step=step_name,
-            phase=phase,
-            remaining=remaining if remaining is not None else "unknown",
-            reset=reset if reset is not None else "unknown",
-        )
-    except Exception as error:
-        log_warning(
-            logger,
-            "github_rate_limit_unavailable",
-            step=step_name,
-            phase=phase,
-            error=str(error),
-        )
 
 
 def get_github_client(owner: str) -> GitHubRestClient:

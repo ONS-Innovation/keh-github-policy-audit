@@ -52,7 +52,7 @@ In Lambda JSON mode, this appears in CloudWatch like:
   - `lambda_completed`
   - `storing_results`
   - `stored_results`
-  - `github_rate_limit`
+  - `github_rate_limit_checkpoint`
   - `github_client_initialisation_retry`
 
 ## Field Conventions

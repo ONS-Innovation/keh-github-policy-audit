@@ -18,7 +18,7 @@ R = TypeVar("R")
 def github_handler(
     func: Callable[Concatenate[dict[str, Any], Any, GitHubRestClient, P], R],
 ) -> Callable[Concatenate[dict[str, Any], Any, P], R]:
-    """Wrap a Lambda handler with GitHub client setup and rate-limit logging."""
+    """Wrap a Lambda handler with GitHub client setup and invocation logging."""
 
     @wraps(func)
     def wrapper(
@@ -33,11 +33,6 @@ def github_handler(
         )
 
         client = github.get_github_client(event["owner"])
-        step_name = func.__module__
-        github.log_step_rate_limit(client, "start", step_name)
-        try:
-            return func(event, context, client, *args, **kwargs)
-        finally:
-            github.log_step_rate_limit(client, "end", step_name)
+        return func(event, context, client, *args, **kwargs)
 
     return wrapper
