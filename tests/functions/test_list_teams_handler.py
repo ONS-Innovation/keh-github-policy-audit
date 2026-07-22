@@ -34,7 +34,7 @@ class TestListTeamsHandler:
         )
 
         with (
-            patch.object(self.module, "get_github_client", return_value=client),
+            patch("utils.github.get_github_client", return_value=client),
             patch.object(self.module, "get_paginated_list", mock_paginated),
         ):
             result = self.module.handler({"owner": "ONS-Innovation"}, None)

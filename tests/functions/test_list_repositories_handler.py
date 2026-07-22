@@ -58,7 +58,7 @@ class TestListRepositoriesHandler:
     def test_raises_for_invalid_environment(self) -> None:
         """An unsupported ENVIRONMENT value should raise ValueError."""
         with (
-            patch.object(self.module, "get_github_client", return_value=object()),
+            patch("utils.github.get_github_client", return_value=object()),
             patch.object(
                 self.module,
                 "get_paginated_list",
@@ -74,7 +74,7 @@ class TestListRepositoriesHandler:
     def test_raises_for_missing_output_bucket_in_prod(self) -> None:
         """Prod execution requires either output_bucket or S3_BUCKET_NAME."""
         with (
-            patch.object(self.module, "get_github_client", return_value=object()),
+            patch("utils.github.get_github_client", return_value=object()),
             patch.object(
                 self.module,
                 "get_paginated_list",
@@ -93,7 +93,7 @@ class TestListRepositoriesHandler:
         monkeypatch.chdir(tmp_path)
 
         with (
-            patch.object(self.module, "get_github_client", return_value=object()),
+            patch("utils.github.get_github_client", return_value=object()),
             patch.object(
                 self.module,
                 "get_paginated_list",
@@ -142,7 +142,7 @@ class TestListRepositoriesHandler:
         mock_s3_client = MagicMock()
 
         with (
-            patch.object(self.module, "get_github_client", return_value=client),
+            patch("utils.github.get_github_client", return_value=client),
             patch.object(self.module, "get_paginated_list", mock_paginated),
             patch.object(self.module, "boto3") as mock_boto3,
             patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=False),
@@ -196,7 +196,7 @@ class TestListRepositoriesHandler:
         mock_s3_client = MagicMock()
 
         with (
-            patch.object(self.module, "get_github_client", return_value=object()),
+            patch("utils.github.get_github_client", return_value=object()),
             patch.object(self.module, "get_paginated_list", return_value=repositories),
             patch.object(self.module, "boto3") as mock_boto3,
             patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=False),

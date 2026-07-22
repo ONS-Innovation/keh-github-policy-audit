@@ -38,7 +38,6 @@ class FakeSecretsManager:
         return {"SecretString": self.secrets_by_id[SecretId]}
 
 
-# ---------------------------------------------------------------------------
 # get_github_client
 # ---------------------------------------------------------------------------
 
@@ -447,7 +446,9 @@ class TestGithubRateLimitHelpers:
             ),
         ],
     )
-    def test_extract_rate_limit_fields(self, payload: Any, expected: tuple[Any, Any]) -> None:
+    def test_extract_rate_limit_fields(
+        self, payload: Any, expected: tuple[Any, Any]
+    ) -> None:
         """Rate-limit field extraction should be robust across malformed payloads."""
         assert github._extract_rate_limit_fields(payload) == expected
 

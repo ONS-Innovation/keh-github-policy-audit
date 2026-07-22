@@ -92,7 +92,9 @@ def _extract_rate_limit_fields(rate_limit_payload: Any) -> tuple[Any, Any]:
     return core.get("remaining"), core.get("reset")
 
 
-def log_step_rate_limit(github_client: GitHubRestClient, phase: str, step_name: str) -> None:
+def log_step_rate_limit(
+    github_client: GitHubRestClient, phase: str, step_name: str
+) -> None:
     """Log the GitHub API rate limit at a step boundary.
 
     This helper must never raise, to avoid masking handler failures.

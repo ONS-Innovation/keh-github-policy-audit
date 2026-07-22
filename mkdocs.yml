@@ -6,6 +6,8 @@ repo_name: GitHub Policy Audit
 nav:
   - Home: index.md
   - Documentation: documentation.md
+  - Lambda Structure: lambda-structure.md
+  - Step Function Flow: step-function-flow.md
   - Rate Limit Considerations: rate-limit-considerations.md
 theme:
   name: material

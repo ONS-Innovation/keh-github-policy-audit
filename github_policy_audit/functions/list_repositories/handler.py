@@ -6,7 +6,7 @@ import os
 
 import boto3
 
-from utils.github import get_github_client, log_step_rate_limit
+from utils.lambda_handler import github_handler
 
 from policy_methods_library.utils.pagination import get_paginated_list
 
@@ -32,12 +32,9 @@ def _slim_security_and_analysis(security_and_analysis: dict | None) -> dict | No
     }
 
 
-def handler(event, context):
+@github_handler
+def handler(event, context, client):
     """Step Function invokes with {"owner": "...", "run_id": "...", "output_bucket": "..."}."""
-    logger.info(f"Lambda invoked with event keys={sorted(event.keys())}")
-    client = get_github_client(event["owner"])
-    log_step_rate_limit(client, "start", __name__)
-
     repositories = get_paginated_list(
         client, f"/orgs/{event['owner']}/repos?per_page=100", "repositories"
     )
@@ -93,7 +90,6 @@ def handler(event, context):
         f"Lambda completed owner={owner} repositories_count={len(repository_summaries)} "
         f"storage=s3 bucket={bucket_name} key={key}"
     )
-    log_step_rate_limit(client, "end", __name__)
 
     return {
         "s3_bucket": bucket_name,
