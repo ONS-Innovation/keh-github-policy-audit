@@ -167,6 +167,8 @@ Some repository-scoped handlers can also accept optional repository metadata und
 | ------------------------------ | ------------------------------------------------ | ----------------- |
 | `functions.rate_limit.handler` | `{"owner":"<org>","checkpoint":"rate-limit-start | rate-limit-end"}` |
 
+Rate-limit telemetry is collected only by this checkpoint handler at workflow boundaries.
+
 #### Check Handlers
 
 | Checks                                                  | Handler modules                                                                                                                                                                                                                                                                                                                                                                                                    | Required event payload                                                                                        |
