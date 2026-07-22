@@ -24,10 +24,12 @@ The function has been tested against 2 organisations of various sizes:
   - ~1,400 repositories
   - ~350 teams
   - ~17 minutes execution time (with `MaxConcurrency = 5`)
+  - ~15,000 GitHub API Rate Limit Used
 - Organisation B:
   - ~100 repositories
   - ~20 teams
   - ~1.5 minutes execution time (with `MaxConcurrency = 5`)
+  - ~1,250 GitHub API Rate Limit Used
 
 Scaling beyond 1,500 repositories may require further tuning of `MaxConcurrency` and/or splitting the organisation into multiple runs.
 For our current use case at ONS, the current configuration is sufficient to run weekly audits of all repositories and teams in a single execution.

@@ -163,9 +163,9 @@ Some repository-scoped handlers can also accept optional repository metadata und
 
 #### Rate Limit Checkpoint
 
-| Handler modules                 | Required event payload                                                |
-| ------------------------------- | --------------------------------------------------------------------- |
-| `functions.rate_limit.handler`  | `{"owner":"<org>","checkpoint":"rate-limit-start|rate-limit-end"}` |
+| Handler modules                | Required event payload                           |
+| ------------------------------ | ------------------------------------------------ | ----------------- |
+| `functions.rate_limit.handler` | `{"owner":"<org>","checkpoint":"rate-limit-start | rate-limit-end"}` |
 
 #### Check Handlers
 
@@ -180,9 +180,9 @@ Some repository-scoped handlers can also accept optional repository metadata und
 
 #### Output Handlers
 
-| Handler modules                                   | Required event payload                                                                                                                   |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `functions.store_repository_output.handler`       | `{"owner":"<org>","run_id":"<execution-id>","repository_name":"<repo>","checks":[{"check_name":"readme","status":"pass"}]}`              |
+| Handler modules                                   | Required event payload                                                                                                                                                                   |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `functions.store_repository_output.handler`       | `{"owner":"<org>","run_id":"<execution-id>","repository_name":"<repo>","checks":[{"check_name":"readme","status":"pass"}]}`                                                              |
 | `functions.store_output.handler` (S3 aggregation) | `{"owner":"<org>","run_id":"<execution-id>","output_bucket":"<bucket>","organisation_results":[...],"teams":[...],"team_results":[...],"rate_limit_start":{...},"rate_limit_end":{...}}` |
 
 The scalable production flow stores one repository JSON file at a time under `audit-runs/<owner>/<run_id>/repositories/`, then `store_output` aggregates that prefix and writes the final summary to `audit-results/<owner>/<run_id>.json`.
