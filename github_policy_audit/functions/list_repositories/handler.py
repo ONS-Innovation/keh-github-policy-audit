@@ -7,6 +7,7 @@ import os
 import boto3
 
 from utils.lambda_handler import github_handler
+from utils.structured_logging import log_info
 
 from policy_methods_library.utils.pagination import get_paginated_list
 
@@ -86,9 +87,14 @@ def handler(event, context, client):
         with open(local_output_path, "w", encoding="utf-8") as file:
             json.dump(repository_summaries, file, indent=2)
 
-    logger.info(
-        f"Lambda completed owner={owner} repositories_count={len(repository_summaries)} "
-        f"storage=s3 bucket={bucket_name} key={key}"
+    log_info(
+        logger,
+        "lambda_completed",
+        owner=owner,
+        repositories_count=len(repository_summaries),
+        storage="s3" if environment == "prod" else "local",
+        bucket=bucket_name,
+        key=key,
     )
 
     return {

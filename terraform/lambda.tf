@@ -122,6 +122,10 @@ resource "aws_lambda_function" "audit" {
     mode = "Active"
   }
 
+  logging_config {
+    log_format = "JSON"
+  }
+
   depends_on = [aws_cloudwatch_log_group.audit]
 
   environment {

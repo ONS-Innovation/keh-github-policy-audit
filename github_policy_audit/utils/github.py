@@ -10,6 +10,7 @@ import boto3
 from requests.exceptions import HTTPError
 
 from policy_methods_library.github.clients import GitHubRestClient
+from utils.structured_logging import log_error, log_info, log_warning
 
 
 logger = logging.getLogger(__name__)
@@ -112,19 +113,21 @@ def log_step_rate_limit(
     try:
         rate_limit_payload = github_client.make_request("GET", "/rate_limit")
         remaining, reset = _extract_rate_limit_fields(rate_limit_payload)
-        logger.info(
-            "GitHub rate limit step=%s phase=%s remaining=%s reset=%s",
-            step_name,
-            phase,
-            remaining if remaining is not None else "unknown",
-            reset if reset is not None else "unknown",
+        log_info(
+            logger,
+            "github_rate_limit",
+            step=step_name,
+            phase=phase,
+            remaining=remaining if remaining is not None else "unknown",
+            reset=reset if reset is not None else "unknown",
         )
     except Exception as error:
-        logger.warning(
-            "Unable to read GitHub rate limit step=%s phase=%s error=%s",
-            step_name,
-            phase,
-            error,
+        log_warning(
+            logger,
+            "github_rate_limit_unavailable",
+            step=step_name,
+            phase=phase,
+            error=str(error),
         )
 
 
@@ -180,28 +183,30 @@ def get_github_client(owner: str) -> GitHubRestClient:
             if not _is_retryable_http_error(error):
                 status_code = getattr(error.response, "status_code", "unknown")
                 url, body_snippet = _http_error_context(error)
-                logger.error(
-                    "GitHub client initialisation failed owner=%s status=%s url=%s app_id_secret=%s private_key_secret=%s body=%s",
-                    owner,
-                    status_code,
-                    url,
-                    app_id_secret_name,
-                    private_key_secret_name,
-                    body_snippet,
+                log_error(
+                    logger,
+                    "github_client_initialisation_failed",
+                    owner=owner,
+                    status=status_code,
+                    url=url,
+                    app_id_secret=app_id_secret_name,
+                    private_key_secret=private_key_secret_name,
+                    body=body_snippet,
                 )
                 raise
 
             status_code = getattr(error.response, "status_code", "unknown")
             url, body_snippet = _http_error_context(error)
-            logger.warning(
-                "Transient GitHub client initialisation error for owner=%s status=%s url=%s attempt=%s/%s. Retrying in %.1fs. body=%s",
-                owner,
-                status_code,
-                url,
-                attempt,
-                len(_CLIENT_INIT_RETRY_DELAYS_SECONDS),
-                delay,
-                body_snippet,
+            log_warning(
+                logger,
+                "github_client_initialisation_retry",
+                owner=owner,
+                status=status_code,
+                url=url,
+                attempt=attempt,
+                max_attempts=len(_CLIENT_INIT_RETRY_DELAYS_SECONDS),
+                retry_delay_seconds=delay,
+                body=body_snippet,
             )
             time.sleep(delay)
 

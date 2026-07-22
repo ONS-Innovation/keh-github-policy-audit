@@ -8,6 +8,7 @@ from typing import Any, Concatenate, ParamSpec, TypeVar
 from policy_methods_library.github.clients import GitHubRestClient
 
 from utils import github
+from utils.structured_logging import log_info
 
 
 P = ParamSpec("P")
@@ -24,7 +25,12 @@ def github_handler(
         event: dict[str, Any], context: Any, *args: P.args, **kwargs: P.kwargs
     ) -> R:
         handler_logger = logging.getLogger(func.__module__)
-        handler_logger.info("Lambda invoked with event keys=%s", sorted(event.keys()))
+        log_info(
+            handler_logger,
+            "lambda_invoked",
+            module=func.__module__,
+            event_keys=sorted(event.keys()),
+        )
 
         client = github.get_github_client(event["owner"])
         step_name = func.__module__

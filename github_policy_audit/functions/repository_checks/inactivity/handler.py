@@ -4,6 +4,7 @@ import logging
 
 from policy_methods_library.checks.inactivity import check_inactivity
 from utils.lambda_handler import github_handler
+from utils.structured_logging import log_info
 
 
 logger = logging.getLogger(__name__)
@@ -19,7 +20,10 @@ def handler(event, context, client):
         data=event.get("data"),
     )
     result["check_name"] = "inactivity"
-    logger.info(
-        f"Lambda completed check={result['check_name']} result={result.get('result')}"
+    log_info(
+        logger,
+        "lambda_completed",
+        check=result["check_name"],
+        result=result.get("result"),
     )
     return result

@@ -69,6 +69,7 @@ export AWS_REGION=eu-west-2
 export GITHUB_APP_ID_SECRET_NAME=<your-app-id-secret-name>
 export GITHUB_PRIVATE_KEY_SECRET_NAME=<your-private-key-secret-name>
 export ENVIRONMENT=local
+export LOG_PRETTY_JSON=true
 ```
 
 `GITHUB_APP_ID_SECRET_NAME` should point to a secret containing a JSON object with the GitHub App ID under the `AppID` key (for example: `{"AppID":"123456"}`).
@@ -77,6 +78,13 @@ export ENVIRONMENT=local
 
 - `local` (default): writes output JSON to `outputs/<owner>/` and does not call AWS S3.
 - `prod`: writes output JSON to S3 and requires `S3_BUCKET_NAME`.
+
+`LOG_PRETTY_JSON` controls the format of structured application log messages:
+
+- false (default): compact single-line JSON log payloads.
+- true: pretty-printed multi-line JSON payloads, useful for local debugging.
+
+For production Lambda deployments, keep `LOG_PRETTY_JSON` unset so CloudWatch log volume remains lower.
 
 `boto3` uses the standard AWS credential provider chain. For local development, this can come from an AWS CLI SSO profile after running `aws sso login`. In Lambda, credentials are provided by the function's IAM execution role.
 

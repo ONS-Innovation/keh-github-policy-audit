@@ -3,6 +3,7 @@
 import logging
 
 from utils.lambda_handler import github_handler
+from utils.structured_logging import log_info
 
 from policy_methods_library.utils.pagination import get_paginated_list
 
@@ -21,6 +22,11 @@ def handler(event, context, client):
     # Downsize team objects to only include the slug and name, to reduce the size of the output.
     teams = [{"slug": team["slug"], "name": team["name"]} for team in teams]
 
-    logger.info(f"Lambda completed owner={event['owner']} teams_count={len(teams)}")
+    log_info(
+        logger,
+        "lambda_completed",
+        owner=event["owner"],
+        teams_count=len(teams),
+    )
 
     return teams
