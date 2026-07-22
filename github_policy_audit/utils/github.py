@@ -76,6 +76,49 @@ def _http_error_context(error: HTTPError) -> tuple[str, str]:
     return url, body_snippet
 
 
+def _extract_rate_limit_fields(rate_limit_payload: Any) -> tuple[Any, Any]:
+    """Extract remaining and reset values from a GitHub /rate_limit payload."""
+    if not isinstance(rate_limit_payload, dict):
+        return None, None
+
+    resources = rate_limit_payload.get("resources")
+    if not isinstance(resources, dict):
+        return None, None
+
+    core = resources.get("core")
+    if not isinstance(core, dict):
+        return None, None
+
+    return core.get("remaining"), core.get("reset")
+
+
+def log_step_rate_limit(github_client: GitHubRestClient, phase: str, step_name: str) -> None:
+    """Log the GitHub API rate limit at a step boundary.
+
+    This helper must never raise, to avoid masking handler failures.
+    """
+    if phase not in {"start", "end"}:
+        raise ValueError("phase must be either 'start' or 'end'")
+
+    try:
+        rate_limit_payload = github_client.make_request("/rate_limit")
+        remaining, reset = _extract_rate_limit_fields(rate_limit_payload)
+        logger.info(
+            "GitHub rate limit step=%s phase=%s remaining=%s reset=%s",
+            step_name,
+            phase,
+            remaining if remaining is not None else "unknown",
+            reset if reset is not None else "unknown",
+        )
+    except Exception as error:
+        logger.warning(
+            "Unable to read GitHub rate limit step=%s phase=%s error=%s",
+            step_name,
+            phase,
+            error,
+        )
+
+
 def get_github_client(owner: str) -> GitHubRestClient:
     """Create a GitHubRestClient for the provided owner."""
     owner = _normalise_owner(owner)

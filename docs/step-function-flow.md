@@ -11,6 +11,8 @@ The Step Function is triggered weekly by an EventBridge schedule and orchestrate
 
 Due to the size of some GitHub Organisations, the step function may only be able to run once per hour. The `MaxConcurrency` of the repository checks map is configurable to limit simultaneous GitHub API calls and stay within rate limits.
 
+For more information on rate limits, including per-step start/end rate-limit logging, see [rate-limit-considerations.md](rate-limit-considerations.md).
+
 The function has been tested against 2 organisations of various sizes:
 
 - Organisation A:

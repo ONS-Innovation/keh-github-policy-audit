@@ -6,6 +6,7 @@ repo_name: GitHub Policy Audit
 nav:
   - Home: index.md
   - Documentation: documentation.md
+  - Rate Limit Considerations: rate-limit-considerations.md
 theme:
   name: material
   language: en

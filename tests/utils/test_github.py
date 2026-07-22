@@ -415,3 +415,104 @@ class TestGetGithubClient:
         ):
             with pytest.raises(HTTPError):
                 github.get_github_client("ONS-Innovation")
+
+
+class TestGithubRateLimitHelpers:
+    def test_is_retryable_http_error_returns_true_for_retry_after_header(self) -> None:
+        """A 403 with Retry-After should be treated as retryable."""
+        response = _response_with_status(403)
+        response.headers["Retry-After"] = "30"
+
+        error = HTTPError("Forbidden", response=response)
+
+        assert github._is_retryable_http_error(error) is True
+
+    def test_is_retryable_http_error_returns_true_for_retryable_non_403(self) -> None:
+        """Retryable status codes other than 403 should return True."""
+        error = HTTPError("Too Many Requests", response=_response_with_status(429))
+
+        assert github._is_retryable_http_error(error) is True
+
+    @pytest.mark.parametrize(
+        "payload, expected",
+        [
+            ("not-a-dict", (None, None)),
+            ({}, (None, None)),
+            ({"resources": "not-a-dict"}, (None, None)),
+            ({"resources": {}}, (None, None)),
+            ({"resources": {"core": "not-a-dict"}}, (None, None)),
+            (
+                {"resources": {"core": {"remaining": 4999, "reset": 1700000000}}},
+                (4999, 1700000000),
+            ),
+        ],
+    )
+    def test_extract_rate_limit_fields(self, payload: Any, expected: tuple[Any, Any]) -> None:
+        """Rate-limit field extraction should be robust across malformed payloads."""
+        assert github._extract_rate_limit_fields(payload) == expected
+
+
+class TestLogStepRateLimit:
+    def test_raises_for_invalid_phase(self) -> None:
+        """Invalid phase values should raise ValueError."""
+        client = object()
+        with pytest.raises(ValueError, match="phase must be either 'start' or 'end'"):
+            github.log_step_rate_limit(client, "middle", "tests.step")  # type: ignore[arg-type]
+
+    def test_logs_rate_limit_when_request_succeeds(self) -> None:
+        """Successful /rate_limit requests should log remaining and reset."""
+
+        class FakeClient:
+            def make_request(self, path: str) -> dict[str, Any]:
+                assert path == "/rate_limit"
+                return {
+                    "resources": {
+                        "core": {
+                            "remaining": 1234,
+                            "reset": 1712345678,
+                        }
+                    }
+                }
+
+        with patch.object(github.logger, "info") as mocked_info:
+            github.log_step_rate_limit(FakeClient(), "start", "tests.step")
+
+        mocked_info.assert_called_once_with(
+            "GitHub rate limit step=%s phase=%s remaining=%s reset=%s",
+            "tests.step",
+            "start",
+            1234,
+            1712345678,
+        )
+
+    def test_logs_unknown_fields_when_payload_missing_values(self) -> None:
+        """Missing rate-limit fields should be logged as unknown."""
+
+        class FakeClient:
+            def make_request(self, path: str) -> dict[str, Any]:
+                assert path == "/rate_limit"
+                return {}
+
+        with patch.object(github.logger, "info") as mocked_info:
+            github.log_step_rate_limit(FakeClient(), "end", "tests.step")
+
+        mocked_info.assert_called_once_with(
+            "GitHub rate limit step=%s phase=%s remaining=%s reset=%s",
+            "tests.step",
+            "end",
+            "unknown",
+            "unknown",
+        )
+
+    def test_logs_warning_when_request_fails(self) -> None:
+        """Errors when reading /rate_limit should log a warning and not raise."""
+
+        class FakeClient:
+            def make_request(self, path: str) -> dict[str, Any]:
+                assert path == "/rate_limit"
+                raise RuntimeError("boom")
+
+        with patch.object(github.logger, "warning") as mocked_warning:
+            github.log_step_rate_limit(FakeClient(), "start", "tests.step")
+
+        mocked_warning.assert_called_once()
