@@ -67,6 +67,62 @@ class TestSerialisePayload:
         # Should be compact (no newlines from pretty printing)
         assert "\n" not in logged_payload
 
+    def test_uses_extra_fields_in_lambda_json_mode(self) -> None:
+        """Lambda JSON mode should avoid embedding JSON in message."""
+        logger = logging.getLogger("test")
+
+        with patch.dict("os.environ", {"APP_LOG_FORMAT": "JSON"}):
+            with patch.object(logger, "info") as mock_log:
+                log_info(logger, "github_rate_limit", phase="end", remaining=123)
+
+        mock_log.assert_called_once_with(
+            "github_rate_limit", extra={"phase": "end", "remaining": 123}
+        )
+
+    def test_normalises_nested_fields_in_lambda_json_mode(self) -> None:
+        """Nested and non-primitive fields should be JSON-safe in Lambda mode."""
+        logger = logging.getLogger("test")
+
+        class CustomObj:
+            def __str__(self) -> str:
+                return "custom-value"
+
+        with patch.dict("os.environ", {"APP_LOG_FORMAT": "JSON"}):
+            with patch.object(logger, "info") as mock_log:
+                log_info(
+                    logger,
+                    "test_event",
+                    payload={"a": 1, "b": [CustomObj(), None]},
+                )
+
+        mock_log.assert_called_once_with(
+            "test_event", extra={"payload": {"a": 1, "b": ["custom-value", None]}}
+        )
+
+    def test_remaps_reserved_logrecord_fields_in_lambda_json_mode(self) -> None:
+        """Reserved LogRecord keys should be remapped to avoid KeyError."""
+        logger = logging.getLogger("test")
+
+        with patch.dict("os.environ", {"APP_LOG_FORMAT": "JSON"}):
+            with patch.object(logger, "info") as mock_log:
+                log_info(logger, "lambda_invoked", module="utils.lambda_handler")
+
+        mock_log.assert_called_once_with(
+            "lambda_invoked", extra={"field_module": "utils.lambda_handler"}
+        )
+
+    def test_handles_reserved_key_collision_after_remap(self) -> None:
+        """Remapped keys should remain unique when both forms are supplied."""
+        logger = logging.getLogger("test")
+
+        with patch.dict("os.environ", {"APP_LOG_FORMAT": "JSON"}):
+            with patch.object(logger, "info") as mock_log:
+                log_info(logger, "test_event", module="a", field_module="b")
+
+        mock_log.assert_called_once_with(
+            "test_event", extra={"field_module": "a", "field_module_2": "b"}
+        )
+
 
 class TestLogInfo:
     def test_logs_info_with_event_and_fields(self) -> None:
@@ -111,6 +167,18 @@ class TestLogWarning:
             "max_attempts": 3,
         }
 
+    def test_logs_lambda_json_mode_with_extra_fields(self) -> None:
+        """log_warning should use message + extra in Lambda JSON mode."""
+        logger = logging.getLogger("test")
+
+        with patch.dict("os.environ", {"APP_LOG_FORMAT": "JSON"}):
+            with patch.object(logger, "warning") as mock_log:
+                log_warning(logger, "retry_attempt", attempt=2, max_attempts=3)
+
+        mock_log.assert_called_once_with(
+            "retry_attempt", extra={"attempt": 2, "max_attempts": 3}
+        )
+
 
 class TestLogError:
     def test_logs_error_with_event_and_fields(self) -> None:
@@ -127,3 +195,38 @@ class TestLogError:
             "reason": "invalid_token",
             "status_code": 401,
         }
+
+    def test_logs_lambda_json_mode_with_extra_fields(self) -> None:
+        """log_error should use message + extra in Lambda JSON mode."""
+        logger = logging.getLogger("test")
+
+        with patch.dict("os.environ", {"APP_LOG_FORMAT": "JSON"}):
+            with patch.object(logger, "error") as mock_log:
+                log_error(
+                    logger,
+                    "auth_failed",
+                    reason="invalid_token",
+                    status_code=401,
+                )
+
+        mock_log.assert_called_once_with(
+            "auth_failed", extra={"reason": "invalid_token", "status_code": 401}
+        )
+
+    def test_app_log_format_overrides_runtime_fallback(self) -> None:
+        """APP_LOG_FORMAT should take precedence over AWS runtime fallback variable."""
+        logger = logging.getLogger("test")
+
+        with patch.dict(
+            "os.environ",
+            {
+                "APP_LOG_FORMAT": "TEXT",
+                "AWS_LAMBDA_LOG_FORMAT": "JSON",
+            },
+        ):
+            with patch.object(logger, "info") as mock_log:
+                log_info(logger, "test_event", field="value")
+
+        # TEXT mode keeps the JSON payload in the message string.
+        payload = json.loads(mock_log.call_args[0][0])
+        assert payload == {"event": "test_event", "field": "value"}

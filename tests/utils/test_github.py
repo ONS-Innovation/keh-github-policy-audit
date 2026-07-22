@@ -491,21 +491,21 @@ class TestLogStepRateLimit:
                     }
                 }
 
-        with patch.object(github.logger, "info") as mocked_info:
+        with (
+            patch.dict("os.environ", {"AWS_LAMBDA_LOG_FORMAT": "JSON"}),
+            patch.object(github.logger, "info") as mocked_info,
+        ):
             github.log_step_rate_limit(FakeClient(), "start", "tests.step")
 
-        # Verify log_info was called with structured JSON payload
-        mocked_info.assert_called_once()
-        call_arg = mocked_info.call_args[0][0]
-        import json
-        payload = json.loads(call_arg)
-        assert payload == {
-            "event": "github_rate_limit",
-            "phase": "start",
-            "remaining": 1234,
-            "reset": 1712345678,
-            "step": "tests.step",
-        }
+        mocked_info.assert_called_once_with(
+            "github_rate_limit",
+            extra={
+                "phase": "start",
+                "remaining": 1234,
+                "reset": 1712345678,
+                "step": "tests.step",
+            },
+        )
 
     def test_logs_unknown_fields_when_payload_missing_values(self) -> None:
         """Missing rate-limit fields should be logged as unknown."""
@@ -516,21 +516,21 @@ class TestLogStepRateLimit:
                 assert path == "/rate_limit"
                 return {}
 
-        with patch.object(github.logger, "info") as mocked_info:
+        with (
+            patch.dict("os.environ", {"AWS_LAMBDA_LOG_FORMAT": "JSON"}),
+            patch.object(github.logger, "info") as mocked_info,
+        ):
             github.log_step_rate_limit(FakeClient(), "end", "tests.step")
 
-        # Verify log_info was called with structured JSON payload
-        mocked_info.assert_called_once()
-        call_arg = mocked_info.call_args[0][0]
-        import json
-        payload = json.loads(call_arg)
-        assert payload == {
-            "event": "github_rate_limit",
-            "phase": "end",
-            "remaining": "unknown",
-            "reset": "unknown",
-            "step": "tests.step",
-        }
+        mocked_info.assert_called_once_with(
+            "github_rate_limit",
+            extra={
+                "phase": "end",
+                "remaining": "unknown",
+                "reset": "unknown",
+                "step": "tests.step",
+            },
+        )
 
     def test_logs_warning_when_request_fails(self) -> None:
         """Errors when reading /rate_limit should log a warning and not raise."""
@@ -541,15 +541,14 @@ class TestLogStepRateLimit:
                 assert path == "/rate_limit"
                 raise RuntimeError("boom")
 
-        with patch.object(github.logger, "warning") as mocked_warning:
+        with (
+            patch.dict("os.environ", {"AWS_LAMBDA_LOG_FORMAT": "JSON"}),
+            patch.object(github.logger, "warning") as mocked_warning,
+        ):
             github.log_step_rate_limit(FakeClient(), "start", "tests.step")
 
-        # Verify log_warning was called with structured JSON payload
         mocked_warning.assert_called_once()
-        call_arg = mocked_warning.call_args[0][0]
-        import json
-        payload = json.loads(call_arg)
-        assert payload["event"] == "github_rate_limit_unavailable"
-        assert payload["phase"] == "start"
-        assert payload["step"] == "tests.step"
-        assert "error" in payload
+        assert mocked_warning.call_args.args == ("github_rate_limit_unavailable",)
+        assert mocked_warning.call_args.kwargs["extra"]["phase"] == "start"
+        assert mocked_warning.call_args.kwargs["extra"]["step"] == "tests.step"
+        assert "error" in mocked_warning.call_args.kwargs["extra"]

@@ -70,6 +70,7 @@ export GITHUB_APP_ID_SECRET_NAME=<your-app-id-secret-name>
 export GITHUB_PRIVATE_KEY_SECRET_NAME=<your-private-key-secret-name>
 export ENVIRONMENT=local
 export LOG_PRETTY_JSON=true
+export APP_LOG_FORMAT=TEXT
 ```
 
 `GITHUB_APP_ID_SECRET_NAME` should point to a secret containing a JSON object with the GitHub App ID under the `AppID` key (for example: `{"AppID":"123456"}`).
@@ -83,6 +84,14 @@ export LOG_PRETTY_JSON=true
 
 - false (default): compact single-line JSON log payloads.
 - true: pretty-printed multi-line JSON payloads, useful for local debugging.
+
+`APP_LOG_FORMAT` controls how `utils/structured_logging.py` emits records to Python logging:
+
+- `TEXT` (default): emit JSON payload in the log message string (best for local CLI use).
+- `JSON`: emit event name as message and fields via logger `extra` for Lambda JSON logs.
+
+In deployed Lambda, Terraform sets `APP_LOG_FORMAT=JSON`.
+If `APP_LOG_FORMAT` is unset, the code falls back to the Lambda runtime value `AWS_LAMBDA_LOG_FORMAT` when present.
 
 For production Lambda deployments, keep `LOG_PRETTY_JSON` unset so CloudWatch log volume remains lower.
 

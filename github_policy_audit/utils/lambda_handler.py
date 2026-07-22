@@ -28,7 +28,7 @@ def github_handler(
         log_info(
             handler_logger,
             "lambda_invoked",
-            module=func.__module__,
+            handler_module=func.__module__,
             event_keys=sorted(event.keys()),
         )
 

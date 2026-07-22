@@ -10,9 +10,15 @@ This project uses structured JSON logging in application code, with Lambda-level
 
 ## How Logging Is Produced
 
-1. Application code produces structured JSON payloads via `utils/structured_logging.py`.
-2. Lambda infrastructure is configured with `logging_config { log_format = "JSON" }`.
-3. CloudWatch receives a JSON log record containing a structured JSON message payload.
+1. Application code produces logs through `utils/structured_logging.py`.
+2. For local and plain-text runtimes, messages are emitted as JSON strings.
+3. In AWS Lambda JSON log mode (`logging_config { log_format = "JSON" }`), the `message` is the event name and log fields are emitted as top-level JSON attributes.
+
+The log mode selection is:
+
+- `APP_LOG_FORMAT=JSON`: use Lambda compatible emission (`message` + `extra` fields).
+- `APP_LOG_FORMAT=TEXT` (or unset outside Lambda): emit a JSON payload string in `message`.
+- If `APP_LOG_FORMAT` is unset, the code falls back to `AWS_LAMBDA_LOG_FORMAT` (runtime-provided by AWS when available).
 
 ## Standard Event Shape
 
@@ -21,6 +27,18 @@ Use an event name plus flat fields:
 ```json
 {
   "event": "lambda_completed",
+  "owner": "ONS-Innovation",
+  "repositories_count": 123
+}
+```
+
+In Lambda JSON mode, this appears in CloudWatch like:
+
+```json
+{
+  "timestamp": "2026-07-22T12:34:56.789Z",
+  "level": "INFO",
+  "message": "lambda_completed",
   "owner": "ONS-Innovation",
   "repositories_count": 123
 }
