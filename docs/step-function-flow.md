@@ -7,6 +7,24 @@ The Step Function is triggered weekly by an EventBridge schedule and orchestrate
 **Trigger:** `cron(0 8 ? * MON *)` — every Monday at 08:00 UTC  
 **Input:** `{"owner": "<org-name>", "levels": ["critical", "high", "medium", "low"]}`
 
+## Rate Limit Notes
+
+Due to the size of some GitHub Organisations, the step function may only be able to run once per hour. The `MaxConcurrency` of the repository checks map is configurable to limit simultaneous GitHub API calls and stay within rate limits.
+
+The function has been tested against 2 organisations of various sizes:
+
+- Organisation A:
+  - ~1,400 repositories
+  - ~350 teams
+  - ~17 minutes execution time (with `MaxConcurrency = 5`)
+- Organisation B:
+  - ~100 repositories
+  - ~20 teams
+  - ~1.5 minutes execution time (with `MaxConcurrency = 5`)
+
+Scaling beyond 1,500 repositories may require further tuning of `MaxConcurrency` and/or splitting the organisation into multiple runs.
+For our current use case at ONS, the current configuration is sufficient to run weekly audits of all repositories and teams in a single execution.
+
 ## Flow
 
 ```mermaid
