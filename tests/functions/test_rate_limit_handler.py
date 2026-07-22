@@ -9,6 +9,36 @@ import pytest
 class TestRateLimitHandler:
     module = importlib.import_module("functions.rate_limit.handler")
 
+    def test_extract_core_rate_limit_supports_response_json_method(self):
+        """Extractor should accept response-like objects exposing a json() method."""
+
+        class FakeResponse:
+            def json(self):
+                return {
+                    "resources": {
+                        "core": {
+                            "limit": 5000,
+                            "remaining": 4000,
+                            "reset": 1721668800,
+                            "used": 1000,
+                        }
+                    }
+                }
+
+        result = self.module._extract_core_rate_limit(FakeResponse())
+        assert result["limit"] == 5000
+        assert result["remaining"] == 4000
+
+    def test_extract_core_rate_limit_raises_for_non_dict_payload(self):
+        """Extractor should reject non-dictionary payloads."""
+        with pytest.raises(ValueError, match="must be a dictionary"):
+            self.module._extract_core_rate_limit(["not", "a", "dict"])
+
+    def test_extract_core_rate_limit_raises_for_non_dict_resources(self):
+        """Extractor should reject payloads where resources is not a dictionary."""
+        with pytest.raises(ValueError, match="missing resources"):
+            self.module._extract_core_rate_limit({"resources": []})
+
     def test_returns_rate_limit_payload_for_checkpoint(self):
         """The handler should return checkpoint metadata and parsed core rate-limit values."""
 

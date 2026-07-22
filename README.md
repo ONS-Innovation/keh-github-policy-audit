@@ -380,7 +380,7 @@ Tests live in `terraform/tests/` and are grouped by concern:
 To run the Terraform tests locally:
 
 ```bash
-make test-terraform
+make tf-test
 ```
 
 This will build the Lambda artefacts first (`make build`), then run `terraform test` against all test files.

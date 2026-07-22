@@ -39,12 +39,12 @@ def handler(event, context):
     checkpoint = event.get("checkpoint")
 
     if checkpoint not in {"rate-limit-start", "rate-limit-end"}:
-        raise ValueError(
-            "checkpoint must be one of: rate-limit-start, rate-limit-end"
-        )
+        raise ValueError("checkpoint must be one of: rate-limit-start, rate-limit-end")
 
     client = get_github_client(owner)
-    core_rate_limit = _extract_core_rate_limit(client.make_request("GET", "/rate_limit"))
+    core_rate_limit = _extract_core_rate_limit(
+        client.make_request("GET", "/rate_limit")
+    )
 
     rate_limit = {
         "checkpoint": checkpoint,

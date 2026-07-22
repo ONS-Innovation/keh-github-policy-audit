@@ -100,7 +100,7 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
         Type     = "Task"
         Resource = aws_lambda_function.audit["rate_limit"].arn
         Parameters = {
-          "owner.$"   = "$.initial_input.owner"
+          "owner.$"    = "$.initial_input.owner"
           "checkpoint" = "rate-limit-start"
         }
         ResultPath = "$.rate_limit_start"
@@ -310,7 +310,7 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
         Type     = "Task"
         Resource = aws_lambda_function.audit["rate_limit"].arn
         Parameters = {
-          "owner.$"   = "$.owner"
+          "owner.$"    = "$.owner"
           "checkpoint" = "rate-limit-end"
         }
         ResultPath = "$.rate_limit_end"
