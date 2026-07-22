@@ -1,10 +1,10 @@
-# Step Function Flow — GitHub Policy Audit
+# Step Function Flow - GitHub Policy Audit
 
 ## Overview
 
 The Step Function is triggered weekly by an EventBridge schedule and orchestrates all Lambda functions to audit GitHub organisation policy compliance, then store results in S3 using run-scoped prefixes.
 
-**Trigger:** `cron(0 8 ? * MON *)` — every Monday at 08:00 UTC  
+**Trigger:** `cron(0 8 ? * MON *)` - every Monday at 08:00 UTC  
 **Input:** `{"owner": "<org-name>", "levels": ["critical", "high", "medium", "low"]}`
 
 ## Rate Limit Notes
@@ -33,10 +33,10 @@ For our current use case at ONS, the current configuration is sufficient to run 
 flowchart TD
     EB([EventBridge\nWeekly Schedule\ncron 0 8 MON]) -->|owner: org-name| SF_START([Start Execution])
 
-    SF_START --> PII[PrepareInitialInput\nPass — inject run_id + output_bucket\ninto $.initial_input]
+    SF_START --> PII[PrepareInitialInput\nPass - inject run_id + output_bucket\ninto $.initial_input]
     PII --> INIT_PARALLEL
 
-    subgraph INIT_PARALLEL[" Parallel — Initialise "]
+    subgraph INIT_PARALLEL[" Parallel - Initialise "]
         LR[list_repositories\nwrites repositories-list.json to S3\nreturns S3 reference]
         LT[list_teams]
     end
@@ -44,7 +44,7 @@ flowchart TD
     INIT_PARALLEL --> PREP[PrepareInput\nextract S3 ref + teams from initial_data]
     PREP --> ORG_PARALLEL
 
-    subgraph ORG_PARALLEL[" Parallel — Organisation Checks "]
+    subgraph ORG_PARALLEL[" Parallel - Organisation Checks "]
         DS[dependabot_slo]
         SS[secret_scanning_slo]
         TM_MAP["Map over teams → team_maintainer"]
@@ -53,7 +53,7 @@ flowchart TD
     ORG_PARALLEL --> REPO_MAP
 
     subgraph REPO_MAP[" Distributed Map over repositories\nItemReader reads repositories-list.json from S3\nMaxConcurrency = 5 "]
-        subgraph REPO_PARALLEL[" Parallel — Per-repository Checks "]
+        subgraph REPO_PARALLEL[" Parallel - Per-repository Checks "]
             RC1[codeowners]
             RC2[dependabot]
             RC3[external_pull_request]
@@ -192,7 +192,7 @@ Three branches run in parallel. Each branch receives a subset of the state:
 | `secret_scanning_slo` | `owner` |
 | `TeamMaintainerMap` (Map over `teams`) | `owner`, `team.slug` per iteration |
 
-Their combined outputs are collected into `$.organisation_results` as a three-element array — one element per branch, in declaration order:
+Their combined outputs are collected into `$.organisation_results` as a three-element array - one element per branch, in declaration order:
 
 ```json
 {
@@ -275,7 +275,7 @@ After all repository child executions complete, `store_output` is invoked with o
 
 The Lambda lists all objects under `audit-runs/<owner>/<run_id>/repositories/`, reads each file, and builds the aggregated output.
 
-#### S3 write — final summary
+#### S3 write - final summary
 
 ```bash
 s3://<bucket>/audit-results/<owner>/<run_id>.json

@@ -132,7 +132,7 @@ Some repository-scoped handlers can also accept optional repository metadata und
 
 | Handler modules                       | Required event payload                                                                           |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `functions.list_repositories.handler` | `{"owner":"<org>","run_id":"<id>","output_bucket":"<bucket>"}` — writes a bare JSON array of repository summaries to `s3://<bucket>/audit-runs/<owner>/<run_id>/repositories-list.json` and returns an S3 reference. In the step function the `run_id` and `output_bucket` are injected automatically. |
+| `functions.list_repositories.handler` | `{"owner":"<org>","run_id":"<id>","output_bucket":"<bucket>"}` - writes a bare JSON array of repository summaries to `s3://<bucket>/audit-runs/<owner>/<run_id>/repositories-list.json` and returns an S3 reference. In the step function the `run_id` and `output_bucket` are injected automatically. |
 
 #### Organisation Team Listing
 
@@ -252,9 +252,9 @@ Terraform in `terraform/` provisions:
 | --------------------------------------- | -------- | ------------------------------------ | ------------------------------------------------------------------------------------------------- |
 | `env_name`                              | No       | `sdp-dev`                            | Environment name. Controls bucket/resource naming (e.g. `sdp-dev`, `sdp-prod`).                   |
 | `region`                                | No       | `eu-west-2`                          | AWS region to deploy into.                                                                        |
-| `github_owner`                          | **Yes**  | —                                    | GitHub organisation name audited on each run.                                                     |
-| `github_app_id_secret_name`             | **Yes**  | —                                    | Secrets Manager secret name for the GitHub App ID (`{"AppID":"..."}` JSON).                       |
-| `github_private_key_secret_name`        | **Yes**  | —                                    | Secrets Manager secret name for the GitHub App private key (PEM, plain text).                     |
+| `github_owner`                          | **Yes**  | -                                    | GitHub organisation name audited on each run.                                                     |
+| `github_app_id_secret_name`             | **Yes**  | -                                    | Secrets Manager secret name for the GitHub App ID (`{"AppID":"..."}` JSON).                       |
+| `github_private_key_secret_name`        | **Yes**  | -                                    | Secrets Manager secret name for the GitHub App private key (PEM, plain text).                     |
 | `lambda_runtime`                        | No       | `python3.12`                         | Lambda runtime identifier.                                                                        |
 | `lambda_timeout`                        | No       | `120`                                | Default Lambda timeout in seconds. This can be overridden per Lambda function in `locals.tf`.     |
 | `lambda_memory_size`                    | No       | `512`                                | Lambda memory in MB.                                                                              |
@@ -338,7 +338,7 @@ make test
 
 #### Terraform
 
-Terraform tests use the native [`terraform test`](https://developer.hashicorp.com/terraform/language/tests) framework with mock providers — no AWS credentials are required.
+Terraform tests use the native [`terraform test`](https://developer.hashicorp.com/terraform/language/tests) framework with mock providers - no AWS credentials are required.
 
 Tests live in `terraform/tests/` and are grouped by concern:
 

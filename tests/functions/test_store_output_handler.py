@@ -86,7 +86,7 @@ class TestHandlerValidation:
 
 
 # ---------------------------------------------------------------------------
-# Normalise helpers — bad-input continue branches
+# Normalise helpers - bad-input continue branches
 # ---------------------------------------------------------------------------
 
 
