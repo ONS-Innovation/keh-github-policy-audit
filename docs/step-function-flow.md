@@ -47,7 +47,7 @@ flowchart TD
         LT[list_teams]
     end
 
-    INIT_PARALLEL --> PREP[PrepareInput\nextract S3 ref + teams from initial_data]
+    INIT_PARALLEL --> PREP[PrepareInput\nextract S3 ref + teams and preserve rate_limit_start]
     PREP --> ORG_PARALLEL
 
     subgraph ORG_PARALLEL[" Parallel - Organisation Checks "]
@@ -83,17 +83,17 @@ flowchart TD
 
 ## Stage Summary
 
-| Stage                  | State Type                                                | Lambdas                                                                                                                                                                    |
-| ---------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Prepare initial input  | `Pass`                                                    | None (injects `run_id` and `output_bucket` into `$.initial_input`)                                                                                                         |
-| Rate-limit start       | `Task`                                                    | `rate_limit` (`checkpoint=rate-limit-start`)                                                                                                                              |
-| Initialise             | `Parallel`                                                | `list_repositories` (writes to S3, returns reference), `list_teams`                                                                                                        |
-| Prepare input          | `Pass`                                                    | None (reshapes state; promotes S3 ref and teams)                                                                                                                           |
-| Organisation checks    | `Parallel` + inner `Map` for teams                        | `dependabot_slo`, `secret_scanning_slo`, `team_maintainer`                                                                                                                 |
-| Repository checks      | `Map` (Mode=`DISTRIBUTED`, MaxConcurrency=5) + `Parallel` | `codeowners`, `dependabot`, `external_pull_request`, `gitignore`, `inactivity`, `license`, `naming_convention`, `pirr`, `readme`, `repository_access`, `security_scanning` |
-| Repo output write      | `Task`                                                    | `store_repository_output`                                                                                                                                                  |
-| Rate-limit end         | `Task`                                                    | `rate_limit` (`checkpoint=rate-limit-end`)                                                                                                                                |
-| Final aggregation      | `Task`                                                    | `store_output`                                                                                                                                                             |
+| Stage | State Type | Lambdas |
+| --- | --- | --- |
+| Prepare initial input | `Pass` | None (injects `run_id` and `output_bucket` into `$.initial_input`) |
+| Rate-limit start | `Task` | `rate_limit` (`checkpoint=rate-limit-start`) |
+| Initialise | `Parallel` | `list_repositories` (writes to S3, returns reference), `list_teams` |
+| Prepare input | `Pass` | None (reshapes root state; promotes S3 ref, teams, and `rate_limit_start`) |
+| Organisation checks | `Parallel` + inner `Map` for teams | `dependabot_slo`, `secret_scanning_slo`, `team_maintainer` |
+| Repository checks | `Map` (Mode=`DISTRIBUTED`, MaxConcurrency=5) + `Parallel` | `codeowners`, `dependabot`, `external_pull_request`, `gitignore`, `inactivity`, `license`, `naming_convention`, `pirr`, `readme`, `repository_access`, `security_scanning` |
+| Repo output write | `Task` | `store_repository_output` |
+| Rate-limit end | `Task` | `rate_limit` (`checkpoint=rate-limit-end`) |
+| Final aggregation | `Task` | `store_output` |
 
 ## Storage and Lifecycle
 
@@ -189,7 +189,7 @@ The parallel branches return their results as an array under `$.initial_data`:
 
 ### 3. PrepareInput → OrganisationChecks
 
-`PrepareInput` is a Pass state that reshapes the execution state, extracting `owner`, `levels`, `run_id`, and `output_bucket` from `$.initial_input`, the S3 reference from `initial_data[0]`, and `teams` from `initial_data[1]`:
+`PrepareInput` is a Pass state that reshapes the execution state, extracting `owner`, `levels`, `run_id`, and `output_bucket` from `$.initial_input`, the S3 reference from `initial_data[0]`, `teams` from `initial_data[1]`, and carrying forward `rate_limit_start`:
 
 ```json
 {
@@ -198,9 +198,12 @@ The parallel branches return their results as an array under `$.initial_data`:
     "run_id": "<sfn-execution-name>",
     "output_bucket": "<s3-bucket-name>",
     "repositories_s3_ref": { "s3_bucket": "<s3-bucket-name>", "s3_key": "audit-runs/ONS-Innovation/<run_id>/repositories-list.json", "repository_count": 42 },
-    "teams": [{ "name": "team-a", "slug": "team-a" }]
+    "teams": [{ "name": "team-a", "slug": "team-a" }],
+    "rate_limit_start": { "checkpoint": "rate-limit-start", "remaining": 4988, "limit": 5000, "reset": 1721668800, "used": 12, "retrieved_at": "..." }
 }
 ```
+
+> Because this state writes to the root object (`ResultPath = "$"`), any field not listed in `PrepareInput.Parameters` is dropped. This is really important to consider when adding new fields to the state, as they will be lost unless explicitly preserved.
 
 The `repositories_s3_ref` is carried through `OrganisationChecks` unchanged and consumed later by the `RepositoryChecksMap` `ItemReader`.
 
