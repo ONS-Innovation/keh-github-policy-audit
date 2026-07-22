@@ -94,6 +94,16 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
           "output_bucket" = aws_s3_bucket.audit_output.bucket
         }
         ResultPath = "$.initial_input"
+        Next       = "RateLimitStart"
+      }
+      RateLimitStart = {
+        Type     = "Task"
+        Resource = aws_lambda_function.audit["rate_limit"].arn
+        Parameters = {
+          "owner.$"   = "$.initial_input.owner"
+          "checkpoint" = "rate-limit-start"
+        }
+        ResultPath = "$.rate_limit_start"
         Next       = "Initialise"
       }
       Initialise = {
@@ -294,6 +304,16 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
           }
         }
         ResultPath = null
+        Next       = "RateLimitEnd"
+      }
+      RateLimitEnd = {
+        Type     = "Task"
+        Resource = aws_lambda_function.audit["rate_limit"].arn
+        Parameters = {
+          "owner.$"   = "$.owner"
+          "checkpoint" = "rate-limit-end"
+        }
+        ResultPath = "$.rate_limit_end"
         Next       = "store_output"
       }
       store_output = {
@@ -306,6 +326,8 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
           "teams.$"                = "$.teams"
           "organisation_results.$" = "$.organisation_results"
           "team_results.$"         = "$.organisation_results[2]"
+          "rate_limit_start.$"     = "$.rate_limit_start"
+          "rate_limit_end.$"       = "$.rate_limit_end"
         }
         End = true
       }

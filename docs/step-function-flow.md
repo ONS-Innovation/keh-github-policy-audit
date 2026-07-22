@@ -13,6 +13,11 @@ Due to the size of some GitHub Organisations, the step function may only be able
 
 For more information on rate limits, including per-step start/end rate-limit logging, see [rate-limit-considerations.md](rate-limit-considerations.md).
 
+This workflow also includes two explicit checkpoint tasks so overall quota usage is visible at execution boundaries:
+
+- `rate-limit-start` runs immediately after `PrepareInitialInput`.
+- `rate-limit-end` runs after repository checks complete and before final aggregation.
+
 The function has been tested against 2 organisations of various sizes:
 
 - Organisation A:
@@ -34,7 +39,8 @@ flowchart TD
     EB([EventBridge\nWeekly Schedule\ncron 0 8 MON]) -->|owner: org-name| SF_START([Start Execution])
 
     SF_START --> PII[PrepareInitialInput\nPass - inject run_id + output_bucket\ninto $.initial_input]
-    PII --> INIT_PARALLEL
+    PII --> RL_START[rate_limit\ncheckpoint=rate-limit-start]
+    RL_START --> INIT_PARALLEL
 
     subgraph INIT_PARALLEL[" Parallel - Initialise "]
         LR[list_repositories\nwrites repositories-list.json to S3\nreturns S3 reference]
@@ -70,7 +76,8 @@ flowchart TD
         REPO_PARALLEL --> REPO_WRITE
     end
 
-    REPO_MAP --> STORE[store_output\naggregate run prefix and write audit-results owner/run_id.json]
+    REPO_MAP --> RL_END[rate_limit\ncheckpoint=rate-limit-end]
+    RL_END --> STORE[store_output\naggregate run prefix and write audit-results owner/run_id.json]
     STORE --> END([End])
 ```
 
@@ -79,11 +86,13 @@ flowchart TD
 | Stage                  | State Type                                                | Lambdas                                                                                                                                                                    |
 | ---------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Prepare initial input  | `Pass`                                                    | None (injects `run_id` and `output_bucket` into `$.initial_input`)                                                                                                         |
+| Rate-limit start       | `Task`                                                    | `rate_limit` (`checkpoint=rate-limit-start`)                                                                                                                              |
 | Initialise             | `Parallel`                                                | `list_repositories` (writes to S3, returns reference), `list_teams`                                                                                                        |
 | Prepare input          | `Pass`                                                    | None (reshapes state; promotes S3 ref and teams)                                                                                                                           |
 | Organisation checks    | `Parallel` + inner `Map` for teams                        | `dependabot_slo`, `secret_scanning_slo`, `team_maintainer`                                                                                                                 |
 | Repository checks      | `Map` (Mode=`DISTRIBUTED`, MaxConcurrency=5) + `Parallel` | `codeowners`, `dependabot`, `external_pull_request`, `gitignore`, `inactivity`, `license`, `naming_convention`, `pirr`, `readme`, `repository_access`, `security_scanning` |
 | Repo output write      | `Task`                                                    | `store_repository_output`                                                                                                                                                  |
+| Rate-limit end         | `Task`                                                    | `rate_limit` (`checkpoint=rate-limit-end`)                                                                                                                                |
 | Final aggregation      | `Task`                                                    | `store_output`                                                                                                                                                             |
 
 ## Storage and Lifecycle
@@ -136,6 +145,19 @@ EventBridge injects the initial execution input:
 ```
 
 The `Initialise` parallel state then fans out to `list_repositories` and `list_teams`, both reading from `$.initial_input.*`.
+
+### 1b. RateLimitStart checkpoint
+
+Before initialization fan-out, a dedicated `rate_limit` task is invoked with:
+
+```json
+{
+    "owner": "ONS-Innovation",
+    "checkpoint": "rate-limit-start"
+}
+```
+
+The response is persisted at `$.rate_limit_start` and carried through to final aggregation.
 
 ### 2. Initialise → PrepareInput
 
@@ -258,7 +280,20 @@ The parent map's `ResultPath` is also `null`, so no repository data accumulates 
 
 > This write is **crucial** for scaling since the step function state size is too small to handle all repository check results in memory. Each child execution writes its results to S3 and discards them from state, allowing the parent execution to continue without exceeding the 256KB state limit.
 
-### 6. store_output (Final Aggregation)
+### 6. RateLimitEnd checkpoint
+
+After repository map completion and before final aggregation, `rate_limit` is invoked again:
+
+```json
+{
+    "owner": "ONS-Innovation",
+    "checkpoint": "rate-limit-end"
+}
+```
+
+The response is stored at `$.rate_limit_end`.
+
+### 7. store_output (Final Aggregation)
 
 After all repository child executions complete, `store_output` is invoked with only the organisation-level data still held in state:
 
@@ -269,7 +304,9 @@ After all repository child executions complete, `store_output` is invoked with o
     "output_bucket": "<s3-bucket-name>",
     "teams": [{ "name": "team-a", "slug": "team-a" }],
     "organisation_results": [ ... ],
-    "team_results": [ ... ]
+    "team_results": [ ... ],
+    "rate_limit_start": { "checkpoint": "rate-limit-start", "remaining": 4988, "limit": 5000, "reset": 1721668800, "used": 12, "retrieved_at": "..." },
+    "rate_limit_end": { "checkpoint": "rate-limit-end", "remaining": 4321, "limit": 5000, "reset": 1721668800, "used": 679, "retrieved_at": "..." }
 }
 ```
 
@@ -303,6 +340,10 @@ The summary file structure:
         "repository_checks": { "readme": { "total": 1, "compliant": 1 } },
         "organisation_checks": { "dependabot_slo": { "compliant": true } }
     },
+    "rate-limit-start": { "checkpoint": "rate-limit-start", "remaining": 4988, "limit": 5000, "reset": 1721668800, "used": 12, "retrieved_at": "..." },
+    "rate-limit-end": { "checkpoint": "rate-limit-end", "remaining": 4321, "limit": 5000, "reset": 1721668800, "used": 679, "retrieved_at": "..." },
     "timestamp": "2026-07-16T08:00:00+00:00"
 }
 ```
+
+Because `store_output` is the terminal task, these same `rate-limit-start` and `rate-limit-end` fields are also present in the final Step Functions execution output.

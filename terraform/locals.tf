@@ -13,6 +13,10 @@ locals {
       zip_path = "${local.lambda_source_root}/list_teams.zip"
       handler  = "functions.list_teams.handler.handler"
     }
+    rate_limit = {
+      zip_path = "${local.lambda_source_root}/rate_limit.zip"
+      handler  = "functions.rate_limit.handler.handler"
+    }
     dependabot_slo = {
       zip_path = "${local.lambda_source_root}/organisation_checks-dependabot_slo.zip"
       handler  = "functions.organisation_checks.dependabot_slo.handler.handler"

@@ -9,6 +9,7 @@ To reduce risk of rate-limit failures, the workflow combines:
 - Concurrency controls in Step Functions (`MaxConcurrency` in the repository distributed map)
 - Retry logic during GitHub client initialisation for transient/rate-limit responses
 - Explicit rate-limit telemetry at the start and end of each GitHub-backed step
+- Dedicated Step Functions checkpoint tasks (`rate-limit-start`, `rate-limit-end`) to capture org-wide boundary snapshots
 
 ## What is logged now
 
@@ -34,6 +35,21 @@ Unable to read GitHub rate limit step=<step_module> phase=<start|end> error=<...
 - Applies to all GitHub-backed Step Function task handlers.
 - Does not apply to storage-only handlers that do not call GitHub.
 - Adds two extra GitHub API calls per GitHub-backed step invocation (one at start, one at end).
+
+## Workflow boundary checkpoints
+
+In addition to per-step logs, the state machine invokes `functions.rate_limit.handler` twice:
+
+- Start checkpoint: immediately after `PrepareInitialInput` (`checkpoint=rate-limit-start`)
+- End checkpoint: after repository checks complete, before final aggregation (`checkpoint=rate-limit-end`)
+
+Each checkpoint returns a compact payload with `limit`, `remaining`, `reset`, `used`, and `retrieved_at`.
+These are passed to `store_output` and written into both the final summary JSON and the terminal Step Functions output as:
+
+- `rate-limit-start`
+- `rate-limit-end`
+
+This helps estimate the total API quota consumed by the workflow, and can be used to tune concurrency for large organisations.
 
 ## Using the logs
 

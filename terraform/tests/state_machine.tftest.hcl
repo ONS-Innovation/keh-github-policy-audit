@@ -63,10 +63,12 @@ run "state_machine_states" {
 
   assert {
     condition = alltrue([
+      contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States), "RateLimitStart"),
       contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States), "Initialise"),
       contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States), "PrepareInput"),
       contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States), "OrganisationChecks"),
       contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States), "RepositoryChecksMap"),
+      contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States), "RateLimitEnd"),
       contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States), "store_output"),
     ])
     error_message = "State machine is missing one or more required states."
@@ -189,8 +191,8 @@ run "terraform_outputs" {
   }
 
   assert {
-    condition     = length(output.lambda_function_names) == 18
-    error_message = "lambda_function_names output should include all 18 Lambda functions."
+    condition     = length(output.lambda_function_names) == 19
+    error_message = "lambda_function_names output should include all 19 Lambda functions."
   }
 
   assert {

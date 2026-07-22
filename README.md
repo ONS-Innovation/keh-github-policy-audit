@@ -15,6 +15,7 @@ A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage 
     - [4. Payload summary](#4-payload-summary)
       - [Repository Listing](#repository-listing)
       - [Organisation Team Listing](#organisation-team-listing)
+      - [Rate Limit Checkpoint](#rate-limit-checkpoint)
       - [Check Handlers](#check-handlers)
       - [Output Handlers](#output-handlers)
   - [Deployment](#deployment)
@@ -132,6 +133,7 @@ Ready-to-use payload files are provided in `examples/`:
 - `examples/dependabot_slo_event.json`
 - `examples/naming_convention_event.json`
 - `examples/team_maintainer_event.json`
+- `examples/rate_limit_event.json`
 - `examples/store_output_event.json`
 - `examples/store_repository_output_event.json`
 
@@ -159,6 +161,12 @@ Some repository-scoped handlers can also accept optional repository metadata und
 | ------------------------------ | ---------------------- |
 | `functions.list_teams.handler` | `{"owner":"<org>"}`    |
 
+#### Rate Limit Checkpoint
+
+| Handler modules                 | Required event payload                                                |
+| ------------------------------- | --------------------------------------------------------------------- |
+| `functions.rate_limit.handler`  | `{"owner":"<org>","checkpoint":"rate-limit-start|rate-limit-end"}` |
+
 #### Check Handlers
 
 | Checks                                                  | Handler modules                                                                                                                                                                                                                                                                                                                                                                                                    | Required event payload                                                                                        |
@@ -175,9 +183,10 @@ Some repository-scoped handlers can also accept optional repository metadata und
 | Handler modules                                   | Required event payload                                                                                                                   |
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `functions.store_repository_output.handler`       | `{"owner":"<org>","run_id":"<execution-id>","repository_name":"<repo>","checks":[{"check_name":"readme","status":"pass"}]}`              |
-| `functions.store_output.handler` (S3 aggregation) | `{"owner":"<org>","run_id":"<execution-id>","output_bucket":"<bucket>","organisation_results":[...],"teams":[...],"team_results":[...]}` |
+| `functions.store_output.handler` (S3 aggregation) | `{"owner":"<org>","run_id":"<execution-id>","output_bucket":"<bucket>","organisation_results":[...],"teams":[...],"team_results":[...],"rate_limit_start":{...},"rate_limit_end":{...}}` |
 
 The scalable production flow stores one repository JSON file at a time under `audit-runs/<owner>/<run_id>/repositories/`, then `store_output` aggregates that prefix and writes the final summary to `audit-results/<owner>/<run_id>.json`.
+The final summary and terminal Step Functions output also include `rate-limit-start` and `rate-limit-end` checkpoint objects.
 
 ## Deployment
 

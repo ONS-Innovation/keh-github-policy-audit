@@ -57,13 +57,13 @@ override_data {
 
 run "lambda_definitions_complete" {
   assert {
-    condition     = length(local.lambda_definitions) == 18
-    error_message = "Expected 18 Lambda function definitions."
+    condition     = length(local.lambda_definitions) == 19
+    error_message = "Expected 19 Lambda function definitions."
   }
 
   assert {
-    condition     = length(aws_lambda_function.audit) == 18
-    error_message = "Expected 18 Lambda functions to be provisioned."
+    condition     = length(aws_lambda_function.audit) == 19
+    error_message = "Expected 19 Lambda functions to be provisioned."
   }
 
   assert {
@@ -144,6 +144,11 @@ run "lambda_handlers" {
   assert {
     condition     = aws_lambda_function.audit["list_teams"].handler == "functions.list_teams.handler.handler"
     error_message = "list_teams handler path is incorrect."
+  }
+
+  assert {
+    condition     = aws_lambda_function.audit["rate_limit"].handler == "functions.rate_limit.handler.handler"
+    error_message = "rate_limit handler path is incorrect."
   }
 
   assert {

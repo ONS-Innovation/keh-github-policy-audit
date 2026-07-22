@@ -212,6 +212,8 @@ def handler(event, context):
 
     bucket_name = event.get("output_bucket") or os.environ.get("S3_BUCKET_NAME")
     run_id = event.get("run_id")
+    rate_limit_start = event.get("rate_limit_start")
+    rate_limit_end = event.get("rate_limit_end")
 
     repositories = _normalise_repository_checks(
         event.get("repositories"), event.get("repository_results")
@@ -273,6 +275,8 @@ def handler(event, context):
         "organisation_checks": organisation_checks,
         "teams": teams,
         "summary": summary,
+        "rate-limit-start": rate_limit_start,
+        "rate-limit-end": rate_limit_end,
         "timestamp": now.isoformat(),
     }
 
@@ -332,4 +336,6 @@ def handler(event, context):
         "local_output_path": local_output_path,
         "owner": owner,
         "run_id": run_id,
+        "rate-limit-start": rate_limit_start,
+        "rate-limit-end": rate_limit_end,
     }
