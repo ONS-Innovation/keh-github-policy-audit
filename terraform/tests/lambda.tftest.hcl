@@ -96,8 +96,8 @@ run "lambda_runtime_config" {
   }
 
   assert {
-    condition     = aws_lambda_function.audit["list_repositories"].timeout == 120
-    error_message = "Lambda timeout should default to 120 seconds."
+    condition     = aws_lambda_function.audit["list_repositories"].timeout == 600
+    error_message = "Lambda list_repositories timeout should be overridden to 600 seconds."
   }
 
   assert {

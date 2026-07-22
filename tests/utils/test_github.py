@@ -494,13 +494,18 @@ class TestLogStepRateLimit:
         with patch.object(github.logger, "info") as mocked_info:
             github.log_step_rate_limit(FakeClient(), "start", "tests.step")
 
-        mocked_info.assert_called_once_with(
-            "GitHub rate limit step=%s phase=%s remaining=%s reset=%s",
-            "tests.step",
-            "start",
-            1234,
-            1712345678,
-        )
+        # Verify log_info was called with structured JSON payload
+        mocked_info.assert_called_once()
+        call_arg = mocked_info.call_args[0][0]
+        import json
+        payload = json.loads(call_arg)
+        assert payload == {
+            "event": "github_rate_limit",
+            "phase": "start",
+            "remaining": 1234,
+            "reset": 1712345678,
+            "step": "tests.step",
+        }
 
     def test_logs_unknown_fields_when_payload_missing_values(self) -> None:
         """Missing rate-limit fields should be logged as unknown."""
@@ -514,13 +519,18 @@ class TestLogStepRateLimit:
         with patch.object(github.logger, "info") as mocked_info:
             github.log_step_rate_limit(FakeClient(), "end", "tests.step")
 
-        mocked_info.assert_called_once_with(
-            "GitHub rate limit step=%s phase=%s remaining=%s reset=%s",
-            "tests.step",
-            "end",
-            "unknown",
-            "unknown",
-        )
+        # Verify log_info was called with structured JSON payload
+        mocked_info.assert_called_once()
+        call_arg = mocked_info.call_args[0][0]
+        import json
+        payload = json.loads(call_arg)
+        assert payload == {
+            "event": "github_rate_limit",
+            "phase": "end",
+            "remaining": "unknown",
+            "reset": "unknown",
+            "step": "tests.step",
+        }
 
     def test_logs_warning_when_request_fails(self) -> None:
         """Errors when reading /rate_limit should log a warning and not raise."""
@@ -534,4 +544,12 @@ class TestLogStepRateLimit:
         with patch.object(github.logger, "warning") as mocked_warning:
             github.log_step_rate_limit(FakeClient(), "start", "tests.step")
 
+        # Verify log_warning was called with structured JSON payload
         mocked_warning.assert_called_once()
+        call_arg = mocked_warning.call_args[0][0]
+        import json
+        payload = json.loads(call_arg)
+        assert payload["event"] == "github_rate_limit_unavailable"
+        assert payload["phase"] == "start"
+        assert payload["step"] == "tests.step"
+        assert "error" in payload

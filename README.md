@@ -86,6 +86,8 @@ export LOG_PRETTY_JSON=true
 
 For production Lambda deployments, keep `LOG_PRETTY_JSON` unset so CloudWatch log volume remains lower.
 
+Detailed logging conventions and examples are documented in `docs/logging-patterns.md`.
+
 `boto3` uses the standard AWS credential provider chain. For local development, this can come from an AWS CLI SSO profile after running `aws sso login`. In Lambda, credentials are provided by the function's IAM execution role.
 
 If running store output in `prod`, set:
@@ -138,8 +140,8 @@ Some repository-scoped handlers can also accept optional repository metadata und
 
 #### Repository Listing
 
-| Handler modules                       | Required event payload                                                                           |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Handler modules                       | Required event payload                                                                                                                                                                                                                                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `functions.list_repositories.handler` | `{"owner":"<org>","run_id":"<id>","output_bucket":"<bucket>"}` - writes a bare JSON array of repository summaries to `s3://<bucket>/audit-runs/<owner>/<run_id>/repositories-list.json` and returns an S3 reference. In the step function the `run_id` and `output_bucket` are injected automatically. |
 
 #### Organisation Team Listing
