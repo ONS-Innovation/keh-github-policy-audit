@@ -150,6 +150,7 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
           "output_bucket"         = aws_s3_bucket.audit_output.bucket
           "repositories_s3_ref.$" = "$.initial_data[0]"
           "teams.$"               = "$.initial_data[1]"
+          "rate_limit_start.$"    = "$.rate_limit_start"
         }
         ResultPath = "$"
         Next       = "OrganisationChecks"
