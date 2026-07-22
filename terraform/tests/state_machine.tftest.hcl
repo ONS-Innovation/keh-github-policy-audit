@@ -143,3 +143,58 @@ run "eventbridge_input_payload" {
     error_message = "EventBridge input payload must include all default dependabot severity levels."
   }
 }
+
+run "step_function_and_eventbridge_iam" {
+  assert {
+    condition = alltrue([
+      strcontains(aws_iam_role_policy.step_function_invoke_lambda.policy, "\"AllowReadRepositoryList\""),
+      strcontains(aws_iam_role_policy.step_function_invoke_lambda.policy, "\"s3:GetObject\""),
+    ])
+    error_message = "Step Function policy should allow reading repository list object from S3."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(aws_iam_role_policy.step_function_invoke_lambda.policy, "\"AllowDistributedMapChildExecutions\""),
+      strcontains(aws_iam_role_policy.step_function_invoke_lambda.policy, "\"states:StartExecution\""),
+      strcontains(aws_iam_role_policy.step_function_invoke_lambda.policy, "\"states:DescribeExecution\""),
+    ])
+    error_message = "Step Function policy should allow distributed-map child execution actions."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(aws_iam_role_policy.step_function_invoke_lambda.policy, "\"AllowCloudWatchLogs\""),
+      strcontains(aws_iam_role_policy.step_function_invoke_lambda.policy, "\"logs:CreateLogDelivery\""),
+      strcontains(aws_iam_role_policy.step_function_invoke_lambda.policy, "\"logs:PutLogEvents\""),
+    ])
+    error_message = "Step Function policy should include required CloudWatch Logs permissions."
+  }
+
+  assert {
+    condition     = contains(flatten([for statement in jsondecode(aws_iam_role_policy.eventbridge_start_execution.policy).Statement : statement.Action]), "states:StartExecution")
+    error_message = "EventBridge policy should allow starting the state machine execution."
+  }
+
+  assert {
+    condition     = contains(flatten([for statement in jsondecode(aws_iam_role_policy.eventbridge_start_execution.policy).Statement : [statement.Resource]]), aws_sfn_state_machine.github_policy_audit.arn)
+    error_message = "EventBridge policy should scope StartExecution to the audit state machine ARN."
+  }
+}
+
+run "terraform_outputs" {
+  assert {
+    condition     = output.step_function_arn == aws_sfn_state_machine.github_policy_audit.arn
+    error_message = "step_function_arn output should match the state machine ARN."
+  }
+
+  assert {
+    condition     = length(output.lambda_function_names) == 18
+    error_message = "lambda_function_names output should include all 18 Lambda functions."
+  }
+
+  assert {
+    condition     = output.audit_output_bucket_name == "sdp-dev-github-policy-audit"
+    error_message = "audit_output_bucket_name output should match the expected dev bucket name."
+  }
+}

@@ -130,3 +130,10 @@ run "lifecycle_rules_configured" {
     error_message = "Global abort rule should set days_after_initiation to 1."
   }
 }
+
+run "bucket_versioning_enabled" {
+  assert {
+    condition     = aws_s3_bucket_versioning.audit_output.versioning_configuration[0].status == "Enabled"
+    error_message = "Audit output bucket versioning should be enabled."
+  }
+}

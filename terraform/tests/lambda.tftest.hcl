@@ -173,3 +173,90 @@ run "lambda_layer_name" {
     error_message = "Dependency layer should be compatible with python3.12."
   }
 }
+
+run "lambda_network_and_observability" {
+  assert {
+    condition = anytrue([
+      for rule in aws_security_group.lambda_sg.ingress :
+      rule.from_port == 443 &&
+      rule.to_port == 443 &&
+      rule.protocol == "tcp" &&
+      contains(rule.cidr_blocks, "10.0.0.0/16")
+    ])
+    error_message = "Lambda security group should allow HTTPS ingress from the expected VPC CIDR."
+  }
+
+  assert {
+    condition = anytrue([
+      for rule in aws_security_group.lambda_sg.egress :
+      rule.protocol == "-1" &&
+      contains(rule.cidr_blocks, "0.0.0.0/0")
+    ])
+    error_message = "Lambda security group should allow outbound traffic."
+  }
+
+  assert {
+    condition     = length(aws_lambda_function.audit["list_repositories"].vpc_config[0].subnet_ids) == 2
+    error_message = "list_repositories Lambda should be configured with two private subnets."
+  }
+
+  assert {
+    condition     = length(aws_lambda_function.audit["list_repositories"].vpc_config[0].security_group_ids) == 1
+    error_message = "list_repositories Lambda should be configured with exactly one security group."
+  }
+
+  assert {
+    condition     = aws_lambda_function.audit["list_repositories"].tracing_config[0].mode == "Active"
+    error_message = "Lambda tracing should be enabled (Active)."
+  }
+
+  assert {
+    condition     = aws_lambda_function.audit["list_repositories"].logging_config[0].log_format == "JSON"
+    error_message = "Lambda log format should be JSON."
+  }
+
+  assert {
+    condition     = aws_lambda_function.audit["list_repositories"].reserved_concurrent_executions == 10
+    error_message = "Lambda reserved concurrency should default to 10."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_group.audit["list_repositories"].retention_in_days == 90
+    error_message = "Lambda log retention should default to 90 days."
+  }
+}
+
+run "lambda_iam_policies" {
+  assert {
+    condition     = aws_iam_role_policy_attachment.lambda_basic_execution.policy_arn == "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+    error_message = "Lambda role should attach AWSLambdaBasicExecutionRole."
+  }
+
+  assert {
+    condition     = aws_iam_role_policy_attachment.lambda_vpc_access_execution.policy_arn == "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+    error_message = "Lambda role should attach AWSLambdaVPCAccessExecutionRole."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(aws_iam_role_policy.lambda_permissions.policy, "\"AllowGitHubSecretsRead\""),
+      strcontains(aws_iam_role_policy.lambda_permissions.policy, "\"secretsmanager:GetSecretValue\""),
+      strcontains(aws_iam_role_policy.lambda_permissions.policy, "\"AllowStoreOutputWrite\""),
+      strcontains(aws_iam_role_policy.lambda_permissions.policy, "\"s3:PutObject\""),
+      strcontains(aws_iam_role_policy.lambda_permissions.policy, "\"s3:GetObject\""),
+      strcontains(aws_iam_role_policy.lambda_permissions.policy, "\"AllowStoreOutputList\""),
+      strcontains(aws_iam_role_policy.lambda_permissions.policy, "\"s3:ListBucket\""),
+    ])
+    error_message = "Lambda inline policy should include required Secrets Manager and S3 actions."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(aws_iam_role_policy.lambda_permissions.policy, "arn:aws:secretsmanager:eu-west-2:123456789012:secret:test-app-id*"),
+      strcontains(aws_iam_role_policy.lambda_permissions.policy, "arn:aws:secretsmanager:eu-west-2:123456789012:secret:test-private-key*"),
+      strcontains(aws_iam_role_policy.lambda_permissions.policy, "arn:aws:s3:::mock-bucket/*"),
+      strcontains(aws_iam_role_policy.lambda_permissions.policy, "arn:aws:s3:::mock-bucket"),
+    ])
+    error_message = "Lambda inline policy should scope resources to expected secrets and audit bucket paths."
+  }
+}
