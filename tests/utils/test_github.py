@@ -1,6 +1,7 @@
 """Tests for shared GitHub utilities."""
 
 import json
+import logging
 import os
 from typing import Any
 from unittest.mock import patch
@@ -437,6 +438,7 @@ class TestGithubRateLimitHelpers:
         [
             ("not-a-dict", (None, None)),
             ({}, (None, None)),
+            (_response_with_status(200), (None, None)),
             ({"resources": "not-a-dict"}, (None, None)),
             ({"resources": {}}, (None, None)),
             ({"resources": {"core": "not-a-dict"}}, (None, None)),
@@ -452,8 +454,21 @@ class TestGithubRateLimitHelpers:
         """Rate-limit field extraction should be robust across malformed payloads."""
         assert github._extract_rate_limit_fields(payload) == expected
 
+    def test_extract_rate_limit_fields_from_response(self) -> None:
+        """Rate-limit field extraction should support requests.Response payloads."""
+        response = _response_with_status(200)
+        response._content = json.dumps(
+            {"resources": {"core": {"remaining": 4999, "reset": 1700000000}}}
+        ).encode("utf-8")
+
+        assert github._extract_rate_limit_fields(response) == (4999, 1700000000)
+
 
 class TestLogStepRateLimit:
+    def test_module_logger_is_configured_for_info(self) -> None:
+        """The utility logger should emit INFO records in Lambda by default."""
+        assert github.logger.level == logging.INFO
+
     def test_raises_for_invalid_phase(self) -> None:
         """Invalid phase values should raise ValueError."""
         client = object()
@@ -464,7 +479,8 @@ class TestLogStepRateLimit:
         """Successful /rate_limit requests should log remaining and reset."""
 
         class FakeClient:
-            def make_request(self, path: str) -> dict[str, Any]:
+            def make_request(self, method: str, path: str) -> dict[str, Any]:
+                assert method == "GET"
                 assert path == "/rate_limit"
                 return {
                     "resources": {
@@ -490,7 +506,8 @@ class TestLogStepRateLimit:
         """Missing rate-limit fields should be logged as unknown."""
 
         class FakeClient:
-            def make_request(self, path: str) -> dict[str, Any]:
+            def make_request(self, method: str, path: str) -> dict[str, Any]:
+                assert method == "GET"
                 assert path == "/rate_limit"
                 return {}
 
@@ -509,7 +526,8 @@ class TestLogStepRateLimit:
         """Errors when reading /rate_limit should log a warning and not raise."""
 
         class FakeClient:
-            def make_request(self, path: str) -> dict[str, Any]:
+            def make_request(self, method: str, path: str) -> dict[str, Any]:
+                assert method == "GET"
                 assert path == "/rate_limit"
                 raise RuntimeError("boom")
 

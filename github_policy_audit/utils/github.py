@@ -13,6 +13,7 @@ from policy_methods_library.github.clients import GitHubRestClient
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 # Transient errors can occur when many Lambdas request installation tokens in parallel.
 _CLIENT_INIT_RETRY_DELAYS_SECONDS = [0.5, 1.0, 2.0]
@@ -78,6 +79,12 @@ def _http_error_context(error: HTTPError) -> tuple[str, str]:
 
 def _extract_rate_limit_fields(rate_limit_payload: Any) -> tuple[Any, Any]:
     """Extract remaining and reset values from a GitHub /rate_limit payload."""
+    if hasattr(rate_limit_payload, "json") and callable(rate_limit_payload.json):
+        try:
+            rate_limit_payload = rate_limit_payload.json()
+        except ValueError:
+            return None, None
+
     if not isinstance(rate_limit_payload, dict):
         return None, None
 
@@ -103,7 +110,7 @@ def log_step_rate_limit(
         raise ValueError("phase must be either 'start' or 'end'")
 
     try:
-        rate_limit_payload = github_client.make_request("/rate_limit")
+        rate_limit_payload = github_client.make_request("GET", "/rate_limit")
         remaining, reset = _extract_rate_limit_fields(rate_limit_payload)
         logger.info(
             "GitHub rate limit step=%s phase=%s remaining=%s reset=%s",
