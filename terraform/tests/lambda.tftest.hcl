@@ -133,6 +133,11 @@ run "lambda_env_vars" {
     condition     = aws_lambda_function.audit["store_output"].environment[0].variables["GITHUB_PRIVATE_KEY_SECRET_NAME"] == "test-private-key"
     error_message = "Lambda GITHUB_PRIVATE_KEY_SECRET_NAME should match the variable."
   }
+
+  assert {
+    condition     = aws_lambda_function.audit["store_output"].environment[0].variables["GITHUB_CLIENT_CACHE_TTL_SECONDS"] == "300"
+    error_message = "Lambda GITHUB_CLIENT_CACHE_TTL_SECONDS should default to 300 seconds."
+  }
 }
 
 run "lambda_handlers" {

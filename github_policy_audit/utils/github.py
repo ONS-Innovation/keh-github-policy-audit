@@ -3,8 +3,10 @@
 import json
 import logging
 import os
+import random
 import time
 from typing import Any
+from urllib.parse import urlparse
 
 import boto3
 from requests.exceptions import HTTPError
@@ -19,6 +21,9 @@ logger.setLevel(logging.INFO)
 # Transient errors can occur when many Lambdas request installation tokens in parallel.
 _CLIENT_INIT_RETRY_DELAYS_SECONDS = [0.5, 1.0, 2.0]
 _RETRYABLE_STATUS_CODES = {403, 429, 500, 502, 503, 504}
+_CLIENT_INIT_JITTER_FACTOR = 0.25
+_DEFAULT_CLIENT_CACHE_TTL_SECONDS = 300.0
+_CLIENT_CACHE: dict[str, tuple[float, GitHubRestClient]] = {}
 
 
 def _normalise_owner(owner: str) -> str:
@@ -32,6 +37,73 @@ def _normalise_owner(owner: str) -> str:
     return normalised_owner
 
 
+def _http_error_url(error: HTTPError) -> str:
+    request_url = getattr(getattr(error, "request", None), "url", "")
+    if request_url:
+        return request_url
+
+    return getattr(getattr(error, "response", None), "url", "") or ""
+
+
+def _is_installation_access_token_url(url: str) -> bool:
+    if not url:
+        return False
+
+    path = urlparse(url).path
+    return path.startswith("/app/installations/") and path.endswith("/access_tokens")
+
+
+def _retry_delay_with_jitter(base_delay_seconds: float) -> float:
+    jitter = random.uniform(0.0, base_delay_seconds * _CLIENT_INIT_JITTER_FACTOR)
+    return base_delay_seconds + jitter
+
+
+def _get_client_cache_ttl_seconds() -> float:
+    ttl_value = os.getenv("GITHUB_CLIENT_CACHE_TTL_SECONDS")
+    if ttl_value is None:
+        return _DEFAULT_CLIENT_CACHE_TTL_SECONDS
+
+    try:
+        ttl_seconds = float(ttl_value)
+    except ValueError:
+        log_warning(
+            logger,
+            "github_client_cache_ttl_invalid",
+            provided_value=ttl_value,
+            default_ttl_seconds=_DEFAULT_CLIENT_CACHE_TTL_SECONDS,
+        )
+        return _DEFAULT_CLIENT_CACHE_TTL_SECONDS
+
+    if ttl_seconds <= 0:
+        log_warning(
+            logger,
+            "github_client_cache_ttl_non_positive",
+            provided_value=ttl_value,
+            default_ttl_seconds=_DEFAULT_CLIENT_CACHE_TTL_SECONDS,
+        )
+        return _DEFAULT_CLIENT_CACHE_TTL_SECONDS
+
+    return ttl_seconds
+
+
+def _get_cached_client(owner: str) -> GitHubRestClient | None:
+    cached = _CLIENT_CACHE.get(owner)
+    if cached is None:
+        return None
+
+    cached_at, client = cached
+    ttl_seconds = _get_client_cache_ttl_seconds()
+    if (time.monotonic() - cached_at) <= ttl_seconds:
+        return client
+
+    _CLIENT_CACHE.pop(owner, None)
+    return None
+
+
+def _cache_client(owner: str, client: GitHubRestClient) -> None:
+    _CLIENT_CACHE[owner] = (time.monotonic(), client)
+
+
 def _is_retryable_http_error(error: HTTPError) -> bool:
     response = getattr(error, "response", None)
     status_code = getattr(response, "status_code", None)
@@ -41,6 +113,7 @@ def _is_retryable_http_error(error: HTTPError) -> bool:
     # Most 403s here are permanent auth/permission issues and should fail fast.
     # Retry 403 only for clear rate-limit signals.
     if status_code == 403:
+        url = _http_error_url(error)
         headers = getattr(response, "headers", {}) or {}
         rate_limit_remaining = headers.get("X-RateLimit-Remaining")
         if rate_limit_remaining == "0":
@@ -57,7 +130,12 @@ def _is_retryable_http_error(error: HTTPError) -> bool:
         except Exception:  # pragma: no cover
             response_body = ""
 
-        return "rate limit" in response_body
+        if "rate limit" in response_body:
+            return True
+
+        # GitHub App installation token creation can return transient 403 responses
+        # (for example, burst/abuse protection) without explicit rate-limit headers.
+        return _is_installation_access_token_url(url)
 
     return True
 
@@ -81,6 +159,10 @@ def _http_error_context(error: HTTPError) -> tuple[str, str]:
 def get_github_client(owner: str) -> GitHubRestClient:
     """Create a GitHubRestClient for the provided owner."""
     owner = _normalise_owner(owner)
+
+    cached_client = _get_cached_client(owner)
+    if cached_client is not None:
+        return cached_client
 
     try:
         app_id_secret_name = os.environ["GITHUB_APP_ID_SECRET_NAME"]
@@ -125,7 +207,9 @@ def get_github_client(owner: str) -> GitHubRestClient:
 
     for attempt, delay in enumerate(_CLIENT_INIT_RETRY_DELAYS_SECONDS, start=1):
         try:
-            return GitHubRestClient(**client_kwargs)
+            client = GitHubRestClient(**client_kwargs)
+            _cache_client(owner, client)
+            return client
         except HTTPError as error:
             if not _is_retryable_http_error(error):
                 status_code = getattr(error.response, "status_code", "unknown")
@@ -142,6 +226,7 @@ def get_github_client(owner: str) -> GitHubRestClient:
                 )
                 raise
 
+            retry_delay_seconds = _retry_delay_with_jitter(delay)
             status_code = getattr(error.response, "status_code", "unknown")
             url, body_snippet = _http_error_context(error)
             log_warning(
@@ -152,9 +237,12 @@ def get_github_client(owner: str) -> GitHubRestClient:
                 url=url,
                 attempt=attempt,
                 max_attempts=len(_CLIENT_INIT_RETRY_DELAYS_SECONDS),
-                retry_delay_seconds=delay,
+                base_retry_delay_seconds=delay,
+                retry_delay_seconds=retry_delay_seconds,
                 body=body_snippet,
             )
-            time.sleep(delay)
+            time.sleep(retry_delay_seconds)
 
-    return GitHubRestClient(**client_kwargs)
+    client = GitHubRestClient(**client_kwargs)
+    _cache_client(owner, client)
+    return client

@@ -118,6 +118,8 @@ The repository checks map uses `Mode = DISTRIBUTED` and `MaxConcurrency = 5` (co
 
 The 11 per-repository checks run in parallel within each repository item, but Step Functions state remains small because repository check outputs are persisted to S3 and discarded from parent execution state after each item.
 
+Each per-repository check task also includes a retry policy for transient failures (`Lambda.ServiceException`, `Lambda.AWSLambdaException`, `Lambda.SdkClientException`, `States.TaskFailed`) with `IntervalSeconds=2`, `BackoffRate=2.0`, and `MaxAttempts=3`.
+
 ## Data Flow
 
 ### 1. EventBridge → PrepareInitialInput

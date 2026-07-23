@@ -256,6 +256,19 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                     (check_name) = {
                       Type     = "Task"
                       Resource = aws_lambda_function.audit[check_name].arn
+                      Retry = [
+                        {
+                          ErrorEquals = [
+                            "Lambda.ServiceException",
+                            "Lambda.AWSLambdaException",
+                            "Lambda.SdkClientException",
+                            "States.TaskFailed",
+                          ]
+                          IntervalSeconds = 2
+                          BackoffRate     = 2.0
+                          MaxAttempts     = 3
+                        }
+                      ]
                       Parameters = {
                         "owner.$"           = "$.owner"
                         "repository_name.$" = "$.repository.name"

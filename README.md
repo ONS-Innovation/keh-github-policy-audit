@@ -69,6 +69,7 @@ poetry install
 export AWS_REGION=eu-west-2
 export GITHUB_APP_ID_SECRET_NAME=<your-app-id-secret-name>
 export GITHUB_PRIVATE_KEY_SECRET_NAME=<your-private-key-secret-name>
+export GITHUB_CLIENT_CACHE_TTL_SECONDS=300
 export ENVIRONMENT=local
 export LOG_PRETTY_JSON=true
 export APP_LOG_FORMAT=TEXT
@@ -76,6 +77,7 @@ export APP_LOG_FORMAT=TEXT
 
 `GITHUB_APP_ID_SECRET_NAME` should point to a secret containing a JSON object with the GitHub App ID under the `AppID` key (for example: `{"AppID":"123456"}`).
 `GITHUB_PRIVATE_KEY_SECRET_NAME` should point to a separate secret containing only the GitHub App private key as plain text (PEM), not a key-value JSON object.
+`GITHUB_CLIENT_CACHE_TTL_SECONDS` controls in-process GitHub client reuse per owner within warm Lambda runtimes to reduce installation-token burst traffic (default `300`).
 `ENVIRONMENT` controls output behaviour for `functions.store_repository_output.handler` and `functions.store_output.handler`:
 
 - `local` (default): writes output JSON to `outputs/<owner>/` and does not call AWS S3.
@@ -285,6 +287,7 @@ Terraform in `terraform/` provisions:
 | `github_owner`                          | **Yes**  | -                                    | GitHub organisation name audited on each run.                                                     |
 | `github_app_id_secret_name`             | **Yes**  | -                                    | Secrets Manager secret name for the GitHub App ID (`{"AppID":"..."}` JSON).                       |
 | `github_private_key_secret_name`        | **Yes**  | -                                    | Secrets Manager secret name for the GitHub App private key (PEM, plain text).                     |
+| `github_client_cache_ttl_seconds`       | No       | `300`                                | TTL in seconds for in-process GitHub client reuse within warm Lambda runtimes.                    |
 | `lambda_runtime`                        | No       | `python3.12`                         | Lambda runtime identifier.                                                                        |
 | `lambda_timeout`                        | No       | `120`                                | Default Lambda timeout in seconds. This can be overridden per Lambda function in `locals.tf`.     |
 | `lambda_memory_size`                    | No       | `512`                                | Lambda memory in MB.                                                                              |

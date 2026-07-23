@@ -8,6 +8,8 @@ To reduce risk of rate-limit failures, the workflow combines:
 
 - Concurrency controls in Step Functions (`MaxConcurrency` in the repository distributed map)
 - Retry logic during GitHub client initialisation for transient/rate-limit responses
+- Endpoint-scoped retries for GitHub App installation token creation (`/app/installations/*/access_tokens`) when transient 403 responses are returned
+- Short-lived in-process GitHub client reuse in warm Lambda runtimes (default TTL: `300` seconds)
 - Dedicated Step Functions checkpoint tasks (`rate-limit-start`, `rate-limit-end`) to capture org-wide boundary snapshots
 
 ## What is logged now
@@ -59,6 +61,13 @@ All rate-limit logs are written to Lambda function log groups. You can filter fo
 
 - Start conservatively with low map concurrency for large organisations.
 - Increase concurrency gradually while observing checkpoint deltas.
+- If transient token-creation failures appear, keep map concurrency stable and tune `GITHUB_CLIENT_CACHE_TTL_SECONDS` before increasing throughput.
 - Prefer predictable schedules that avoid overlapping organisation runs.
 - If you have multiple workflows that run concurrently, consider staggering their schedules to avoid simultaneous API calls.
 - Keep an eye on the rate-limit logs during testing and adjust concurrency as needed to avoid hitting the limit.
+
+## Client initialisation resilience
+
+- GitHub client initialisation retries transient failures with exponential backoff (`0.5s`, `1.0s`, `2.0s`) and bounded jitter.
+- Plain 403 responses still fail fast by default, except for GitHub App installation token creation endpoint responses, which are retried because GitHub can return burst-protection 403s without explicit rate-limit headers.
+- Warm Lambda runtimes reuse an in-memory GitHub client per owner for `GITHUB_CLIENT_CACHE_TTL_SECONDS` (default `300`) to reduce repeated token creation spikes.

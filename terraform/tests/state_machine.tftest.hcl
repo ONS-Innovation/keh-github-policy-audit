@@ -90,6 +90,16 @@ run "state_machine_concurrency" {
     condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.OrganisationChecks.Branches[2].States.TeamMaintainerMap.MaxConcurrency == 5
     error_message = "TeamMaintainerMap MaxConcurrency should default to 5."
   }
+
+  assert {
+    condition     = length(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.RepositoryChecksMap.ItemProcessor.States.RepositoryChecksParallel.Branches[0].States.codeowners.Retry) == 1
+    error_message = "Repository check tasks should define a retry policy for transient failures."
+  }
+
+  assert {
+    condition     = contains(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.RepositoryChecksMap.ItemProcessor.States.RepositoryChecksParallel.Branches[0].States.codeowners.Retry[0].ErrorEquals, "States.TaskFailed")
+    error_message = "Repository check task retry policy should include States.TaskFailed."
+  }
 }
 
 run "state_machine_logging" {

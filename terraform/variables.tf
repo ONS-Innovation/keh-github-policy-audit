@@ -67,6 +67,12 @@ variable "lambda_reserved_concurrent_executions" {
   default     = 10
 }
 
+variable "github_client_cache_ttl_seconds" {
+  description = "TTL in seconds for in-process GitHub client reuse within warm Lambda runtimes."
+  type        = number
+  default     = 300
+}
+
 variable "lambda_log_retention_days" {
   description = "CloudWatch log group retention period in days for Lambda functions."
   type        = number

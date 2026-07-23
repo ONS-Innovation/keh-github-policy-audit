@@ -130,11 +130,12 @@ resource "aws_lambda_function" "audit" {
 
   environment {
     variables = {
-      ENVIRONMENT                    = "prod"
-      APP_LOG_FORMAT                 = "JSON"
-      S3_BUCKET_NAME                 = aws_s3_bucket.audit_output.bucket
-      GITHUB_APP_ID_SECRET_NAME      = var.github_app_id_secret_name
-      GITHUB_PRIVATE_KEY_SECRET_NAME = var.github_private_key_secret_name
+      ENVIRONMENT                     = "prod"
+      APP_LOG_FORMAT                  = "JSON"
+      S3_BUCKET_NAME                  = aws_s3_bucket.audit_output.bucket
+      GITHUB_APP_ID_SECRET_NAME       = var.github_app_id_secret_name
+      GITHUB_PRIVATE_KEY_SECRET_NAME  = var.github_private_key_secret_name
+      GITHUB_CLIENT_CACHE_TTL_SECONDS = tostring(var.github_client_cache_ttl_seconds)
     }
   }
 }
