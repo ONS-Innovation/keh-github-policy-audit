@@ -17,9 +17,11 @@ from utils import github
 def clear_client_cache() -> Generator[None, None, None]:
     """Ensure process-level client cache does not leak between tests."""
     github._CLIENT_CACHE.clear()
+    github._SECRETS_MANAGER = None
     os.environ.pop("GITHUB_CLIENT_CACHE_TTL_SECONDS", None)
     yield
     github._CLIENT_CACHE.clear()
+    github._SECRETS_MANAGER = None
 
 
 def _response_with_status(status_code: int) -> Response:

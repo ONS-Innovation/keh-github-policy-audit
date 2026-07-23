@@ -25,6 +25,18 @@ _CLIENT_INIT_JITTER_FACTOR = 0.25
 _DEFAULT_CLIENT_CACHE_TTL_SECONDS = 300.0
 _CLIENT_CACHE: dict[str, tuple[float, GitHubRestClient]] = {}
 
+# Lazily initialised and reused across invocations in a warm Lambda execution
+# environment. Boto3 client creation is not free (config parsing, credential
+# resolution), so we avoid repeating it on every call to get_github_client.
+_SECRETS_MANAGER: Any | None = None
+
+
+def _get_secrets_manager() -> Any:
+    global _SECRETS_MANAGER
+    if _SECRETS_MANAGER is None:
+        _SECRETS_MANAGER = boto3.client("secretsmanager")
+    return _SECRETS_MANAGER
+
 
 def _normalise_owner(owner: str) -> str:
     if not isinstance(owner, str):
@@ -172,11 +184,10 @@ def get_github_client(owner: str) -> GitHubRestClient:
             f"Missing required environment variable: {e}. Please ensure the Lambda function has the necessary environment variables set."
         ) from e
 
-    secrets_manager = boto3.client("secretsmanager")
-    app_id_secret = secrets_manager.get_secret_value(SecretId=app_id_secret_name)[
+    app_id_secret = _get_secrets_manager().get_secret_value(SecretId=app_id_secret_name)[
         "SecretString"
     ]
-    private_key_secret = secrets_manager.get_secret_value(
+    private_key_secret = _get_secrets_manager().get_secret_value(
         SecretId=private_key_secret_name
     )["SecretString"]
 
