@@ -24,7 +24,7 @@ The function has been tested against 2 organisations of various sizes:
   - ~1,400 repositories
   - ~350 teams
   - ~17 minutes execution time (with `MaxConcurrency = 5`)
-  - ~15,000 GitHub API Rate Limit Used
+  - ~6,100 GitHub API Rate Limit Used
 - Organisation B:
   - ~100 repositories
   - ~20 teams
