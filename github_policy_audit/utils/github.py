@@ -184,9 +184,9 @@ def get_github_client(owner: str) -> GitHubRestClient:
             f"Missing required environment variable: {e}. Please ensure the Lambda function has the necessary environment variables set."
         ) from e
 
-    app_id_secret = _get_secrets_manager().get_secret_value(SecretId=app_id_secret_name)[
-        "SecretString"
-    ]
+    app_id_secret = _get_secrets_manager().get_secret_value(
+        SecretId=app_id_secret_name
+    )["SecretString"]
     private_key_secret = _get_secrets_manager().get_secret_value(
         SecretId=private_key_secret_name
     )["SecretString"]
