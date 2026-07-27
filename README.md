@@ -2,6 +2,8 @@
 
 A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage Policy. Built using the [KEH Policy Methods Library](https://github.com/ONS-Innovation/keh-policy-methods-library), this tool produces a report of the audit findings, which can be used to identify areas of non-compliance and inform remediation efforts. Additionally, these reports can track compliance over time, providing a historical record of the organisation's adherence to the policy, and its progress towards achieving compliance.
 
+This repository just collects the data for these reports using an AWS Step Function workflow, and stores the results in S3. The reporting half of the project is implemented within the [Digital Landscape](https://github.com/ONSdigital/keh-digital-landscape).
+
 ## Table of Contents
 
 - [GitHub Policy Audit](#github-policy-audit)
@@ -227,7 +229,7 @@ Terraform in `terraform/` provisions:
 - all Lambda functions from `build/lambdas/*.zip`
 - a shared Lambda dependency layer from `build/dependency-layer.zip`
 - a Step Functions state machine matching `docs/step-function-flow.md`
-- an EventBridge weekly schedule (`cron(0 8 ? * MON *)`) that starts execution
+- an EventBridge schedule rule per organisation (each with its own cron expression) that starts execution
 
 ##### Terraform file structure
 
@@ -280,26 +282,24 @@ Terraform in `terraform/` provisions:
 
 ##### Terraform Variables
 
-| Variable                                | Required | Default                              | Description                                                                                       |
-| --------------------------------------- | -------- | ------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `env_name`                              | No       | `sdp-dev`                            | Environment name. Controls bucket/resource naming (e.g. `sdp-dev`, `sdp-prod`).                   |
-| `region`                                | No       | `eu-west-2`                          | AWS region to deploy into.                                                                        |
-| `github_owner`                          | **Yes**  | -                                    | GitHub organisation name audited on each run.                                                     |
-| `github_app_id_secret_name`             | **Yes**  | -                                    | Secrets Manager secret name for the GitHub App ID (`{"AppID":"..."}` JSON).                       |
-| `github_private_key_secret_name`        | **Yes**  | -                                    | Secrets Manager secret name for the GitHub App private key (PEM, plain text).                     |
-| `github_client_cache_ttl_seconds`       | No       | `300`                                | TTL in seconds for in-process GitHub client reuse within warm Lambda runtimes.                    |
-| `lambda_runtime`                        | No       | `python3.12`                         | Lambda runtime identifier.                                                                        |
-| `lambda_timeout`                        | No       | `120`                                | Default Lambda timeout in seconds. This can be overridden per Lambda function in `locals.tf`.     |
-| `lambda_memory_size`                    | No       | `512`                                | Lambda memory in MB.                                                                              |
-| `lambda_reserved_concurrent_executions` | No       | `10`                                 | Reserved concurrent executions per Lambda function. Set to `-1` for unreserved (not recommended). |
-| `lambda_log_retention_days`             | No       | `90`                                 | CloudWatch log group retention period in days for Lambda functions.                               |
-| `step_function_log_retention_days`      | No       | `90`                                 | CloudWatch log group retention period in days for the Step Functions state machine.               |
-| `repository_map_max_concurrency`        | No       | `5`                                  | Max parallel repositories processed in the repository checks map state.                           |
-| `team_map_max_concurrency`              | No       | `5`                                  | Max parallel teams processed in the team maintainer map state.                                    |
-| `dependabot_slo_levels`                 | No       | `["critical","high","medium","low"]` | Dependabot alert severity levels included in the SLO check.                                       |
-| `audit_schedule_expression`             | No       | `cron(0 8 ? * MON *)`                | EventBridge schedule expression for the weekly audit trigger.                                     |
-| `audit_run_retention_days`              | No       | `30`                                 | Days to retain per-repository run artifacts under `audit-runs/`.                                  |
-| `audit_summary_retention_days`          | No       | `365`                                | Days to retain aggregated summary outputs under `audit-results/`.                                 |
+| Variable                                | Required | Default      | Description                                                                                                                                                                                                               |
+| --------------------------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `env_name`                              | No       | `sdp-dev`    | Environment name. Controls bucket/resource naming (e.g. `sdp-dev`, `sdp-prod`).                                                                                                                                           |
+| `region`                                | No       | `eu-west-2`  | AWS region to deploy into.                                                                                                                                                                                                |
+| `organisation_schedules`                | **Yes**  | -            | List of organisations to audit. Each entry requires `owner` and `schedule_expression`, and optionally `dependabot_slo_levels` (defaults to `["critical","high","medium","low"]`). Creates one EventBridge rule per entry. |
+| `github_app_id_secret_name`             | **Yes**  | -            | Secrets Manager secret name for the GitHub App ID (`{"AppID":"..."}` JSON).                                                                                                                                               |
+| `github_private_key_secret_name`        | **Yes**  | -            | Secrets Manager secret name for the GitHub App private key (PEM, plain text).                                                                                                                                             |
+| `github_client_cache_ttl_seconds`       | No       | `300`        | TTL in seconds for in-process GitHub client reuse within warm Lambda runtimes.                                                                                                                                            |
+| `lambda_runtime`                        | No       | `python3.12` | Lambda runtime identifier.                                                                                                                                                                                                |
+| `lambda_timeout`                        | No       | `120`        | Default Lambda timeout in seconds. This can be overridden per Lambda function in `locals.tf`.                                                                                                                             |
+| `lambda_memory_size`                    | No       | `512`        | Lambda memory in MB.                                                                                                                                                                                                      |
+| `lambda_reserved_concurrent_executions` | No       | `10`         | Reserved concurrent executions per Lambda function. Set to `-1` for unreserved (not recommended).                                                                                                                         |
+| `lambda_log_retention_days`             | No       | `90`         | CloudWatch log group retention period in days for Lambda functions.                                                                                                                                                       |
+| `step_function_log_retention_days`      | No       | `90`         | CloudWatch log group retention period in days for the Step Functions state machine.                                                                                                                                       |
+| `repository_map_max_concurrency`        | No       | `5`          | Max parallel repositories processed in the repository checks map state.                                                                                                                                                   |
+| `team_map_max_concurrency`              | No       | `5`          | Max parallel teams processed in the team maintainer map state.                                                                                                                                                            |
+| `audit_run_retention_days`              | No       | `30`         | Days to retain per-repository run artifacts under `audit-runs/`.                                                                                                                                                          |
+| `audit_summary_retention_days`          | No       | `365`        | Days to retain aggregated summary outputs under `audit-results/`.                                                                                                                                                         |
 
 ## Documentation
 

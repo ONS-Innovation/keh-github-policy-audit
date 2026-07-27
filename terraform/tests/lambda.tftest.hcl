@@ -40,7 +40,12 @@ mock_provider "aws" {
 }
 
 variables {
-  github_owner                   = "ONS-Innovation"
+  organisation_schedules = [
+    {
+      owner               = "ONS-Innovation"
+      schedule_expression = "cron(0 6 ? * MON *)"
+    },
+  ]
   github_app_id_secret_name      = "test-app-id"
   github_private_key_secret_name = "test-private-key"
 }

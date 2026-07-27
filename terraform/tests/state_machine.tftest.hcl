@@ -40,7 +40,16 @@ mock_provider "aws" {
 }
 
 variables {
-  github_owner                   = "ONS-Innovation"
+  organisation_schedules = [
+    {
+      owner               = "ONS-Innovation"
+      schedule_expression = "cron(0 6 ? * MON *)"
+    },
+    {
+      owner               = "ONSdigital"
+      schedule_expression = "cron(0 8 ? * MON *)"
+    },
+  ]
   github_app_id_secret_name      = "test-app-id"
   github_private_key_secret_name = "test-private-key"
 }
@@ -128,30 +137,45 @@ run "state_machine_concurrency_overridden" {
 
 run "eventbridge_schedule" {
   assert {
-    condition     = aws_cloudwatch_event_rule.weekly_audit.schedule_expression == "cron(0 8 ? * MON *)"
-    error_message = "EventBridge schedule should default to cron(0 8 ? * MON *)."
+    condition     = aws_cloudwatch_event_rule.weekly_audit["ONS-Innovation"].schedule_expression == "cron(0 6 ? * MON *)"
+    error_message = "EventBridge schedule for ONS-Innovation should be cron(0 6 ? * MON *)."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_event_rule.weekly_audit["ONSdigital"].schedule_expression == "cron(0 8 ? * MON *)"
+    error_message = "EventBridge schedule for ONSdigital should be cron(0 8 ? * MON *)."
   }
 }
 
 run "eventbridge_schedule_overridden" {
   variables {
-    audit_schedule_expression = "cron(0 6 ? * WED *)"
+    organisation_schedules = [
+      {
+        owner               = "ONS-Innovation"
+        schedule_expression = "cron(0 6 ? * WED *)"
+      },
+    ]
   }
 
   assert {
-    condition     = aws_cloudwatch_event_rule.weekly_audit.schedule_expression == "cron(0 6 ? * WED *)"
+    condition     = aws_cloudwatch_event_rule.weekly_audit["ONS-Innovation"].schedule_expression == "cron(0 6 ? * WED *)"
     error_message = "EventBridge schedule should reflect the overridden value."
   }
 }
 
 run "eventbridge_input_payload" {
   assert {
-    condition     = jsondecode(aws_cloudwatch_event_target.weekly_audit_state_machine.input).owner == "ONS-Innovation"
-    error_message = "EventBridge input payload must include the github_owner."
+    condition     = jsondecode(aws_cloudwatch_event_target.weekly_audit_state_machine["ONS-Innovation"].input).owner == "ONS-Innovation"
+    error_message = "EventBridge input payload for ONS-Innovation must include the correct owner."
   }
 
   assert {
-    condition     = toset(jsondecode(aws_cloudwatch_event_target.weekly_audit_state_machine.input).levels) == toset(["critical", "high", "medium", "low"])
+    condition     = jsondecode(aws_cloudwatch_event_target.weekly_audit_state_machine["ONSdigital"].input).owner == "ONSdigital"
+    error_message = "EventBridge input payload for ONSdigital must include the correct owner."
+  }
+
+  assert {
+    condition     = toset(jsondecode(aws_cloudwatch_event_target.weekly_audit_state_machine["ONS-Innovation"].input).levels) == toset(["critical", "high", "medium", "low"])
     error_message = "EventBridge input payload must include all default dependabot severity levels."
   }
 }

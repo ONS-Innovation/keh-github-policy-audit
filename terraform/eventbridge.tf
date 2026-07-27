@@ -33,19 +33,29 @@ resource "aws_iam_role_policy" "eventbridge_start_execution" {
   })
 }
 
+locals {
+  organisation_schedules_map = {
+    for org in var.organisation_schedules : org.owner => org
+  }
+}
+
 resource "aws_cloudwatch_event_rule" "weekly_audit" {
-  name                = "${local.lambda_name_prefix}-weekly-trigger"
-  description         = "Weekly trigger for GitHub policy audit state machine."
-  schedule_expression = var.audit_schedule_expression
+  for_each = local.organisation_schedules_map
+
+  name                = "${local.lambda_name_prefix}-${each.key}-weekly-trigger"
+  description         = "Weekly trigger for GitHub policy audit state machine for ${each.key}."
+  schedule_expression = each.value.schedule_expression
 }
 
 resource "aws_cloudwatch_event_target" "weekly_audit_state_machine" {
-  rule     = aws_cloudwatch_event_rule.weekly_audit.name
+  for_each = local.organisation_schedules_map
+
+  rule     = aws_cloudwatch_event_rule.weekly_audit[each.key].name
   arn      = aws_sfn_state_machine.github_policy_audit.arn
   role_arn = aws_iam_role.eventbridge_step_function.arn
 
   input = jsonencode({
-    owner  = var.github_owner
-    levels = var.dependabot_slo_levels
+    owner  = each.value.owner
+    levels = each.value.dependabot_slo_levels
   })
 }

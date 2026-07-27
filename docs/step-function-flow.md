@@ -2,9 +2,9 @@
 
 ## Overview
 
-The Step Function is triggered weekly by an EventBridge schedule and orchestrates all Lambda functions to audit GitHub organisation policy compliance, then store results in S3 using run-scoped prefixes.
+The Step Function is triggered weekly by per-organisation EventBridge schedules and orchestrates all Lambda functions to audit GitHub organisation policy compliance, then store results in S3 using run-scoped prefixes.
 
-**Trigger:** `cron(0 8 ? * MON *)` - every Monday at 08:00 UTC  
+**Trigger:** One EventBridge rule per organisation, each with its own cron schedule (e.g. `cron(0 6 ? * MON *)` for ONS-Innovation, `cron(0 8 ? * MON *)` for ONSdigital). Configured via `organisation_schedules` in tfvars.  
 **Input:** `{"owner": "<org-name>", "levels": ["critical", "high", "medium", "low"]}`
 
 ## Rate Limit Notes
@@ -38,7 +38,7 @@ For our current use case at ONS, the current configuration is sufficient to run 
 
 ```mermaid
 flowchart TD
-    EB([EventBridge\nWeekly Schedule\ncron 0 8 MON]) -->|owner: org-name| SF_START([Start Execution])
+    EB(["EventBridge\nPer-org Schedules\ne.g. cron 0 6 MON / cron 0 8 MON"]) -->|owner: org-name| SF_START([Start Execution])
 
     SF_START --> PII[PrepareInitialInput\nPass - inject run_id + output_bucket\ninto $.initial_input]
     PII --> RL_START[rate_limit\ncheckpoint=rate-limit-start]
