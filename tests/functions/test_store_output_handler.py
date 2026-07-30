@@ -329,6 +329,53 @@ class TestHandlerLocal:
         assert org_checks["dependabot_slo"]["compliant"]
         assert not org_checks["secret_scanning_slo"]["compliant"]
 
+    def test_summary_aggregates_team_checks(self):
+        """The summary should aggregate pass/fail counts per check across all teams."""
+        event = {
+            "owner": "test-org",
+            "teams": {
+                "team-a": {"team_maintainer": {"result": "pass"}},
+                "team-b": {"team_maintainer": {"result": "fail"}},
+                "team-c": {"team_maintainer": {"result": "pass"}},
+            },
+        }
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+            self.module.handler(event, None)
+
+        output_dir = self.tmp_path / "outputs" / "test-org"
+        files = list(output_dir.glob("*.json"))
+        written = json.loads(files[0].read_text())
+
+        check_summary = written["summary"]["team_checks"]["team_maintainer"]
+        assert check_summary["total"] == 3
+        assert check_summary["compliant"] == 2
+
+    def test_summary_team_checks_excludes_is_compliant_key(self):
+        """Team-level is_compliant should not be treated as a per-check summary entry."""
+        event = {
+            "owner": "test-org",
+            "teams": {
+                "team-a": {"team_maintainer": {"result": "pass"}, "is_compliant": True},
+                "team-b": {
+                    "team_maintainer": {"result": "fail"},
+                    "is_compliant": False,
+                },
+            },
+        }
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+            self.module.handler(event, None)
+
+        output_dir = self.tmp_path / "outputs" / "test-org"
+        files = list(output_dir.glob("*.json"))
+        written = json.loads(files[0].read_text())
+
+        team_checks = written["summary"]["team_checks"]
+        assert "is_compliant" not in team_checks
+        assert team_checks["team_maintainer"]["total"] == 2
+        assert team_checks["team_maintainer"]["compliant"] == 1
+
     def test_summary_counts_compliant_teams(self):
         """The summary should count only teams where all checks pass."""
         event = {

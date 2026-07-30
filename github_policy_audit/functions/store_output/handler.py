@@ -252,6 +252,7 @@ def handler(event, context):
         ),
         "repository_checks": {},
         "organisation_checks": {},
+        "team_checks": {},
     }
 
     for _, checks in repositories.items():
@@ -268,6 +269,16 @@ def handler(event, context):
         summary["organisation_checks"][check_name] = {
             "compliant": _is_pass(check_output)
         }
+
+    for _, checks in teams.items():
+        for check_name, check_output in checks.items():
+            if check_name == "is_compliant":
+                continue
+            if check_name not in summary["team_checks"]:
+                summary["team_checks"][check_name] = {"total": 0, "compliant": 0}
+            summary["team_checks"][check_name]["total"] += 1
+            if _is_pass(check_output):
+                summary["team_checks"][check_name]["compliant"] += 1
 
     output = {
         "owner": owner,

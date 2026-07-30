@@ -76,8 +76,8 @@ docs-lint: 			## Install and run the documentation linter (Markdownlint).
 	npm install -g markdownlint-cli
 	markdownlint .
 
-.PHONY: docs-fix
-docs-fix: 			## Install and run the documentation linter with auto-fix (Markdownlint).
+.PHONY: docs-fmt
+docs-fmt: 			## Install and run the documentation linter with auto-fix (Markdownlint).
 	npm install -g markdownlint-cli
 	markdownlint . --fix
 

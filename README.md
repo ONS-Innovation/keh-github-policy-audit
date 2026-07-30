@@ -418,7 +418,7 @@ make docs-lint
 To apply automatic fixes for any linting issues found by Markdownlint, you can use:
 
 ```bash
-make docs-fix
+make docs-fmt
 ```
 
 To test that the documentation builds correctly, you can use the following command:
