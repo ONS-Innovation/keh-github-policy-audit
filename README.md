@@ -78,8 +78,11 @@ export APP_LOG_FORMAT=TEXT
 ```
 
 `GITHUB_APP_ID_SECRET_NAME` should point to a secret containing a JSON object with the GitHub App ID under the `AppID` key (for example: `{"AppID":"123456"}`).
+
 `GITHUB_PRIVATE_KEY_SECRET_NAME` should point to a separate secret containing only the GitHub App private key as plain text (PEM), not a key-value JSON object.
+
 `GITHUB_CLIENT_CACHE_TTL_SECONDS` controls in-process GitHub client reuse per owner within warm Lambda runtimes to reduce installation-token burst traffic (default `300`).
+
 `ENVIRONMENT` controls output behaviour for `functions.store_repository_output.handler` and `functions.store_output.handler`:
 
 - `local` (default): writes output JSON to `outputs/<owner>/` and does not call AWS S3.
@@ -167,9 +170,9 @@ Some repository-scoped handlers can also accept optional repository metadata und
 
 #### Rate Limit Checkpoint
 
-| Handler modules                | Required event payload                           |
-| ------------------------------ | ------------------------------------------------ | ----------------- |
-| `functions.rate_limit.handler` | `{"owner":"<org>","checkpoint":"rate-limit-start | rate-limit-end"}` |
+| Handler modules                | Required event payload                                                |
+| ------------------------------ | --------------------------------------------------------------------- |
+| `functions.rate_limit.handler` | `{"owner":"<org>","checkpoint":"rate-limit-start OR rate-limit-end"}` |
 
 Rate-limit telemetry is collected only by this checkpoint handler at workflow boundaries.
 
@@ -192,6 +195,7 @@ Rate-limit telemetry is collected only by this checkpoint handler at workflow bo
 | `functions.store_output.handler` (S3 aggregation) | `{"owner":"<org>","run_id":"<execution-id>","output_bucket":"<bucket>","organisation_results":[...],"teams":[...],"team_results":[...],"rate_limit_start":{...},"rate_limit_end":{...}}` |
 
 The scalable production flow stores one repository JSON file at a time under `audit-runs/<owner>/<run_id>/repositories/`, then `store_output` aggregates that prefix and writes the final summary to `audit-results/<owner>/<run_id>.json`.
+
 The final summary and terminal Step Functions output also include `rate-limit-start` and `rate-limit-end` checkpoint objects.
 
 ## Deployment
