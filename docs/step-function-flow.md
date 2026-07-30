@@ -345,7 +345,8 @@ The summary file structure:
         "total_teams": 1,
         "compliant_teams": 1,
         "repository_checks": { "readme": { "total": 1, "compliant": 1 } },
-        "organisation_checks": { "dependabot_slo": { "compliant": true } }
+        "organisation_checks": { "dependabot_slo": { "compliant": true } },
+        "team_checks": { "team_maintainer": { "total": 1, "compliant": 1 } }
     },
     "rate-limit-start": { "checkpoint": "rate-limit-start", "remaining": 4988, "limit": 5000, "reset": 1721668800, "used": 12, "retrieved_at": "..." },
     "rate-limit-end": { "checkpoint": "rate-limit-end", "remaining": 4321, "limit": 5000, "reset": 1721668800, "used": 679, "retrieved_at": "..." },
