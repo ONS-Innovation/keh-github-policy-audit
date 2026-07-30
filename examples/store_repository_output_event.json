@@ -6,17 +6,17 @@
   "checks": [
     {
       "check_name": "readme",
-      "status": "pass",
+      "result": "pass",
       "message": "README file exists"
     },
     {
       "check_name": "codeowners",
-      "status": "fail",
+      "result": "fail",
       "message": "CODEOWNERS file missing"
     },
     {
       "check_name": "security_scanning",
-      "status": "pass",
+      "result": "pass",
       "message": "Security scanning is enabled"
     }
   ]

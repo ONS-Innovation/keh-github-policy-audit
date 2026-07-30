@@ -86,7 +86,7 @@ class TestHandlerValidation:
 
 
 # ---------------------------------------------------------------------------
-# Normalise helpers — bad-input continue branches
+# Normalise helpers - bad-input continue branches
 # ---------------------------------------------------------------------------
 
 
@@ -395,6 +395,31 @@ class TestHandlerLocal:
 
         assert result["environment"] == "local"
         assert result["local_output_path"] is not None
+
+    def test_includes_rate_limit_checkpoints_in_output(self):
+        """Rate-limit checkpoints should be included in both persisted and returned output."""
+        event = {
+            "owner": "test-org",
+            "rate_limit_start": {
+                "checkpoint": "rate-limit-start",
+                "remaining": 4990,
+            },
+            "rate_limit_end": {
+                "checkpoint": "rate-limit-end",
+                "remaining": 4321,
+            },
+        }
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+            result = self.module.handler(event, None)
+
+        assert result["rate-limit-start"] == event["rate_limit_start"]
+        assert result["rate-limit-end"] == event["rate_limit_end"]
+
+        output_file = self.tmp_path / result["local_output_path"]
+        written = json.loads(output_file.read_text())
+        assert written["rate-limit-start"] == event["rate_limit_start"]
+        assert written["rate-limit-end"] == event["rate_limit_end"]
 
     def test_normalises_step_function_raw_results(self):
         """The handler should reshape Step Function array outputs into keyed dictionaries."""

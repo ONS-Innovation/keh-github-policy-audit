@@ -74,7 +74,7 @@ class TestRepositoryScopedHandlers:
             )
 
             with (
-                patch.object(module, "get_github_client", return_value=client),
+                patch("utils.github.get_github_client", return_value=client),
                 patch.object(module, check_fn_name, mock_check),
             ):
                 result = module.handler(
@@ -127,7 +127,7 @@ class TestInactivityHandler:
         )
 
         with (
-            patch.object(self.module, "get_github_client", return_value=client),
+            patch("utils.github.get_github_client", return_value=client),
             patch.object(self.module, "check_inactivity", mock_check),
         ):
             result = self.module.handler(event, None)
@@ -163,7 +163,7 @@ class TestInactivityHandler:
         )
 
         with (
-            patch.object(self.module, "get_github_client", return_value=client),
+            patch("utils.github.get_github_client", return_value=client),
             patch.object(self.module, "check_inactivity", mock_check),
         ):
             result = self.module.handler(event, None)
@@ -213,7 +213,7 @@ class TestSecurityScanningHandler:
         )
 
         with (
-            patch.object(self.module, "get_github_client", return_value=client),
+            patch("utils.github.get_github_client", return_value=client),
             patch.object(self.module, "check_security_scanning", mock_check),
         ):
             result = self.module.handler(event, None)
@@ -251,7 +251,7 @@ class TestSecurityScanningHandler:
         )
 
         with (
-            patch.object(self.module, "get_github_client", return_value=client),
+            patch("utils.github.get_github_client", return_value=client),
             patch.object(self.module, "check_security_scanning", mock_check),
         ):
             result = self.module.handler(event, None)

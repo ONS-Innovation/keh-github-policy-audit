@@ -3,6 +3,7 @@
 import logging
 
 from policy_methods_library.checks.naming_convention import check_naming_convention
+from utils.structured_logging import log_info
 
 
 logger = logging.getLogger(__name__)
@@ -11,10 +12,13 @@ logger.setLevel(logging.INFO)
 
 def handler(event, context):
     """Step Function invokes with {"repository_name": "..."}."""
-    logger.info(f"Lambda invoked with event keys={sorted(event.keys())}")
+    log_info(logger, "lambda_invoked", event_keys=sorted(event.keys()))
     result = check_naming_convention(event["repository_name"])
     result["check_name"] = "naming_convention"
-    logger.info(
-        f"Lambda completed check={result['check_name']} result={result.get('result')}"
+    log_info(
+        logger,
+        "lambda_completed",
+        check=result["check_name"],
+        result=result.get("result"),
     )
     return result

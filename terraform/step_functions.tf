@@ -30,6 +30,14 @@ resource "aws_iam_role_policy" "step_function_invoke_lambda" {
         Resource = [for lambda in aws_lambda_function.audit : lambda.arn]
       },
       {
+        Sid    = "AllowReadRepositoryList"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+        ]
+        Resource = "${aws_s3_bucket.audit_output.arn}/audit-runs/*/repositories-list.json"
+      },
+      {
         Sid    = "AllowDistributedMapChildExecutions"
         Effect = "Allow"
         Action = [
@@ -75,8 +83,29 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
 
   definition = jsonencode({
     Comment = "Weekly GitHub organisation policy audit."
-    StartAt = "Initialise"
+    StartAt = "PrepareInitialInput"
     States = {
+      PrepareInitialInput = {
+        Type = "Pass"
+        Parameters = {
+          "owner.$"       = "$.owner"
+          "levels.$"      = "$.levels"
+          "run_id.$"      = "$$.Execution.Name"
+          "output_bucket" = aws_s3_bucket.audit_output.bucket
+        }
+        ResultPath = "$.initial_input"
+        Next       = "RateLimitStart"
+      }
+      RateLimitStart = {
+        Type     = "Task"
+        Resource = aws_lambda_function.audit["rate_limit"].arn
+        Parameters = {
+          "owner.$"    = "$.initial_input.owner"
+          "checkpoint" = "rate-limit-start"
+        }
+        ResultPath = "$.rate_limit_start"
+        Next       = "Initialise"
+      }
       Initialise = {
         Type = "Parallel"
         Branches = [
@@ -86,7 +115,12 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
               list_repositories = {
                 Type     = "Task"
                 Resource = aws_lambda_function.audit["list_repositories"].arn
-                End      = true
+                Parameters = {
+                  "owner.$"         = "$.initial_input.owner"
+                  "run_id.$"        = "$.initial_input.run_id"
+                  "output_bucket.$" = "$.initial_input.output_bucket"
+                }
+                End = true
               }
             }
           },
@@ -96,7 +130,10 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
               list_teams = {
                 Type     = "Task"
                 Resource = aws_lambda_function.audit["list_teams"].arn
-                End      = true
+                Parameters = {
+                  "owner.$" = "$.initial_input.owner"
+                }
+                End = true
               }
             }
           },
@@ -107,12 +144,13 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
       PrepareInput = {
         Type = "Pass"
         Parameters = {
-          "owner.$"        = "$.owner"
-          "levels.$"       = "$.levels"
-          "run_id.$"       = "$$.Execution.Name"
-          "output_bucket"  = aws_s3_bucket.audit_output.bucket
-          "repositories.$" = "$.initial_data[0]"
-          "teams.$"        = "$.initial_data[1]"
+          "owner.$"               = "$.initial_input.owner"
+          "levels.$"              = "$.initial_input.levels"
+          "run_id.$"              = "$.initial_input.run_id"
+          "output_bucket"         = aws_s3_bucket.audit_output.bucket
+          "repositories_s3_ref.$" = "$.initial_data[0]"
+          "teams.$"               = "$.initial_data[1]"
+          "rate_limit_start.$"    = "$.rate_limit_start"
         }
         ResultPath = "$"
         Next       = "OrganisationChecks"
@@ -185,8 +223,17 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
       }
       RepositoryChecksMap = {
         Type           = "Map"
-        ItemsPath      = "$.repositories"
         MaxConcurrency = var.repository_map_max_concurrency
+        ItemReader = {
+          Resource = "arn:${data.aws_partition.current.partition}:states:::s3:getObject"
+          ReaderConfig = {
+            InputType = "JSON"
+          }
+          Parameters = {
+            "Bucket.$" = "$.repositories_s3_ref.s3_bucket"
+            "Key.$"    = "$.repositories_s3_ref.s3_key"
+          }
+        }
         ItemSelector = {
           "owner.$"         = "$.owner"
           "run_id.$"        = "$.run_id"
@@ -209,6 +256,19 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                     (check_name) = {
                       Type     = "Task"
                       Resource = aws_lambda_function.audit[check_name].arn
+                      Retry = [
+                        {
+                          ErrorEquals = [
+                            "Lambda.ServiceException",
+                            "Lambda.AWSLambdaException",
+                            "Lambda.SdkClientException",
+                            "States.TaskFailed",
+                          ]
+                          IntervalSeconds = 2
+                          BackoffRate     = 2.0
+                          MaxAttempts     = 3
+                        }
+                      ]
                       Parameters = {
                         "owner.$"           = "$.owner"
                         "repository_name.$" = "$.repository.name"
@@ -258,6 +318,16 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
           }
         }
         ResultPath = null
+        Next       = "RateLimitEnd"
+      }
+      RateLimitEnd = {
+        Type     = "Task"
+        Resource = aws_lambda_function.audit["rate_limit"].arn
+        Parameters = {
+          "owner.$"    = "$.owner"
+          "checkpoint" = "rate-limit-end"
+        }
+        ResultPath = "$.rate_limit_end"
         Next       = "store_output"
       }
       store_output = {
@@ -270,6 +340,8 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
           "teams.$"                = "$.teams"
           "organisation_results.$" = "$.organisation_results"
           "team_results.$"         = "$.organisation_results[2]"
+          "rate_limit_start.$"     = "$.rate_limit_start"
+          "rate_limit_end.$"       = "$.rate_limit_end"
         }
         End = true
       }

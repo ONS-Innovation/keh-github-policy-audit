@@ -31,7 +31,7 @@ class TestDependabotSloHandler:
         )
 
         with (
-            patch.object(self.module, "get_github_client", return_value=client),
+            patch("utils.github.get_github_client", return_value=client),
             patch.object(self.module, "get_dependabot_slo", mock_check),
         ):
             result = self.module.handler(
@@ -58,7 +58,7 @@ class TestDependabotSloHandler:
         )
 
         with (
-            patch.object(self.module, "get_github_client", return_value=client),
+            patch("utils.github.get_github_client", return_value=client),
             patch.object(self.module, "get_dependabot_slo", mock_check),
         ):
             result = self.module.handler({"owner": "ONS-Innovation"}, None)
@@ -91,7 +91,7 @@ class TestSecretScanningSloHandler:
         )
 
         with (
-            patch.object(self.module, "get_github_client", return_value=client),
+            patch("utils.github.get_github_client", return_value=client),
             patch.object(self.module, "get_secret_scanning_slo", mock_check),
         ):
             result = self.module.handler({"owner": "ONS-Innovation"}, None)
@@ -125,7 +125,7 @@ class TestTeamMaintainerHandler:
         )
 
         with (
-            patch.object(self.module, "get_github_client", return_value=client),
+            patch("utils.github.get_github_client", return_value=client),
             patch.object(self.module, "check_team_maintainer", mock_check),
         ):
             result = self.module.handler(

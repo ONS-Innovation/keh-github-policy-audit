@@ -28,9 +28,13 @@ variable "business_owner_tag" {
   default     = "DST"
 }
 
-variable "github_owner" {
-  description = "GitHub organisation owner passed to the state machine input."
-  type        = string
+variable "organisation_schedules" {
+  description = "List of GitHub organisations with their EventBridge cron schedule and optional dependabot SLO severity levels."
+  type = list(object({
+    owner                 = string
+    schedule_expression   = string
+    dependabot_slo_levels = optional(list(string), ["critical", "high", "medium", "low"])
+  }))
 }
 
 variable "github_app_id_secret_name" {
@@ -67,6 +71,12 @@ variable "lambda_reserved_concurrent_executions" {
   default     = 10
 }
 
+variable "github_client_cache_ttl_seconds" {
+  description = "TTL in seconds for in-process GitHub client reuse within warm Lambda runtimes."
+  type        = number
+  default     = 300
+}
+
 variable "lambda_log_retention_days" {
   description = "CloudWatch log group retention period in days for Lambda functions."
   type        = number
@@ -91,17 +101,6 @@ variable "team_map_max_concurrency" {
   default     = 5
 }
 
-variable "dependabot_slo_levels" {
-  description = "Severity levels passed to dependabot_slo check. Defaults to all severities."
-  type        = list(string)
-  default     = ["critical", "high", "medium", "low"]
-}
-
-variable "audit_schedule_expression" {
-  description = "EventBridge cron expression for weekly execution."
-  type        = string
-  default     = "cron(0 8 ? * MON *)"
-}
 
 variable "audit_run_retention_days" {
   description = "Days to retain per-repository run artifacts under audit-runs/."

@@ -67,3 +67,6 @@ __pycache__/
 .coverage
 htmlcov/
 coverage.xml
+
+# Local Output from Lambdas
+outputs

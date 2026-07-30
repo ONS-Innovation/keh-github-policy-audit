@@ -2,13 +2,25 @@
 # Copy this file to dev.tfvars and fill in the required values.
 # Usage: terraform plan -var-file="env/dev/dev.tfvars"
 
-env_name   = "sdp-dev"
-region     = "eu-west-2"
-github_owner = "ONS-Innovation"
+env_name = "sdp-dev"
+region   = "eu-west-2"
 
 # Secrets Manager secret names for the GitHub App credentials.
 github_app_id_secret_name      = "sdp-dev-github-app-id"
 github_private_key_secret_name = "sdp-dev-github-private-key"
+
+# One entry per GitHub organisation. Each entry sets the owner, cron schedule,
+# and optionally overrides the dependabot SLO severity levels.
+organisation_schedules = [
+  {
+    owner               = "ONS-Innovation"
+    schedule_expression = "cron(0 6 ? * MON *)"
+  },
+  {
+    owner               = "ONSdigital"
+    schedule_expression = "cron(0 8 ? * MON *)"
+  },
+]
 
 # Optional overrides (defaults shown)
 # lambda_runtime                 = "python3.12"
@@ -16,5 +28,3 @@ github_private_key_secret_name = "sdp-dev-github-private-key"
 # lambda_memory_size             = 512
 # repository_map_max_concurrency = 5
 # team_map_max_concurrency       = 5
-# dependabot_slo_levels          = ["critical", "high", "medium", "low"]
-# audit_schedule_expression      = "cron(0 8 ? * MON *)"

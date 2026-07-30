@@ -3,21 +3,24 @@
 import logging
 
 from policy_methods_library.checks.team_maintainer import check_team_maintainer
-from utils.github import get_github_client
+from utils.lambda_handler import github_handler
+from utils.structured_logging import log_info
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def handler(event, context):
+@github_handler
+def handler(event, context, client):
     """Step Function invokes with {"owner": "...", "team_slug": "..."}."""
-    logger.info(f"Lambda invoked with event keys={sorted(event.keys())}")
-    client = get_github_client(event["owner"])
     result = check_team_maintainer(client, event["team_slug"])
     result["check_name"] = "team_maintainer"
-    logger.info(
-        f"Lambda completed check={result['check_name']} result={result.get('result')}"
+    log_info(
+        logger,
+        "lambda_completed",
+        check=result["check_name"],
+        result=result.get("result"),
     )
 
     result.pop("details", None)  # Remove details from the result to reduce payload size

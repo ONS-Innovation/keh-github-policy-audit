@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 
 import boto3
 
+from utils.structured_logging import log_info
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -200,7 +202,7 @@ def _normalise_team_checks(teams, team_results) -> dict[str, dict]:
 
 def handler(event, context):
     """Store output from either canonical maps or raw Step Function map/parallel arrays."""
-    logger.info(f"Lambda invoked with event keys={sorted(event.keys())}")
+    log_info(logger, "lambda_invoked", event_keys=sorted(event.keys()))
 
     owner = event["owner"]
 
@@ -210,6 +212,8 @@ def handler(event, context):
 
     bucket_name = event.get("output_bucket") or os.environ.get("S3_BUCKET_NAME")
     run_id = event.get("run_id")
+    rate_limit_start = event.get("rate_limit_start")
+    rate_limit_end = event.get("rate_limit_end")
 
     repositories = _normalise_repository_checks(
         event.get("repositories"), event.get("repository_results")
@@ -271,6 +275,8 @@ def handler(event, context):
         "organisation_checks": organisation_checks,
         "teams": teams,
         "summary": summary,
+        "rate-limit-start": rate_limit_start,
+        "rate-limit-end": rate_limit_end,
         "timestamp": now.isoformat(),
     }
 
@@ -288,7 +294,7 @@ def handler(event, context):
                 "output_bucket (or S3_BUCKET_NAME) environment variable not set"
             )
 
-        logger.info(f"Storing results to s3://{bucket_name}/{key}")
+        log_info(logger, "storing_results", storage="s3", bucket=bucket_name, key=key)
         boto3.client("s3").put_object(
             Bucket=bucket_name,
             Key=key,
@@ -306,12 +312,20 @@ def handler(event, context):
         with open(local_output_path, "w", encoding="utf-8") as file:
             json.dump(output, file, indent=2)
 
-        logger.info(f"ENVIRONMENT=local, wrote output to {local_output_path}")
+        log_info(
+            logger,
+            "stored_results",
+            environment="local",
+            local_output_path=local_output_path,
+        )
 
-    logger.info(
-        f"Lambda completed owner={owner} repositories_count={len(repositories)} "
-        f"organisation_checks_count={len(organisation_checks)} "
-        f"teams_count={len(teams)}"
+    log_info(
+        logger,
+        "lambda_completed",
+        owner=owner,
+        repositories_count=len(repositories),
+        organisation_checks_count=len(organisation_checks),
+        teams_count=len(teams),
     )
 
     return {
@@ -322,4 +336,6 @@ def handler(event, context):
         "local_output_path": local_output_path,
         "owner": owner,
         "run_id": run_id,
+        "rate-limit-start": rate_limit_start,
+        "rate-limit-end": rate_limit_end,
     }

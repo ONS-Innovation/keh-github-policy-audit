@@ -2,6 +2,8 @@
 
 A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage Policy. Built using the [KEH Policy Methods Library](https://github.com/ONS-Innovation/keh-policy-methods-library), this tool produces a report of the audit findings, which can be used to identify areas of non-compliance and inform remediation efforts. Additionally, these reports can track compliance over time, providing a historical record of the organisation's adherence to the policy, and its progress towards achieving compliance.
 
+This repository just collects the data for these reports using an AWS Step Function workflow, and stores the results in S3. The reporting half of the project is implemented within the [Digital Landscape](https://github.com/ONSdigital/keh-digital-landscape).
+
 ## Table of Contents
 
 - [GitHub Policy Audit](#github-policy-audit)
@@ -15,6 +17,7 @@ A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage 
     - [4. Payload summary](#4-payload-summary)
       - [Repository Listing](#repository-listing)
       - [Organisation Team Listing](#organisation-team-listing)
+      - [Rate Limit Checkpoint](#rate-limit-checkpoint)
       - [Check Handlers](#check-handlers)
       - [Output Handlers](#output-handlers)
   - [Deployment](#deployment)
@@ -68,15 +71,36 @@ poetry install
 export AWS_REGION=eu-west-2
 export GITHUB_APP_ID_SECRET_NAME=<your-app-id-secret-name>
 export GITHUB_PRIVATE_KEY_SECRET_NAME=<your-private-key-secret-name>
+export GITHUB_CLIENT_CACHE_TTL_SECONDS=300
 export ENVIRONMENT=local
+export LOG_PRETTY_JSON=true
+export APP_LOG_FORMAT=TEXT
 ```
 
 `GITHUB_APP_ID_SECRET_NAME` should point to a secret containing a JSON object with the GitHub App ID under the `AppID` key (for example: `{"AppID":"123456"}`).
 `GITHUB_PRIVATE_KEY_SECRET_NAME` should point to a separate secret containing only the GitHub App private key as plain text (PEM), not a key-value JSON object.
+`GITHUB_CLIENT_CACHE_TTL_SECONDS` controls in-process GitHub client reuse per owner within warm Lambda runtimes to reduce installation-token burst traffic (default `300`).
 `ENVIRONMENT` controls output behaviour for `functions.store_repository_output.handler` and `functions.store_output.handler`:
 
 - `local` (default): writes output JSON to `outputs/<owner>/` and does not call AWS S3.
 - `prod`: writes output JSON to S3 and requires `S3_BUCKET_NAME`.
+
+`LOG_PRETTY_JSON` controls the format of structured application log messages:
+
+- false (default): compact single-line JSON log payloads.
+- true: pretty-printed multi-line JSON payloads, useful for local debugging.
+
+`APP_LOG_FORMAT` controls how `utils/structured_logging.py` emits records to Python logging:
+
+- `TEXT` (default): emit JSON payload in the log message string (best for local CLI use).
+- `JSON`: emit event name as message and fields via logger `extra` for Lambda JSON logs.
+
+In deployed Lambda, Terraform sets `APP_LOG_FORMAT=JSON`.
+If `APP_LOG_FORMAT` is unset, the code falls back to the Lambda runtime value `AWS_LAMBDA_LOG_FORMAT` when present.
+
+For production Lambda deployments, keep `LOG_PRETTY_JSON` unset so CloudWatch log volume remains lower.
+
+Detailed logging conventions and examples are documented in `docs/logging-patterns.md`.
 
 `boto3` uses the standard AWS credential provider chain. For local development, this can come from an AWS CLI SSO profile after running `aws sso login`. In Lambda, credentials are provided by the function's IAM execution role.
 
@@ -113,6 +137,7 @@ Ready-to-use payload files are provided in `examples/`:
 - `examples/dependabot_slo_event.json`
 - `examples/naming_convention_event.json`
 - `examples/team_maintainer_event.json`
+- `examples/rate_limit_event.json`
 - `examples/store_output_event.json`
 - `examples/store_repository_output_event.json`
 
@@ -130,15 +155,23 @@ Some repository-scoped handlers can also accept optional repository metadata und
 
 #### Repository Listing
 
-| Handler modules                       | Required event payload |
-| ------------------------------------- | ---------------------- |
-| `functions.list_repositories.handler` | `{"owner":"<org>"}`    |
+| Handler modules                       | Required event payload                                                                                                                                                                                                                                                                                 |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `functions.list_repositories.handler` | `{"owner":"<org>","run_id":"<id>","output_bucket":"<bucket>"}` - writes a bare JSON array of repository summaries to `s3://<bucket>/audit-runs/<owner>/<run_id>/repositories-list.json` and returns an S3 reference. In the step function the `run_id` and `output_bucket` are injected automatically. |
 
 #### Organisation Team Listing
 
 | Handler modules                | Required event payload |
 | ------------------------------ | ---------------------- |
 | `functions.list_teams.handler` | `{"owner":"<org>"}`    |
+
+#### Rate Limit Checkpoint
+
+| Handler modules                | Required event payload                           |
+| ------------------------------ | ------------------------------------------------ | ----------------- |
+| `functions.rate_limit.handler` | `{"owner":"<org>","checkpoint":"rate-limit-start | rate-limit-end"}` |
+
+Rate-limit telemetry is collected only by this checkpoint handler at workflow boundaries.
 
 #### Check Handlers
 
@@ -153,12 +186,13 @@ Some repository-scoped handlers can also accept optional repository metadata und
 
 #### Output Handlers
 
-| Handler modules                                   | Required event payload                                                                                                                   |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `functions.store_repository_output.handler`       | `{"owner":"<org>","run_id":"<execution-id>","repository_name":"<repo>","checks":[{"check_name":"readme","status":"pass"}]}`              |
-| `functions.store_output.handler` (S3 aggregation) | `{"owner":"<org>","run_id":"<execution-id>","output_bucket":"<bucket>","organisation_results":[...],"teams":[...],"team_results":[...]}` |
+| Handler modules                                   | Required event payload                                                                                                                                                                   |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `functions.store_repository_output.handler`       | `{"owner":"<org>","run_id":"<execution-id>","repository_name":"<repo>","checks":[{"check_name":"readme","status":"pass"}]}`                                                              |
+| `functions.store_output.handler` (S3 aggregation) | `{"owner":"<org>","run_id":"<execution-id>","output_bucket":"<bucket>","organisation_results":[...],"teams":[...],"team_results":[...],"rate_limit_start":{...},"rate_limit_end":{...}}` |
 
 The scalable production flow stores one repository JSON file at a time under `audit-runs/<owner>/<run_id>/repositories/`, then `store_output` aggregates that prefix and writes the final summary to `audit-results/<owner>/<run_id>.json`.
+The final summary and terminal Step Functions output also include `rate-limit-start` and `rate-limit-end` checkpoint objects.
 
 ## Deployment
 
@@ -195,7 +229,7 @@ Terraform in `terraform/` provisions:
 - all Lambda functions from `build/lambdas/*.zip`
 - a shared Lambda dependency layer from `build/dependency-layer.zip`
 - a Step Functions state machine matching `docs/step-function-flow.md`
-- an EventBridge weekly schedule (`cron(0 8 ? * MON *)`) that starts execution
+- an EventBridge schedule rule per organisation (each with its own cron expression) that starts execution
 
 ##### Terraform file structure
 
@@ -248,25 +282,24 @@ Terraform in `terraform/` provisions:
 
 ##### Terraform Variables
 
-| Variable                                | Required | Default                              | Description                                                                                       |
-| --------------------------------------- | -------- | ------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `env_name`                              | No       | `sdp-dev`                            | Environment name. Controls bucket/resource naming (e.g. `sdp-dev`, `sdp-prod`).                   |
-| `region`                                | No       | `eu-west-2`                          | AWS region to deploy into.                                                                        |
-| `github_owner`                          | **Yes**  | —                                    | GitHub organisation name audited on each run.                                                     |
-| `github_app_id_secret_name`             | **Yes**  | —                                    | Secrets Manager secret name for the GitHub App ID (`{"AppID":"..."}` JSON).                       |
-| `github_private_key_secret_name`        | **Yes**  | —                                    | Secrets Manager secret name for the GitHub App private key (PEM, plain text).                     |
-| `lambda_runtime`                        | No       | `python3.12`                         | Lambda runtime identifier.                                                                        |
-| `lambda_timeout`                        | No       | `120`                                | Lambda timeout in seconds.                                                                        |
-| `lambda_memory_size`                    | No       | `512`                                | Lambda memory in MB.                                                                              |
-| `lambda_reserved_concurrent_executions` | No       | `10`                                 | Reserved concurrent executions per Lambda function. Set to `-1` for unreserved (not recommended). |
-| `lambda_log_retention_days`             | No       | `90`                                 | CloudWatch log group retention period in days for Lambda functions.                               |
-| `step_function_log_retention_days`      | No       | `90`                                 | CloudWatch log group retention period in days for the Step Functions state machine.               |
-| `repository_map_max_concurrency`        | No       | `5`                                  | Max parallel repositories processed in the repository checks map state.                           |
-| `team_map_max_concurrency`              | No       | `5`                                  | Max parallel teams processed in the team maintainer map state.                                    |
-| `dependabot_slo_levels`                 | No       | `["critical","high","medium","low"]` | Dependabot alert severity levels included in the SLO check.                                       |
-| `audit_schedule_expression`             | No       | `cron(0 8 ? * MON *)`                | EventBridge schedule expression for the weekly audit trigger.                                     |
-| `audit_run_retention_days`              | No       | `30`                                 | Days to retain per-repository run artifacts under `audit-runs/`.                                  |
-| `audit_summary_retention_days`          | No       | `365`                                | Days to retain aggregated summary outputs under `audit-results/`.                                 |
+| Variable                                | Required | Default      | Description                                                                                                                                                                                                               |
+| --------------------------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `env_name`                              | No       | `sdp-dev`    | Environment name. Controls bucket/resource naming (e.g. `sdp-dev`, `sdp-prod`).                                                                                                                                           |
+| `region`                                | No       | `eu-west-2`  | AWS region to deploy into.                                                                                                                                                                                                |
+| `organisation_schedules`                | **Yes**  | -            | List of organisations to audit. Each entry requires `owner` and `schedule_expression`, and optionally `dependabot_slo_levels` (defaults to `["critical","high","medium","low"]`). Creates one EventBridge rule per entry. |
+| `github_app_id_secret_name`             | **Yes**  | -            | Secrets Manager secret name for the GitHub App ID (`{"AppID":"..."}` JSON).                                                                                                                                               |
+| `github_private_key_secret_name`        | **Yes**  | -            | Secrets Manager secret name for the GitHub App private key (PEM, plain text).                                                                                                                                             |
+| `github_client_cache_ttl_seconds`       | No       | `300`        | TTL in seconds for in-process GitHub client reuse within warm Lambda runtimes.                                                                                                                                            |
+| `lambda_runtime`                        | No       | `python3.12` | Lambda runtime identifier.                                                                                                                                                                                                |
+| `lambda_timeout`                        | No       | `120`        | Default Lambda timeout in seconds. This can be overridden per Lambda function in `locals.tf`.                                                                                                                             |
+| `lambda_memory_size`                    | No       | `512`        | Lambda memory in MB.                                                                                                                                                                                                      |
+| `lambda_reserved_concurrent_executions` | No       | `10`         | Reserved concurrent executions per Lambda function. Set to `-1` for unreserved (not recommended).                                                                                                                         |
+| `lambda_log_retention_days`             | No       | `90`         | CloudWatch log group retention period in days for Lambda functions.                                                                                                                                                       |
+| `step_function_log_retention_days`      | No       | `90`         | CloudWatch log group retention period in days for the Step Functions state machine.                                                                                                                                       |
+| `repository_map_max_concurrency`        | No       | `5`          | Max parallel repositories processed in the repository checks map state.                                                                                                                                                   |
+| `team_map_max_concurrency`              | No       | `5`          | Max parallel teams processed in the team maintainer map state.                                                                                                                                                            |
+| `audit_run_retention_days`              | No       | `30`         | Days to retain per-repository run artifacts under `audit-runs/`.                                                                                                                                                          |
+| `audit_summary_retention_days`          | No       | `365`        | Days to retain aggregated summary outputs under `audit-results/`.                                                                                                                                                         |
 
 ## Documentation
 
@@ -338,7 +371,7 @@ make test
 
 #### Terraform
 
-Terraform tests use the native [`terraform test`](https://developer.hashicorp.com/terraform/language/tests) framework with mock providers — no AWS credentials are required.
+Terraform tests use the native [`terraform test`](https://developer.hashicorp.com/terraform/language/tests) framework with mock providers - no AWS credentials are required.
 
 Tests live in `terraform/tests/` and are grouped by concern:
 
@@ -352,7 +385,7 @@ Tests live in `terraform/tests/` and are grouped by concern:
 To run the Terraform tests locally:
 
 ```bash
-make test-terraform
+make tf-test
 ```
 
 This will build the Lambda artefacts first (`make build`), then run `terraform test` against all test files.

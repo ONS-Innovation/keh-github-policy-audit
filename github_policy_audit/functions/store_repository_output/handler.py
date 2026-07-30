@@ -8,6 +8,8 @@ from typing import Any
 
 import boto3
 
+from utils.structured_logging import log_info
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -34,7 +36,7 @@ def _normalise_checks(checks: Any) -> dict[str, dict]:
 
 def handler(event, context):
     """Store a repository-level result object and return an S3 pointer."""
-    logger.info("Lambda invoked with event keys=%s", sorted(event.keys()))
+    log_info(logger, "lambda_invoked", event_keys=sorted(event.keys()))
 
     owner = event["owner"]
     repository_name = event["repository_name"]
@@ -76,12 +78,13 @@ def handler(event, context):
         with open(local_output_path, "w", encoding="utf-8") as file:
             json.dump(output, file, indent=2)
 
-    logger.info(
-        "Stored repository result owner=%s run_id=%s repository_name=%s checks_count=%s",
-        owner,
-        run_id,
-        repository_name,
-        len(checks),
+    log_info(
+        logger,
+        "stored_repository_result",
+        owner=owner,
+        run_id=run_id,
+        repository_name=repository_name,
+        checks_count=len(checks),
     )
 
     return {

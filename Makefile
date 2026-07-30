@@ -98,7 +98,7 @@ fmt:				## Run all formatters.
 	poetry run ruff check github_policy_audit tests --fix
 	poetry run ruff format github_policy_audit tests
 
-##
+## 
 
 # Terraform
 
@@ -122,8 +122,8 @@ tf-fmt:				## Format the Terraform configuration.
 test:				## Run all tests and check coverage.
 	poetry run pytest -n auto --cov=github_policy_audit --cov-report term-missing --cov-fail-under=80
 
-.PHONY: test-tf
-test-terraform: build		## Run Terraform tests (requires built Lambda artefacts).
+.PHONY: tf-test
+tf-test: build			## Run Terraform tests (requires built Lambda artefacts).
 	terraform -chdir=terraform test
 
 ## 

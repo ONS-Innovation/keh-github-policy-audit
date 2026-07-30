@@ -40,7 +40,12 @@ mock_provider "aws" {
 }
 
 variables {
-  github_owner                   = "ONS-Innovation"
+  organisation_schedules = [
+    {
+      owner               = "ONS-Innovation"
+      schedule_expression = "cron(0 6 ? * MON *)"
+    },
+  ]
   github_app_id_secret_name      = "test-app-id"
   github_private_key_secret_name = "test-private-key"
 }
@@ -128,5 +133,12 @@ run "lifecycle_rules_configured" {
   assert {
     condition     = aws_s3_bucket_lifecycle_configuration.audit_output.rule[2].abort_incomplete_multipart_upload[0].days_after_initiation == 1
     error_message = "Global abort rule should set days_after_initiation to 1."
+  }
+}
+
+run "bucket_versioning_enabled" {
+  assert {
+    condition     = aws_s3_bucket_versioning.audit_output.versioning_configuration[0].status == "Enabled"
+    error_message = "Audit output bucket versioning should be enabled."
   }
 }
