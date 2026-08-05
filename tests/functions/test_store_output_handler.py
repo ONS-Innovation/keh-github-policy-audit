@@ -575,6 +575,31 @@ class TestHandlerLocal:
         written = json.loads(output_file.read_text())
         assert "repository_ratings" in written["summary"]
 
+    def test_skips_non_dict_repository_checks_in_rating_loop(self):
+        """Non-dict values injected into the repositories map are silently skipped in the rating loop."""
+
+        # Must fail isinstance(..., dict) to trigger the continue on line 259,
+        # but must still expose .items() so the summary aggregation loop doesn't crash.
+        class NonDictChecks:
+            def items(self):
+                return []
+
+        # json.dump is patched to avoid serialization failure on the non-dict value;
+        # we assert only on the returned result, not the written file.
+        with (
+            patch.dict(os.environ, {"ENVIRONMENT": "local"}),
+            patch.object(
+                self.module,
+                "_normalise_repository_checks",
+                return_value={"repo-a": NonDictChecks()},
+            ),
+            patch.object(self.module.json, "dump"),
+        ):
+            result = self.module.handler({"owner": "test-org"}, None)
+
+        assert result["status"] == "success"
+        assert result["environment"] == "local"
+
 
 # ---------------------------------------------------------------------------
 # Prod environment
@@ -928,6 +953,18 @@ class TestHandlerProd:
             os.environ.pop("S3_BUCKET_NAME", None)
             with pytest.raises(ValueError, match="S3_BUCKET_NAME"):
                 self.module.handler({"owner": "test-org"}, None)
+
+    def test_raises_when_bucket_name_missing_at_write_time(self):
+        """Missing bucket_name at the final write step should raise a clear ValueError."""
+        with (
+            patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=True),
+            patch.object(self.module, "load_scorecard_criteria", return_value=[]),
+            patch.object(self.module, "boto3"),
+            pytest.raises(
+                ValueError, match="output_bucket.*environment variable not set"
+            ),
+        ):
+            self.module.handler({"owner": "test-org"}, None)
 
     def test_raises_when_run_id_provided_in_prod_without_bucket(self):
         """Prod run_id aggregation requires an explicit output bucket."""

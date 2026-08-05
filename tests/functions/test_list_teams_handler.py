@@ -51,6 +51,22 @@ class TestListTeamsHandler:
         with pytest.raises(KeyError, match="owner"):
             self.module.handler({}, None)
 
+    def test_raises_for_non_list_non_dict_payload(self) -> None:
+        """A payload that is neither a list nor a dict should raise a clear type error."""
+        with (
+            patch("utils.github.get_github_client", return_value=object()),
+            patch.object(
+                self.module,
+                "get_paginated_list",
+                return_value=42,
+            ),
+            pytest.raises(
+                TypeError,
+                match="got int",
+            ),
+        ):
+            self.module.handler({"owner": "ONS-Innovation"}, None)
+
     def test_raises_for_error_dict_payload(self) -> None:
         """A dict payload from pagination should fail with a clear type error."""
         with (

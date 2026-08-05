@@ -221,6 +221,30 @@ class TestListRepositoriesHandler:
         assert len(stored_data) == 1
         assert stored_data[0]["name"] == "active-repo"
 
+    def test_raises_for_non_list_non_dict_payload(self) -> None:
+        """A payload that is neither a list nor a dict should raise a clear type error."""
+        with (
+            patch("utils.github.get_github_client", return_value=object()),
+            patch.object(
+                self.module,
+                "get_paginated_list",
+                return_value=42,
+            ),
+            patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=False),
+            pytest.raises(
+                TypeError,
+                match="got int",
+            ),
+        ):
+            self.module.handler(
+                {
+                    "owner": "ONS-Innovation",
+                    "run_id": "test-run-123",
+                    "output_bucket": "test-bucket",
+                },
+                None,
+            )
+
     def test_raises_for_error_dict_payload(self) -> None:
         """A dict payload from pagination should fail with a clear type error."""
         with (
