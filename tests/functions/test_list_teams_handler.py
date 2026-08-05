@@ -50,3 +50,35 @@ class TestListTeamsHandler:
         """A missing owner key in the event should raise a KeyError."""
         with pytest.raises(KeyError, match="owner"):
             self.module.handler({}, None)
+
+    def test_raises_for_error_dict_payload(self) -> None:
+        """A dict payload from pagination should fail with a clear type error."""
+        with (
+            patch("utils.github.get_github_client", return_value=object()),
+            patch.object(
+                self.module,
+                "get_paginated_list",
+                return_value={"error": "rate limit", "response": {}},
+            ),
+            pytest.raises(
+                TypeError,
+                match="Expected teams payload to be a list of objects",
+            ),
+        ):
+            self.module.handler({"owner": "ONS-Innovation"}, None)
+
+    def test_raises_for_non_object_item_in_payload(self) -> None:
+        """A payload item that is not a dict should fail with a clear type error."""
+        with (
+            patch("utils.github.get_github_client", return_value=object()),
+            patch.object(
+                self.module,
+                "get_paginated_list",
+                return_value=["not-a-team-object"],
+            ),
+            pytest.raises(
+                TypeError,
+                match="Expected teams payload to contain only objects",
+            ),
+        ):
+            self.module.handler({"owner": "ONS-Innovation"}, None)

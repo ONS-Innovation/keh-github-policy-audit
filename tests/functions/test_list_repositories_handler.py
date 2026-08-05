@@ -220,3 +220,51 @@ class TestListRepositoriesHandler:
         stored_data = json.loads(call_kwargs["Body"])
         assert len(stored_data) == 1
         assert stored_data[0]["name"] == "active-repo"
+
+    def test_raises_for_error_dict_payload(self) -> None:
+        """A dict payload from pagination should fail with a clear type error."""
+        with (
+            patch("utils.github.get_github_client", return_value=object()),
+            patch.object(
+                self.module,
+                "get_paginated_list",
+                return_value={"error": "rate limit", "response": {}},
+            ),
+            patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=False),
+            pytest.raises(
+                TypeError,
+                match="Expected repositories payload to be a list of objects",
+            ),
+        ):
+            self.module.handler(
+                {
+                    "owner": "ONS-Innovation",
+                    "run_id": "test-run-123",
+                    "output_bucket": "test-bucket",
+                },
+                None,
+            )
+
+    def test_raises_for_non_object_item_in_payload(self) -> None:
+        """A payload item that is not a dict should fail with a clear type error."""
+        with (
+            patch("utils.github.get_github_client", return_value=object()),
+            patch.object(
+                self.module,
+                "get_paginated_list",
+                return_value=["not-a-repository-object"],
+            ),
+            patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=False),
+            pytest.raises(
+                TypeError,
+                match="Expected repositories payload to contain only objects",
+            ),
+        ):
+            self.module.handler(
+                {
+                    "owner": "ONS-Innovation",
+                    "run_id": "test-run-123",
+                    "output_bucket": "test-bucket",
+                },
+                None,
+            )
