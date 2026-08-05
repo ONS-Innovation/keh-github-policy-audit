@@ -1,0 +1,24 @@
+{
+  "gold": {
+    "min_compliance": 90,
+    "required_checks": [
+      "codeowners",
+      "dependabot",
+      "readme",
+      "repository_access"
+    ]
+  },
+  "silver": {
+    "min_compliance": 70,
+    "required_checks": [
+      "readme",
+      "license"
+    ]
+  },
+  "bronze": {
+    "min_compliance": 50,
+    "required_checks": [
+      "readme"
+    ]
+  }
+}

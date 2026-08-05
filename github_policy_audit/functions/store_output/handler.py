@@ -7,11 +7,22 @@ from datetime import datetime, timezone
 
 import boto3
 
+from utils.scorecard import calculate_repository_rating
+from utils.scorecard import load_scorecard_criteria
+from utils.scorecard import serialise_scorecard_criteria
 from utils.structured_logging import log_info
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+def _normalise_environment(raw_environment: str | None) -> str:
+    """Normalise supported environments."""
+    environment = (raw_environment or "local").lower()
+    if environment in {"local", "prod"}:
+        return environment
+    raise ValueError("ENVIRONMENT must be either 'local' or 'prod'")
 
 
 def _is_pass(check_output):
@@ -206,9 +217,8 @@ def handler(event, context):
 
     owner = event["owner"]
 
-    environment = os.environ.get("ENVIRONMENT", "local").lower()
-    if environment not in {"local", "prod"}:
-        raise ValueError("ENVIRONMENT must be either 'local' or 'prod'")
+    environment = _normalise_environment(os.environ.get("ENVIRONMENT", "local"))
+    s3_client = boto3.client("s3") if environment == "prod" else None
 
     bucket_name = event.get("output_bucket") or os.environ.get("S3_BUCKET_NAME")
     run_id = event.get("run_id")
@@ -225,11 +235,32 @@ def handler(event, context):
                     "output_bucket (or S3_BUCKET_NAME) is required in prod when using run_id"
                 )
             repositories = _load_repository_checks_from_s3(
-                s3_client=boto3.client("s3"),
+                s3_client=s3_client,
                 bucket_name=bucket_name,
                 owner=owner,
                 run_id=run_id,
             )
+
+    # Load scorecard criteria
+
+    scorecard_ratings = load_scorecard_criteria(
+        environment=environment,
+        bucket_name=bucket_name,
+        s3_client=s3_client,
+    )
+
+    # Calculate repository ratings and tally scorecard status counts
+
+    scorecard_status_counts = {rating["name"]: 0 for rating in scorecard_ratings}
+    scorecard_status_counts["unrated"] = 0
+
+    for repository_name, repository_checks in repositories.items():
+        if not isinstance(repository_checks, dict):
+            continue
+        rating = calculate_repository_rating(repository_checks, scorecard_ratings)
+        repositories[repository_name]["rating"] = rating
+        scorecard_status_counts[rating] = scorecard_status_counts.get(rating, 0) + 1
+
     teams = _normalise_team_checks(event.get("teams"), event.get("team_results"))
     organisation_checks = _normalise_organisation_checks(
         event.get("organisation_checks"), event.get("organisation_results")
@@ -253,6 +284,7 @@ def handler(event, context):
         "repository_checks": {},
         "organisation_checks": {},
         "team_checks": {},
+        "repository_ratings": scorecard_status_counts,
     }
 
     for _, checks in repositories.items():
@@ -283,6 +315,7 @@ def handler(event, context):
     output = {
         "owner": owner,
         "repositories": repositories,
+        "scorecard_criteria": serialise_scorecard_criteria(scorecard_ratings),
         "organisation_checks": organisation_checks,
         "teams": teams,
         "summary": summary,
@@ -306,7 +339,7 @@ def handler(event, context):
             )
 
         log_info(logger, "storing_results", storage="s3", bucket=bucket_name, key=key)
-        boto3.client("s3").put_object(
+        s3_client.put_object(
             Bucket=bucket_name,
             Key=key,
             Body=json.dumps(output, indent=2),

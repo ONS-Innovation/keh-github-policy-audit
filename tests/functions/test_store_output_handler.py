@@ -511,10 +511,12 @@ class TestHandlerLocal:
                 "codeowners": {"check_name": "codeowners", "result": "pass"},
                 "readme": {"check_name": "readme", "result": "fail"},
                 "is_compliant": False,
+                "rating": "unrated",
             },
             "repo-b": {
                 "codeowners": {"check_name": "codeowners", "result": "pass"},
                 "is_compliant": True,
+                "rating": "unrated",
             },
         }
         assert written["teams"] == {
@@ -538,6 +540,67 @@ class TestHandlerLocal:
         assert written["summary"]["compliant_repositories"] == 1
         assert written["summary"]["total_teams"] == 2
         assert written["summary"]["compliant_teams"] == 1
+
+    def test_assigns_repository_scorecard_status_from_local_config(self):
+        """Repository scorecards should use local scorecard criteria in local mode."""
+        scorecard_dir = self.tmp_path / "config"
+        scorecard_dir.mkdir(parents=True, exist_ok=True)
+        scorecard_file = scorecard_dir / "scorecard_criteria.json"
+        scorecard_file.write_text(
+            json.dumps(
+                {
+                    "gold": {
+                        "min_compliance": 90,
+                        "required_checks": ["codeowners", "readme"],
+                    },
+                    "silver": {
+                        "min_compliance": 70,
+                        "required_checks": ["readme"],
+                    },
+                    "bronze": {
+                        "min_compliance": 50,
+                        "required_checks": ["readme"],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        event = {
+            "owner": "test-org",
+            "repositories": {
+                "repo-gold": {
+                    "codeowners": {"result": "pass"},
+                    "readme": {"result": "pass"},
+                },
+                "repo-silver": {
+                    "codeowners": {"result": "fail"},
+                    "readme": {"result": "pass"},
+                    "dependabot": {"result": "pass"},
+                    "license": {"result": "pass"},
+                },
+                "repo-unrated": {
+                    "codeowners": {"result": "pass"},
+                    "readme": {"result": "fail"},
+                },
+            },
+        }
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+            result = self.module.handler(event, None)
+
+        output_file = self.tmp_path / result["local_output_path"]
+        written = json.loads(output_file.read_text())
+
+        assert written["repositories"]["repo-gold"]["rating"] == "gold"
+        assert written["repositories"]["repo-silver"]["rating"] == "silver"
+        assert written["repositories"]["repo-unrated"]["rating"] == "unrated"
+
+        scorecard_summary = written["summary"]["repository_ratings"]
+        assert scorecard_summary["gold"] == 1
+        assert scorecard_summary["silver"] == 1
+        assert scorecard_summary["bronze"] == 0
+        assert scorecard_summary["unrated"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -658,6 +721,26 @@ class TestHandlerProd:
                 return FakePaginator()
 
             def get_object(self, **kwargs):
+                if kwargs["Key"] == "config/scorecard_criteria.json":
+                    return {
+                        "Body": FakeBody(
+                            {
+                                "gold": {
+                                    "min_compliance": 90,
+                                    "required_checks": ["readme"],
+                                },
+                                "silver": {
+                                    "min_compliance": 70,
+                                    "required_checks": ["readme"],
+                                },
+                                "bronze": {
+                                    "min_compliance": 50,
+                                    "required_checks": [],
+                                },
+                            }
+                        )
+                    }
+
                 assert kwargs["Key"].endswith("repo-a.json")
                 return {
                     "Body": FakeBody(
@@ -701,7 +784,36 @@ class TestHandlerProd:
         """In the prod environment the handler should upload the result to S3."""
         captured: dict[str, object] = {}
 
+        class FakeBody:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def read(self):
+                return json.dumps(self.payload)
+
         class FakeS3Client:
+            def get_object(self, **kwargs: object):
+                if kwargs["Key"] == "config/scorecard_criteria.json":
+                    return {
+                        "Body": FakeBody(
+                            {
+                                "gold": {
+                                    "min_compliance": 90,
+                                    "required_checks": [],
+                                },
+                                "silver": {
+                                    "min_compliance": 70,
+                                    "required_checks": [],
+                                },
+                                "bronze": {
+                                    "min_compliance": 50,
+                                    "required_checks": [],
+                                },
+                            }
+                        )
+                    }
+                raise AssertionError(f"Unexpected key: {kwargs['Key']}")
+
             def put_object(self, **kwargs: object) -> None:
                 captured.update(kwargs)
 
@@ -729,6 +841,113 @@ class TestHandlerProd:
         assert "audit-results/test-org/" in str(captured["Key"])
         written = json.loads(str(captured["Body"]))
         assert written["owner"] == "test-org"
+
+    def test_loads_scorecard_criteria_from_s3_in_prod(self) -> None:
+        """Prod mode should load scorecard criteria from S3 config key."""
+        captured: dict[str, object] = {}
+
+        class FakeBody:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def read(self):
+                return json.dumps(self.payload)
+
+        class FakeS3Client:
+            def get_object(self, **kwargs):
+                if kwargs["Key"] == "config/scorecard_criteria.json":
+                    return {
+                        "Body": FakeBody(
+                            {
+                                "gold": {
+                                    "min_compliance": 90,
+                                    "required_checks": ["codeowners"],
+                                },
+                                "silver": {
+                                    "min_compliance": 70,
+                                    "required_checks": ["readme"],
+                                },
+                                "bronze": {
+                                    "min_compliance": 50,
+                                    "required_checks": [],
+                                },
+                            }
+                        )
+                    }
+
+                return {
+                    "Body": FakeBody(
+                        {
+                            "repository_name": "repo-a",
+                            "checks": {
+                                "codeowners": {
+                                    "check_name": "codeowners",
+                                    "result": "pass",
+                                },
+                                "readme": {
+                                    "check_name": "readme",
+                                    "result": "pass",
+                                },
+                            },
+                        }
+                    )
+                }
+
+            def get_paginator(self, operation_name):
+                assert operation_name == "list_objects_v2"
+
+                class FakePaginator:
+                    def paginate(self, **kwargs):
+                        del kwargs
+                        return [
+                            {
+                                "Contents": [
+                                    {
+                                        "Key": "audit-runs/test-org/run-123/repositories/repo-a.json"
+                                    }
+                                ]
+                            }
+                        ]
+
+                return FakePaginator()
+
+            def put_object(self, **kwargs):
+                captured.update(kwargs)
+
+        event = {
+            "owner": "test-org",
+            "run_id": "run-123",
+            "output_bucket": "my-audit-bucket",
+        }
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "ENVIRONMENT": "prod",
+                    "S3_BUCKET_NAME": "my-audit-bucket",
+                },
+            ),
+            patch.object(self.module.boto3, "client", return_value=FakeS3Client()),
+        ):
+            self.module.handler(event, None)
+
+        written = json.loads(str(captured["Body"]))
+        assert written["repositories"]["repo-a"]["rating"] == "gold"
+        assert written["scorecard_criteria"] == {
+            "gold": {
+                "min_compliance": 90.0,
+                "required_checks": ["codeowners"],
+            },
+            "silver": {
+                "min_compliance": 70.0,
+                "required_checks": ["readme"],
+            },
+            "bronze": {
+                "min_compliance": 50.0,
+                "required_checks": [],
+            },
+        }
 
     def test_raises_when_s3_bucket_name_missing(self):
         """A missing S3_BUCKET_NAME in prod should raise a ValueError."""

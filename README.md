@@ -83,10 +83,17 @@ export APP_LOG_FORMAT=TEXT
 
 `GITHUB_CLIENT_CACHE_TTL_SECONDS` controls in-process GitHub client reuse per owner within warm Lambda runtimes to reduce installation-token burst traffic (default `300`).
 
-`ENVIRONMENT` controls output behaviour for `functions.store_repository_output.handler` and `functions.store_output.handler`:
+`ENVIRONMENT` controls storage interactions for `functions.store_repository_output.handler` and `functions.store_output.handler`:
+
+Output storage:
 
 - `local` (default): writes output JSON to `outputs/<owner>/` and does not call AWS S3.
 - `prod`: writes output JSON to S3 and requires `S3_BUCKET_NAME`.
+
+Scorecard criteria:
+
+- `local`: criteria loaded from `config/scorecard_criteria.json`.
+- `prod`: criteria loaded from from `s3://<S3_BUCKET_NAME>/config/scorecard_criteria.json`.
 
 `LOG_PRETTY_JSON` controls the format of structured application log messages:
 
@@ -230,6 +237,7 @@ A dependency layer is used to reduce the size of the individual Lambda function 
 Terraform in `terraform/` provisions:
 
 - an S3 bucket for audit outputs
+- a seed scorecard config object at `config/scorecard_criteria.json` (managed as create-once and not updated on content changes)
 - all Lambda functions from `build/lambdas/*.zip`
 - a shared Lambda dependency layer from `build/dependency-layer.zip`
 - a Step Functions state machine matching `docs/step-function-flow.md`
