@@ -169,8 +169,14 @@ class TestHandlerLocal:
         self.tmp_path = Path(self._tmp_dir.name)
         self._original_cwd = os.getcwd()
         os.chdir(self.tmp_path)
+        self._scorecard_patcher = patch(
+            "functions.store_output.handler.load_scorecard_criteria",
+            return_value=[],
+        )
+        self._scorecard_patcher.start()
 
     def teardown_method(self):
+        self._scorecard_patcher.stop()
         os.chdir(self._original_cwd)
         self._tmp_dir.cleanup()
 
@@ -541,49 +547,11 @@ class TestHandlerLocal:
         assert written["summary"]["total_teams"] == 2
         assert written["summary"]["compliant_teams"] == 1
 
-    def test_assigns_repository_scorecard_status_from_local_config(self):
-        """Repository scorecards should use local scorecard criteria in local mode."""
-        scorecard_dir = self.tmp_path / "config"
-        scorecard_dir.mkdir(parents=True, exist_ok=True)
-        scorecard_file = scorecard_dir / "scorecard_criteria.json"
-        scorecard_file.write_text(
-            json.dumps(
-                {
-                    "gold": {
-                        "min_compliance": 90,
-                        "required_checks": ["codeowners", "readme"],
-                    },
-                    "silver": {
-                        "min_compliance": 70,
-                        "required_checks": ["readme"],
-                    },
-                    "bronze": {
-                        "min_compliance": 50,
-                        "required_checks": ["readme"],
-                    },
-                }
-            ),
-            encoding="utf-8",
-        )
-
+    def test_repository_rating_added_to_output(self):
+        """Each repository in the output should include a rating key."""
         event = {
             "owner": "test-org",
-            "repositories": {
-                "repo-gold": {
-                    "codeowners": {"result": "pass"},
-                    "readme": {"result": "pass"},
-                },
-                "repo-silver": {
-                    "codeowners": {"result": "fail"},
-                    "readme": {"result": "pass"},
-                    "dependabot": {"result": "pass"},
-                    "license": {"result": "pass"},
-                },
-                "repo-unrated": {
-                    "codeowners": {"result": "pass"},
-                    "readme": {"result": "fail"},
-                },
-            },
+            "repositories": {"repo-a": {"readme": {"result": "pass"}}},
         }
 
         with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
@@ -591,16 +559,21 @@ class TestHandlerLocal:
 
         output_file = self.tmp_path / result["local_output_path"]
         written = json.loads(output_file.read_text())
+        assert "rating" in written["repositories"]["repo-a"]
 
-        assert written["repositories"]["repo-gold"]["rating"] == "gold"
-        assert written["repositories"]["repo-silver"]["rating"] == "silver"
-        assert written["repositories"]["repo-unrated"]["rating"] == "unrated"
+    def test_summary_includes_repository_ratings_counts(self):
+        """Summary should include a repository_ratings key with per-rating counts."""
+        event = {
+            "owner": "test-org",
+            "repositories": {"repo-a": {"readme": {"result": "pass"}}},
+        }
 
-        scorecard_summary = written["summary"]["repository_ratings"]
-        assert scorecard_summary["gold"] == 1
-        assert scorecard_summary["silver"] == 1
-        assert scorecard_summary["bronze"] == 0
-        assert scorecard_summary["unrated"] == 1
+        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+            result = self.module.handler(event, None)
+
+        output_file = self.tmp_path / result["local_output_path"]
+        written = json.loads(output_file.read_text())
+        assert "repository_ratings" in written["summary"]
 
 
 # ---------------------------------------------------------------------------
@@ -962,3 +935,119 @@ class TestHandlerProd:
         with patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=True):
             with pytest.raises(ValueError, match="required in prod when using run_id"):
                 self.module.handler(event, None)
+
+
+# ---------------------------------------------------------------------------
+# Scorecard rating logic
+# ---------------------------------------------------------------------------
+
+
+class TestScorecardRating:
+    scorecard = importlib.import_module("utils.scorecard")
+
+    CRITERIA = [
+        {
+            "name": "gold",
+            "min_compliance": 90.0,
+            "required_checks": ["readme", "codeowners"],
+        },
+        {
+            "name": "silver",
+            "min_compliance": 70.0,
+            "required_checks": ["readme"],
+        },
+        {
+            "name": "bronze",
+            "min_compliance": 50.0,
+            "required_checks": [],
+        },
+    ]
+
+    def test_compliance_percentage_drives_rating(self):
+        """A repository that meets the compliance threshold receives the matching rating."""
+        checks = {
+            "readme": {"result": "pass"},
+            "codeowners": {"result": "pass"},
+            "license": {"result": "pass"},
+            "dependabot": {"result": "pass"},
+            "gitignore": {"result": "pass"},
+            "pirr": {"result": "pass"},
+            "security": {"result": "pass"},
+            "external_pr": {"result": "pass"},
+            "inactivity": {"result": "pass"},
+            "access": {"result": "pass"},
+        }
+        # 10/10 = 100% -> exceeds gold threshold of 90%
+        assert (
+            self.scorecard.calculate_repository_rating(checks, self.CRITERIA) == "gold"
+        )
+
+    def test_required_check_gates_higher_rating(self):
+        """Failing a required check blocks the rating even if the percentage qualifies."""
+        checks = {
+            "readme": {"result": "pass"},
+            "codeowners": {"result": "fail"},  # required for gold
+            "check_c": {"result": "pass"},
+            "check_d": {"result": "pass"},
+            "check_e": {"result": "pass"},
+            "check_f": {"result": "pass"},
+            "check_g": {"result": "pass"},
+            "check_h": {"result": "pass"},
+            "check_i": {"result": "pass"},
+            "check_j": {"result": "pass"},
+        }
+        # 9/10 = 90% meets gold threshold but codeowners fails -> drops to silver
+        assert (
+            self.scorecard.calculate_repository_rating(checks, self.CRITERIA)
+            == "silver"
+        )
+
+    def test_highest_matching_rating_wins(self):
+        """When a repository meets multiple thresholds, the highest is assigned."""
+        checks = {
+            "readme": {"result": "pass"},
+            "codeowners": {"result": "pass"},
+            "check_c": {"result": "pass"},
+            "check_d": {"result": "pass"},
+            "check_e": {"result": "pass"},
+            "check_f": {"result": "pass"},
+            "check_g": {"result": "pass"},
+            "check_h": {"result": "pass"},
+            "check_i": {"result": "pass"},
+            "check_j": {"result": "pass"},
+        }
+        # 10/10 = 100%, required checks pass -> gold not bronze
+        rating = self.scorecard.calculate_repository_rating(checks, self.CRITERIA)
+        assert rating == "gold"
+        assert rating != "bronze"
+
+    def test_unrated_when_below_lowest_threshold(self):
+        """A repository below every threshold receives unrated."""
+        checks = {
+            "check_a": {"result": "pass"},
+            "check_b": {"result": "fail"},
+            "check_c": {"result": "fail"},
+            "check_d": {"result": "fail"},
+        }
+        # 1/4 = 25% -> below bronze threshold of 50%
+        assert (
+            self.scorecard.calculate_repository_rating(checks, self.CRITERIA)
+            == "unrated"
+        )
+
+    def test_unrated_when_no_criteria_defined(self):
+        """With no criteria configured, all repositories are unrated."""
+        checks = {"readme": {"result": "pass"}}
+        assert self.scorecard.calculate_repository_rating(checks, []) == "unrated"
+
+    def test_required_checks_missing_from_results_treated_as_fail(self):
+        """A required check absent from repository results blocks ratings that need it."""
+        checks = {
+            "codeowners": {"result": "pass"},
+            # readme absent - required for gold and silver
+        }
+        # 100% compliance (1/1) but readme missing -> gold and silver blocked, bronze awarded
+        assert (
+            self.scorecard.calculate_repository_rating(checks, self.CRITERIA)
+            == "bronze"
+        )

@@ -1,6 +1,6 @@
 # Repository Scorecards
 
-Repository scorecards provide a simple Gold, Silver, Bronze, or unrated status for each repository in an audit run. The score is derived from the repository check results that are already collected by the workflow.
+Repository scorecards provide a simple Platinum, Gold, Silver, Bronze, or unrated status for each repository in an audit run. The score is derived from the repository check results that are already collected by the workflow.
 
 ## Purpose
 
@@ -13,7 +13,7 @@ A repository rating is based on:
 
 A repository only receives a rating if it meets both conditions for that level. Any repositories that do not meet the minimum requirements for any rating are marked as `unrated`.
 
-Providing a Bronze, Silver, or Gold rating allows for a simple summary of repository compliance without requiring the reader to understand the underlying checks.
+Providing a Platinum, Gold, Silver, or Bronze rating allows for a simple summary of repository compliance without requiring the reader to understand the underlying checks.
 It can also help teams prioritise remediation work by focusing on the repositories with a lower rating.
 
 ## Rating Rules
@@ -29,34 +29,16 @@ Example:
 
 ```json
 {
-  "gold": {
+  "<rating_name>": {
     "min_compliance": 90,
     "required_checks": [
-      "codeowners",
-      "dependabot",
-      "readme",
-      "repository_access"
-    ]
-  },
-  "silver": {
-    "min_compliance": 70,
-    "required_checks": [
-      "readme",
-      "license"
-    ]
-  },
-  "bronze": {
-    "min_compliance": 50,
-    "required_checks": [
-      "readme"
+      "<check_name>"
     ]
   }
 }
 ```
 
-The ratings are evaluated from highest to lowest threshold.
-
-If a repository does not meet any configured rating, it is marked as `unrated`.
+Any number of ratings can be defined. Ratings are evaluated from highest `min_compliance` to lowest.
 
 ## How Ratings Are Calculated
 

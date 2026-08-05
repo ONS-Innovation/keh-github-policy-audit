@@ -1,4 +1,14 @@
 {
+  "platinum": {
+    "min_compliance": 100,
+    "required_checks": [
+      "codeowners",
+      "dependabot",
+      "readme",
+      "repository_access",
+      "license"
+    ]
+  },
   "gold": {
     "min_compliance": 90,
     "required_checks": [
