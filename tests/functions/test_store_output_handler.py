@@ -99,7 +99,7 @@ class TestNormaliseRepositoryChecks:
             None,
             ["not-a-dict", {"repository_name": "repo-a", "checks": []}],
         )
-        assert result == {"repo-a": {"is_compliant": True}}
+        assert result == {"repo-a": {"checks": {}, "is_compliant": True}}
 
     def test_skips_repository_result_with_missing_name(self):
         """Entries without a repository_name should be silently skipped."""
@@ -125,7 +125,7 @@ class TestNormaliseRepositoryChecks:
         )
         assert result == {
             "repo-a": {
-                "readme": {"check_name": "readme", "result": "pass"},
+                "checks": {"readme": {"result": "pass"}},
                 "is_compliant": True,
             }
         }
@@ -142,7 +142,7 @@ class TestNormaliseTeamChecks:
         )
         assert result == {
             "team-b": {
-                "team_maintainer": {"check_name": "team_maintainer", "result": "pass"},
+                "checks": {"team_maintainer": {"result": "pass"}},
                 "is_compliant": True,
             }
         }
@@ -514,33 +514,32 @@ class TestHandlerLocal:
 
         assert written["repositories"] == {
             "repo-a": {
-                "codeowners": {"check_name": "codeowners", "result": "pass"},
-                "readme": {"check_name": "readme", "result": "fail"},
+                "checks": {
+                    "codeowners": {"result": "pass"},
+                    "readme": {"result": "fail"},
+                },
                 "is_compliant": False,
                 "rating": "unrated",
             },
             "repo-b": {
-                "codeowners": {"check_name": "codeowners", "result": "pass"},
+                "checks": {"codeowners": {"result": "pass"}},
                 "is_compliant": True,
                 "rating": "unrated",
             },
         }
         assert written["teams"] == {
             "team-a": {
-                "team_maintainer": {"check_name": "team_maintainer", "result": "pass"},
+                "checks": {"team_maintainer": {"result": "pass"}},
                 "is_compliant": True,
             },
             "team-b": {
-                "team_maintainer": {"check_name": "team_maintainer", "result": "fail"},
+                "checks": {"team_maintainer": {"result": "fail"}},
                 "is_compliant": False,
             },
         }
         assert written["organisation_checks"] == {
-            "dependabot_slo": {"check_name": "dependabot_slo", "result": "pass"},
-            "secret_scanning_slo": {
-                "check_name": "secret_scanning_slo",
-                "result": "fail",
-            },
+            "dependabot_slo": {"result": "pass"},
+            "secret_scanning_slo": {"result": "fail"},
         }
         assert written["summary"]["total_repositories"] == 2
         assert written["summary"]["compliant_repositories"] == 1
@@ -599,6 +598,36 @@ class TestHandlerLocal:
 
         assert result["status"] == "success"
         assert result["environment"] == "local"
+
+    def test_non_dict_checks_value_skipped_in_rating_and_summary_loops(self):
+        """A repository entry with a non-dict checks value falls back to empty in the rating loop
+        and is excluded from the summary aggregation loop."""
+        # _normalise_repository_checks always produces a dict checks value, so we inject
+        # a non-dict entry directly to exercise the defensive branches on lines 283 and 319.
+        with (
+            patch.dict(os.environ, {"ENVIRONMENT": "local"}),
+            patch.object(
+                self.module,
+                "_normalise_repository_checks",
+                return_value={
+                    "repo-a": {
+                        "checks": {"readme": {"result": "pass"}},
+                        "is_compliant": True,
+                    },
+                    "repo-b": {"checks": "not-a-dict", "is_compliant": False},
+                },
+            ),
+        ):
+            result = self.module.handler({"owner": "test-org"}, None)
+
+        output_file = self.tmp_path / result["local_output_path"]
+        written = json.loads(output_file.read_text())
+        # repo-b has a non-dict checks value; its check should not appear in the summary
+        check_summary = written["summary"]["repository_checks"]
+        assert check_summary["readme"]["total"] == 1
+        assert check_summary["readme"]["compliant"] == 1
+        # repo-b should still have a rating (calculated with empty checks fallback)
+        assert "rating" in written["repositories"]["repo-b"]
 
 
 # ---------------------------------------------------------------------------
@@ -682,10 +711,10 @@ class TestHandlerProd:
 
         assert result == {
             "repo-a": {
-                "readme": {"check_name": "readme", "result": "pass"},
+                "checks": {"readme": {"result": "pass"}},
                 "is_compliant": True,
             },
-            "repo-b": {"is_compliant": False},
+            "repo-b": {"checks": {}, "is_compliant": False},
         }
 
     def test_loads_repository_results_from_run_prefix(self) -> None:

@@ -60,6 +60,7 @@ The final output includes:
 
 - `summary.repository_ratings`: a count of repositories per rating
 - `repositories.<repository_name>.rating`: the repository rating
+- `repositories.<repository_name>.checks`: check outputs keyed by check name
 - `scorecard_criteria`: the criteria object used to calculate the ratings
 
 Example output excerpt:
@@ -68,29 +69,28 @@ Example output excerpt:
 {
   "repositories": {
     "repo-a": {
-      "codeowners": {
-        "check_name": "codeowners",
-        "result": "pass"
-      },
-      "readme": {
-        "check_name": "readme",
-        "result": "fail"
+      "checks": {
+        "codeowners": {
+          "result": "pass"
+        },
+        "readme": {
+          "result": "fail"
+        }
       },
       "is_compliant": false,
       "rating": "unrated"
     },
     "repo-b": {
-      "codeowners": {
-        "check_name": "codeowners",
-        "result": "pass"
-      },
-      "readme": {
-        "check_name": "readme",
-        "result": "pass"
-      },
-      "license": {
-        "check_name": "license",
-        "result": "pass"
+      "checks": {
+        "codeowners": {
+          "result": "pass"
+        },
+        "readme": {
+          "result": "pass"
+        },
+        "license": {
+          "result": "pass"
+        }
       },
       "is_compliant": true,
       "rating": "gold"

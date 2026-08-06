@@ -45,18 +45,27 @@ def _calculate_entity_compliance(entity_checks: dict) -> bool:
     )
 
 
-def _normalise_checks_with_compliance(entity_checks) -> dict:
-    """Return checks dictionary with a computed is_compliant field."""
-    if not isinstance(entity_checks, dict):
-        return {"is_compliant": False}
+def _normalise_repository_entry(repository_data) -> dict[str, dict | bool]:
+    """Return repository entry with nested checks and computed compliance."""
+    if not isinstance(repository_data, dict):
+        return {"checks": {}, "is_compliant": False}
 
-    normalised = {
-        check_name: check_output
-        for check_name, check_output in entity_checks.items()
-        if check_name != "is_compliant"
+    checks_source = repository_data.get("checks")
+    if not isinstance(checks_source, dict):
+        checks_source = repository_data
+
+    checks = {
+        check_name: {k: v for k, v in check_output.items() if k != "check_name"}
+        if isinstance(check_output, dict)
+        else check_output
+        for check_name, check_output in checks_source.items()
+        if check_name not in {"is_compliant", "rating"}
     }
-    normalised["is_compliant"] = _calculate_entity_compliance(normalised)
-    return normalised
+
+    return {
+        "checks": checks,
+        "is_compliant": _calculate_entity_compliance(checks),
+    }
 
 
 def _normalise_organisation_checks(
@@ -77,15 +86,15 @@ def _normalise_organisation_checks(
             continue
         check_name = result.get("check_name")
         if isinstance(check_name, str) and check_name:
-            checks[check_name] = result
+            checks[check_name] = {k: v for k, v in result.items() if k != "check_name"}
     return checks
 
 
 def _normalise_repository_checks(repositories, repository_results) -> dict[str, dict]:
-    """Return repository checks as {repository_name: {check_name: check_output}}."""
+    """Return repositories keyed by name with nested check results."""
     if isinstance(repositories, dict):
         return {
-            repository_name: _normalise_checks_with_compliance(repository_checks)
+            repository_name: _normalise_repository_entry(repository_checks)
             for repository_name, repository_checks in repositories.items()
         }
     if repositories is not None:
@@ -111,8 +120,8 @@ def _normalise_repository_checks(repositories, repository_results) -> dict[str, 
             if isinstance(check_name, str) and check_name:
                 checks_by_name[check_name] = check_result
 
-        repository_checks[repository_name] = _normalise_checks_with_compliance(
-            checks_by_name
+        repository_checks[repository_name] = _normalise_repository_entry(
+            {"checks": checks_by_name}
         )
 
     return repository_checks
@@ -159,20 +168,20 @@ def _load_repository_checks_from_s3(
 
         checks_payload = payload.get("checks")
         if isinstance(checks_payload, dict):
-            repository_checks[repository_name] = _normalise_checks_with_compliance(
-                checks_payload
+            repository_checks[repository_name] = _normalise_repository_entry(
+                {"checks": checks_payload}
             )
         else:
-            repository_checks[repository_name] = {"is_compliant": False}
+            repository_checks[repository_name] = {"checks": {}, "is_compliant": False}
 
     return repository_checks
 
 
 def _normalise_team_checks(teams, team_results) -> dict[str, dict]:
-    """Return team checks as {team_slug_or_name: {check_name: check_output}}."""
+    """Return teams keyed by slug or name with nested check results."""
     if isinstance(teams, dict):
         return {
-            team_name: _normalise_checks_with_compliance(team_checks)
+            team_name: _normalise_repository_entry(team_checks)
             for team_name, team_checks in teams.items()
         }
     if teams is None:
@@ -203,10 +212,12 @@ def _normalise_team_checks(teams, team_results) -> dict[str, dict]:
         if not isinstance(check_name, str) or not check_name:
             continue
 
-        checks_by_team.setdefault(team_key, {})[check_name] = team_result
+        checks_by_team.setdefault(team_key, {})[check_name] = {
+            k: v for k, v in team_result.items() if k != "check_name"
+        }
 
     for team_key, team_checks in list(checks_by_team.items()):
-        checks_by_team[team_key] = _normalise_checks_with_compliance(team_checks)
+        checks_by_team[team_key] = _normalise_repository_entry({"checks": team_checks})
 
     return checks_by_team
 
@@ -257,7 +268,10 @@ def handler(event, context):
     for repository_name, repository_checks in repositories.items():
         if not isinstance(repository_checks, dict):
             continue
-        rating = calculate_repository_rating(repository_checks, scorecard_ratings)
+        checks = repository_checks.get("checks")
+        if not isinstance(checks, dict):
+            checks = {}
+        rating = calculate_repository_rating(checks, scorecard_ratings)
         repositories[repository_name]["rating"] = rating
         scorecard_status_counts[rating] = scorecard_status_counts.get(rating, 0) + 1
 
@@ -287,10 +301,13 @@ def handler(event, context):
         "repository_ratings": scorecard_status_counts,
     }
 
-    for _, checks in repositories.items():
+    for _, repository_entry in repositories.items():
+        if not isinstance(repository_entry, dict):
+            continue
+        checks = repository_entry.get("checks", {})
+        if not isinstance(checks, dict):
+            continue
         for check_name, check_output in checks.items():
-            if check_name == "is_compliant":
-                continue
             if check_name not in summary["repository_checks"]:
                 summary["repository_checks"][check_name] = {"total": 0, "compliant": 0}
             summary["repository_checks"][check_name]["total"] += 1
@@ -302,10 +319,8 @@ def handler(event, context):
             "compliant": _is_pass(check_output)
         }
 
-    for _, checks in teams.items():
-        for check_name, check_output in checks.items():
-            if check_name == "is_compliant":
-                continue
+    for _, team_entry in teams.items():
+        for check_name, check_output in team_entry.get("checks", {}).items():
             if check_name not in summary["team_checks"]:
                 summary["team_checks"][check_name] = {"total": 0, "compliant": 0}
             summary["team_checks"][check_name]["total"] += 1
