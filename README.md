@@ -93,7 +93,7 @@ Output storage:
 Scorecard criteria:
 
 - `local`: criteria loaded from `config/scorecard_criteria.json`.
-- `prod`: criteria loaded from from `s3://<S3_BUCKET_NAME>/config/scorecard_criteria.json`.
+- `prod`: criteria loaded from `s3://<S3_BUCKET_NAME>/config/scorecard_criteria.json`.
 
 `LOG_PRETTY_JSON` controls the format of structured application log messages:
 
