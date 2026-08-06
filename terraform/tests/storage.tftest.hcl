@@ -164,3 +164,20 @@ run "scorecard_criteria_object_seeded" {
     error_message = "Scorecard criteria object should have application/json content type."
   }
 }
+
+run "dependency_layer_object_seeded" {
+  assert {
+    condition     = local.dependency_layer_s3_key == "layers/dependency-layer.zip"
+    error_message = "Dependency layer S3 key should be layers/dependency-layer.zip."
+  }
+
+  assert {
+    condition     = aws_s3_object.dependency_layer.bucket == aws_s3_bucket.audit_output.id
+    error_message = "Dependency layer object should be stored in the audit output bucket."
+  }
+
+  assert {
+    condition     = aws_s3_object.dependency_layer.key == "layers/dependency-layer.zip"
+    error_message = "Dependency layer object key is incorrect."
+  }
+}

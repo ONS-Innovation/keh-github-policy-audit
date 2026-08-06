@@ -3,6 +3,7 @@ locals {
   lambda_name_prefix      = "${var.env_name}-github-policy-audit"
   audit_output_bucket     = "${var.env_name}-github-policy-audit"
   scorecard_config_s3_key = "config/scorecard_criteria.json"
+  dependency_layer_s3_key = "layers/dependency-layer.zip"
 
   lambda_definitions = {
     list_repositories = {
