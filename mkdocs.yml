@@ -6,6 +6,7 @@ repo_name: GitHub Policy Audit
 nav:
   - Home: index.md
   - Documentation: documentation.md
+  - Repository Scorecards: repository-scorecards.md
   - Logging Patterns: logging-patterns.md
   - Lambda Structure: lambda-structure.md
   - Step Function Flow: step-function-flow.md

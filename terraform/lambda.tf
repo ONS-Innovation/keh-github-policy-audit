@@ -85,8 +85,9 @@ resource "aws_iam_role_policy" "lambda_permissions" {
 }
 
 resource "aws_lambda_layer_version" "dependencies" {
-  filename            = "${path.module}/../build/dependency-layer.zip"
-  source_code_hash    = filebase64sha256("${path.module}/../build/dependency-layer.zip")
+  s3_bucket           = aws_s3_bucket.audit_output.id
+  s3_key              = aws_s3_object.dependency_layer.key
+  s3_object_version   = aws_s3_object.dependency_layer.version_id
   layer_name          = "${local.lambda_name_prefix}-dependencies"
   compatible_runtimes = [var.lambda_runtime]
 }

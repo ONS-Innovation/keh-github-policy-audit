@@ -16,6 +16,35 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+def _validate_repository_list(payload: object) -> list[dict[str, object]]:
+    """Validate paginated payload is a list of repository-like objects."""
+    if not isinstance(payload, list):
+        if isinstance(payload, dict):
+            payload_keys = ", ".join(sorted(str(key) for key in payload.keys()))
+            raise TypeError(
+                "Expected repositories payload to be a list of objects, "
+                f"got dict with keys: {payload_keys}.{' Error: ' + payload['error'] if 'error' in payload.keys() else ''}"
+            )
+
+        raise TypeError(
+            "Expected repositories payload to be a list of objects, "
+            f"got {type(payload).__name__}"
+        )
+
+    invalid_item_index = next(
+        (index for index, item in enumerate(payload) if not isinstance(item, dict)),
+        None,
+    )
+    if invalid_item_index is not None:
+        invalid_item = payload[invalid_item_index]
+        raise TypeError(
+            "Expected repositories payload to contain only objects, "
+            f"item at index {invalid_item_index} is {type(invalid_item).__name__}"
+        )
+
+    return payload
+
+
 def _slim_security_and_analysis(security_and_analysis: dict | None) -> dict | None:
     """Return security_and_analysis with each feature reduced to {"status": ...}.
 
@@ -36,9 +65,10 @@ def _slim_security_and_analysis(security_and_analysis: dict | None) -> dict | No
 @github_handler
 def handler(event, context, client):
     """Step Function invokes with {"owner": "...", "run_id": "...", "output_bucket": "..."}."""
-    repositories = get_paginated_list(
+    repositories_payload = get_paginated_list(
         client, f"/orgs/{event['owner']}/repos?per_page=100", "repositories"
     )
+    repositories = _validate_repository_list(repositories_payload)
     repository_summaries = [
         {
             "name": repo["name"],

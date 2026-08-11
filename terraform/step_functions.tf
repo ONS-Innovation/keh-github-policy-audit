@@ -115,6 +115,19 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
               list_repositories = {
                 Type     = "Task"
                 Resource = aws_lambda_function.audit["list_repositories"].arn
+                Retry = [
+                  {
+                    ErrorEquals = [
+                      "Lambda.ServiceException",
+                      "Lambda.AWSLambdaException",
+                      "Lambda.SdkClientException",
+                      "States.TaskFailed",
+                    ]
+                    IntervalSeconds = 2
+                    BackoffRate     = 2.0
+                    MaxAttempts     = 3
+                  }
+                ]
                 Parameters = {
                   "owner.$"         = "$.initial_input.owner"
                   "run_id.$"        = "$.initial_input.run_id"
@@ -130,6 +143,19 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
               list_teams = {
                 Type     = "Task"
                 Resource = aws_lambda_function.audit["list_teams"].arn
+                Retry = [
+                  {
+                    ErrorEquals = [
+                      "Lambda.ServiceException",
+                      "Lambda.AWSLambdaException",
+                      "Lambda.SdkClientException",
+                      "States.TaskFailed",
+                    ]
+                    IntervalSeconds = 2
+                    BackoffRate     = 2.0
+                    MaxAttempts     = 3
+                  }
+                ]
                 Parameters = {
                   "owner.$" = "$.initial_input.owner"
                 }
