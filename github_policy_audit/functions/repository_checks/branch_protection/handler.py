@@ -22,11 +22,11 @@ def handler(event, context, client):
     branch_name = None
 
     for branch in branches:
-        if branch["name"] == "master":
-            branch_name = "master"
-            break
-        elif branch["name"] == "main":
+        if branch["name"] == "main":
             branch_name = "main"
+            break
+        elif branch["name"] == "master":
+            branch_name = "master"
             break
         else:
             continue
