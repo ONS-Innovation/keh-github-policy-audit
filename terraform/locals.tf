@@ -101,5 +101,6 @@ locals {
     "readme",
     "repository_access",
     "security_scanning",
+    "branch_protection"
   ]
 }
