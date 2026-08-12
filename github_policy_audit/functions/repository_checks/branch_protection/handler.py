@@ -13,7 +13,7 @@ logger.setLevel(logging.INFO)
 
 @github_handler
 def handler(event, context, client):
-    """Step Function invokes with {"owner": "...", "repository_name": "...", "branch_name": "..."}."""
+    """Step Function invokes with {"owner": "...", "repository_name": "..."}."""
 
     branches = client.make_request(
         "GET", f"/repos/{event['owner']}/{event['repository_name']}/branches"
