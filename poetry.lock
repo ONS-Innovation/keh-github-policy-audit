@@ -1207,8 +1207,8 @@ requests = ">=2.33.1,<3.0.0"
 
 [package.source]
 type = "git"
-url = "https://github.com/ONS-Innovation/keh-policy-methods-library"
-reference = "v1.0.0"
+url = "https://github.com/ONS-Innovation/keh-policy-methods-library.git"
+reference = "HEAD"
 resolved_reference = "e4fc0371278fae5654880efcfce3d4f54bf44122"
 
 [[package]]
@@ -1605,4 +1605,4 @@ watchmedo = ["PyYAML (>=3.10)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12"
-content-hash = "3c544d99ccab2a9fb0f1aedb21b1140064fb7159960c5e9eeb2754359e07f899"
+content-hash = "f81d2bb2713f7e494e4665c9cf13686be66f12c488736e163bb411e5336c00b7"
