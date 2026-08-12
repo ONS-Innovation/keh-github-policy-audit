@@ -15,6 +15,14 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
+def _normalise_environment(raw_environment: str | None) -> str:
+    """Normalise supported environments."""
+    environment = (raw_environment or "local").lower()
+    if environment in {"local", "prod"}:
+        return environment
+    raise ValueError("ENVIRONMENT must be either 'local' or 'prod'")
+
+
 def _normalise_checks(checks: Any) -> dict[str, dict]:
     """Return checks as a dictionary keyed by check_name."""
     if isinstance(checks, dict):
@@ -44,9 +52,7 @@ def handler(event, context):
 
     checks = _normalise_checks(event.get("checks", []))
 
-    environment = os.environ.get("ENVIRONMENT", "local").lower()
-    if environment not in {"local", "prod"}:
-        raise ValueError("ENVIRONMENT must be either 'local' or 'prod'")
+    environment = _normalise_environment(os.environ.get("ENVIRONMENT", "local"))
 
     bucket_name = event.get("output_bucket") or os.environ.get("S3_BUCKET_NAME")
     key = f"audit-runs/{owner}/{run_id}/repositories/{repository_name}.json"

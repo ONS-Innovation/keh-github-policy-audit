@@ -187,6 +187,16 @@ run "lambda_layer_name" {
     condition     = contains(aws_lambda_layer_version.dependencies.compatible_runtimes, "python3.12")
     error_message = "Dependency layer should be compatible with python3.12."
   }
+
+  assert {
+    condition     = aws_lambda_layer_version.dependencies.s3_bucket == aws_s3_bucket.audit_output.id
+    error_message = "Dependency layer should be sourced from the audit output S3 bucket."
+  }
+
+  assert {
+    condition     = aws_lambda_layer_version.dependencies.s3_key == local.dependency_layer_s3_key
+    error_message = "Dependency layer S3 key should match the local dependency_layer_s3_key."
+  }
 }
 
 run "lambda_network_and_observability" {

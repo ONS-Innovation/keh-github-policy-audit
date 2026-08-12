@@ -331,13 +331,30 @@ The summary file structure:
 {
     "owner": "ONS-Innovation",
     "repositories": {
-        "repo-a": { "readme": { "check_name": "readme", "result": "pass", "message": "..." } }
+        "repo-a": {
+            "checks": {
+                "readme": {
+                    "result": "pass",
+                    "message": "..."
+                }
+            },
+            "is_compliant": true,
+            "rating": "unrated"
+        }
     },
     "organisation_checks": {
-        "dependabot_slo": { "check_name": "dependabot_slo", "result": "pass", "message": "..." }
+        "dependabot_slo": { "result": "pass", "message": "..." }
     },
     "teams": {
-        "team-a": { "team_maintainer": { "check_name": "team_maintainer", "result": "pass", "message": "..." } }
+        "team-a": {
+            "checks": {
+                "team_maintainer": {
+                    "result": "pass",
+                    "message": "..."
+                }
+            },
+            "is_compliant": true
+        }
     },
     "summary": {
         "total_repositories": 1,

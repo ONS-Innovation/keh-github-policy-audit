@@ -142,3 +142,42 @@ run "bucket_versioning_enabled" {
     error_message = "Audit output bucket versioning should be enabled."
   }
 }
+
+run "scorecard_criteria_object_seeded" {
+  assert {
+    condition     = local.scorecard_config_s3_key == "config/scorecard_criteria.json"
+    error_message = "Scorecard criteria S3 key should be config/scorecard_criteria.json."
+  }
+
+  assert {
+    condition     = aws_s3_object.scorecard_criteria.bucket == aws_s3_bucket.audit_output.id
+    error_message = "Scorecard criteria object should be stored in the audit output bucket."
+  }
+
+  assert {
+    condition     = aws_s3_object.scorecard_criteria.key == "config/scorecard_criteria.json"
+    error_message = "Scorecard criteria object key is incorrect."
+  }
+
+  assert {
+    condition     = aws_s3_object.scorecard_criteria.content_type == "application/json"
+    error_message = "Scorecard criteria object should have application/json content type."
+  }
+}
+
+run "dependency_layer_object_seeded" {
+  assert {
+    condition     = local.dependency_layer_s3_key == "layers/dependency-layer.zip"
+    error_message = "Dependency layer S3 key should be layers/dependency-layer.zip."
+  }
+
+  assert {
+    condition     = aws_s3_object.dependency_layer.bucket == aws_s3_bucket.audit_output.id
+    error_message = "Dependency layer object should be stored in the audit output bucket."
+  }
+
+  assert {
+    condition     = aws_s3_object.dependency_layer.key == "layers/dependency-layer.zip"
+    error_message = "Dependency layer object key is incorrect."
+  }
+}

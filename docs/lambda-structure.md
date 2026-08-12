@@ -134,6 +134,37 @@ This is important because many of these handlers run inside Step Functions paral
 
 If a library function returns large or verbose fields, trim them in the handler before returning. `team_maintainer` is one example where extra detail is removed to reduce payload size.
 
+## Dependency Layer
+
+All Lambda functions share a single dependency layer (`aws_lambda_layer_version.dependencies`) that packages third-party Python packages separately from handler code. This keeps individual function zips small and avoids duplicating dependencies.
+
+### S3-backed publication
+
+The layer zip (`build/dependency-layer.zip`, ~21 MB) is uploaded to the audit output S3 bucket before `PublishLayerVersion` is called. Terraform manages this as `aws_s3_object.dependency_layer` at the key `layers/dependency-layer.zip`.
+
+The `aws_lambda_layer_version` resource references the S3 object directly:
+
+```hcl
+resource "aws_lambda_layer_version" "dependencies" {
+  s3_bucket         = aws_s3_bucket.audit_output.id
+  s3_key            = aws_s3_object.dependency_layer.key
+  s3_object_version = aws_s3_object.dependency_layer.version_id
+  ...
+}
+```
+
+This avoids streaming the zip from the local machine during `PublishLayerVersion`, which would otherwise hit the AWS SigV4 5-minute request signing window on slow or interrupted connections.
+
+### Update behaviour
+
+Because the audit output bucket has versioning enabled, each `terraform apply` that produces a new layer zip:
+
+1. Uploads the new zip to the same S3 key, creating a new S3 object version.
+2. The changed `s3_object_version` causes Terraform to publish a new (immutable) Lambda layer version.
+3. All `aws_lambda_function.audit` resources are updated to reference the new layer ARN.
+
+If the zip content has not changed (same `etag`), the S3 object and layer version are both no-ops.
+
 ## Practical Benefits
 
 This structure gives the project a few concrete advantages:

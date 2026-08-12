@@ -99,7 +99,7 @@ class TestNormaliseRepositoryChecks:
             None,
             ["not-a-dict", {"repository_name": "repo-a", "checks": []}],
         )
-        assert result == {"repo-a": {"is_compliant": True}}
+        assert result == {"repo-a": {"checks": {}, "is_compliant": True}}
 
     def test_skips_repository_result_with_missing_name(self):
         """Entries without a repository_name should be silently skipped."""
@@ -125,7 +125,7 @@ class TestNormaliseRepositoryChecks:
         )
         assert result == {
             "repo-a": {
-                "readme": {"check_name": "readme", "result": "pass"},
+                "checks": {"readme": {"result": "pass"}},
                 "is_compliant": True,
             }
         }
@@ -142,7 +142,7 @@ class TestNormaliseTeamChecks:
         )
         assert result == {
             "team-b": {
-                "team_maintainer": {"check_name": "team_maintainer", "result": "pass"},
+                "checks": {"team_maintainer": {"result": "pass"}},
                 "is_compliant": True,
             }
         }
@@ -169,8 +169,14 @@ class TestHandlerLocal:
         self.tmp_path = Path(self._tmp_dir.name)
         self._original_cwd = os.getcwd()
         os.chdir(self.tmp_path)
+        self._scorecard_patcher = patch(
+            "functions.store_output.handler.load_scorecard_criteria",
+            return_value=[],
+        )
+        self._scorecard_patcher.start()
 
     def teardown_method(self):
+        self._scorecard_patcher.stop()
         os.chdir(self._original_cwd)
         self._tmp_dir.cleanup()
 
@@ -508,36 +514,120 @@ class TestHandlerLocal:
 
         assert written["repositories"] == {
             "repo-a": {
-                "codeowners": {"check_name": "codeowners", "result": "pass"},
-                "readme": {"check_name": "readme", "result": "fail"},
+                "checks": {
+                    "codeowners": {"result": "pass"},
+                    "readme": {"result": "fail"},
+                },
                 "is_compliant": False,
+                "rating": "unrated",
             },
             "repo-b": {
-                "codeowners": {"check_name": "codeowners", "result": "pass"},
+                "checks": {"codeowners": {"result": "pass"}},
                 "is_compliant": True,
+                "rating": "unrated",
             },
         }
         assert written["teams"] == {
             "team-a": {
-                "team_maintainer": {"check_name": "team_maintainer", "result": "pass"},
+                "checks": {"team_maintainer": {"result": "pass"}},
                 "is_compliant": True,
             },
             "team-b": {
-                "team_maintainer": {"check_name": "team_maintainer", "result": "fail"},
+                "checks": {"team_maintainer": {"result": "fail"}},
                 "is_compliant": False,
             },
         }
         assert written["organisation_checks"] == {
-            "dependabot_slo": {"check_name": "dependabot_slo", "result": "pass"},
-            "secret_scanning_slo": {
-                "check_name": "secret_scanning_slo",
-                "result": "fail",
-            },
+            "dependabot_slo": {"result": "pass"},
+            "secret_scanning_slo": {"result": "fail"},
         }
         assert written["summary"]["total_repositories"] == 2
         assert written["summary"]["compliant_repositories"] == 1
         assert written["summary"]["total_teams"] == 2
         assert written["summary"]["compliant_teams"] == 1
+
+    def test_repository_rating_added_to_output(self):
+        """Each repository in the output should include a rating key."""
+        event = {
+            "owner": "test-org",
+            "repositories": {"repo-a": {"readme": {"result": "pass"}}},
+        }
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+            result = self.module.handler(event, None)
+
+        output_file = self.tmp_path / result["local_output_path"]
+        written = json.loads(output_file.read_text())
+        assert "rating" in written["repositories"]["repo-a"]
+
+    def test_summary_includes_repository_ratings_counts(self):
+        """Summary should include a repository_ratings key with per-rating counts."""
+        event = {
+            "owner": "test-org",
+            "repositories": {"repo-a": {"readme": {"result": "pass"}}},
+        }
+
+        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
+            result = self.module.handler(event, None)
+
+        output_file = self.tmp_path / result["local_output_path"]
+        written = json.loads(output_file.read_text())
+        assert "repository_ratings" in written["summary"]
+
+    def test_skips_non_dict_repository_checks_in_rating_loop(self):
+        """Non-dict values injected into the repositories map are silently skipped in the rating loop."""
+
+        # Must fail isinstance(..., dict) to trigger the continue on line 259,
+        # but must still expose .items() so the summary aggregation loop doesn't crash.
+        class NonDictChecks:
+            def items(self):
+                return []
+
+        # json.dump is patched to avoid serialization failure on the non-dict value;
+        # we assert only on the returned result, not the written file.
+        with (
+            patch.dict(os.environ, {"ENVIRONMENT": "local"}),
+            patch.object(
+                self.module,
+                "_normalise_repository_checks",
+                return_value={"repo-a": NonDictChecks()},
+            ),
+            patch.object(self.module.json, "dump"),
+        ):
+            result = self.module.handler({"owner": "test-org"}, None)
+
+        assert result["status"] == "success"
+        assert result["environment"] == "local"
+
+    def test_non_dict_checks_value_skipped_in_rating_and_summary_loops(self):
+        """A repository entry with a non-dict checks value falls back to empty in the rating loop
+        and is excluded from the summary aggregation loop."""
+        # _normalise_repository_checks always produces a dict checks value, so we inject
+        # a non-dict entry directly to exercise the defensive branches on lines 283 and 319.
+        with (
+            patch.dict(os.environ, {"ENVIRONMENT": "local"}),
+            patch.object(
+                self.module,
+                "_normalise_repository_checks",
+                return_value={
+                    "repo-a": {
+                        "checks": {"readme": {"result": "pass"}},
+                        "is_compliant": True,
+                    },
+                    "repo-b": {"checks": "not-a-dict", "is_compliant": False},
+                },
+            ),
+        ):
+            result = self.module.handler({"owner": "test-org"}, None)
+
+        output_file = self.tmp_path / result["local_output_path"]
+        written = json.loads(output_file.read_text())
+        # repo-b has a non-dict checks value; its check should not appear in the summary
+        check_summary = written["summary"]["repository_checks"]
+        assert check_summary["readme"]["total"] == 1
+        assert check_summary["readme"]["compliant"] == 1
+        # repo-b should still have a rating (calculated with empty checks fallback)
+        assert "rating" in written["repositories"]["repo-b"]
 
 
 # ---------------------------------------------------------------------------
@@ -621,10 +711,10 @@ class TestHandlerProd:
 
         assert result == {
             "repo-a": {
-                "readme": {"check_name": "readme", "result": "pass"},
+                "checks": {"readme": {"result": "pass"}},
                 "is_compliant": True,
             },
-            "repo-b": {"is_compliant": False},
+            "repo-b": {"checks": {}, "is_compliant": False},
         }
 
     def test_loads_repository_results_from_run_prefix(self) -> None:
@@ -658,6 +748,26 @@ class TestHandlerProd:
                 return FakePaginator()
 
             def get_object(self, **kwargs):
+                if kwargs["Key"] == "config/scorecard_criteria.json":
+                    return {
+                        "Body": FakeBody(
+                            {
+                                "gold": {
+                                    "min_compliance": 90,
+                                    "required_checks": ["readme"],
+                                },
+                                "silver": {
+                                    "min_compliance": 70,
+                                    "required_checks": ["readme"],
+                                },
+                                "bronze": {
+                                    "min_compliance": 50,
+                                    "required_checks": [],
+                                },
+                            }
+                        )
+                    }
+
                 assert kwargs["Key"].endswith("repo-a.json")
                 return {
                     "Body": FakeBody(
@@ -701,7 +811,36 @@ class TestHandlerProd:
         """In the prod environment the handler should upload the result to S3."""
         captured: dict[str, object] = {}
 
+        class FakeBody:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def read(self):
+                return json.dumps(self.payload)
+
         class FakeS3Client:
+            def get_object(self, **kwargs: object):
+                if kwargs["Key"] == "config/scorecard_criteria.json":
+                    return {
+                        "Body": FakeBody(
+                            {
+                                "gold": {
+                                    "min_compliance": 90,
+                                    "required_checks": [],
+                                },
+                                "silver": {
+                                    "min_compliance": 70,
+                                    "required_checks": [],
+                                },
+                                "bronze": {
+                                    "min_compliance": 50,
+                                    "required_checks": [],
+                                },
+                            }
+                        )
+                    }
+                raise AssertionError(f"Unexpected key: {kwargs['Key']}")
+
             def put_object(self, **kwargs: object) -> None:
                 captured.update(kwargs)
 
@@ -730,6 +869,113 @@ class TestHandlerProd:
         written = json.loads(str(captured["Body"]))
         assert written["owner"] == "test-org"
 
+    def test_loads_scorecard_criteria_from_s3_in_prod(self) -> None:
+        """Prod mode should load scorecard criteria from S3 config key."""
+        captured: dict[str, object] = {}
+
+        class FakeBody:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def read(self):
+                return json.dumps(self.payload)
+
+        class FakeS3Client:
+            def get_object(self, **kwargs):
+                if kwargs["Key"] == "config/scorecard_criteria.json":
+                    return {
+                        "Body": FakeBody(
+                            {
+                                "gold": {
+                                    "min_compliance": 90,
+                                    "required_checks": ["codeowners"],
+                                },
+                                "silver": {
+                                    "min_compliance": 70,
+                                    "required_checks": ["readme"],
+                                },
+                                "bronze": {
+                                    "min_compliance": 50,
+                                    "required_checks": [],
+                                },
+                            }
+                        )
+                    }
+
+                return {
+                    "Body": FakeBody(
+                        {
+                            "repository_name": "repo-a",
+                            "checks": {
+                                "codeowners": {
+                                    "check_name": "codeowners",
+                                    "result": "pass",
+                                },
+                                "readme": {
+                                    "check_name": "readme",
+                                    "result": "pass",
+                                },
+                            },
+                        }
+                    )
+                }
+
+            def get_paginator(self, operation_name):
+                assert operation_name == "list_objects_v2"
+
+                class FakePaginator:
+                    def paginate(self, **kwargs):
+                        del kwargs
+                        return [
+                            {
+                                "Contents": [
+                                    {
+                                        "Key": "audit-runs/test-org/run-123/repositories/repo-a.json"
+                                    }
+                                ]
+                            }
+                        ]
+
+                return FakePaginator()
+
+            def put_object(self, **kwargs):
+                captured.update(kwargs)
+
+        event = {
+            "owner": "test-org",
+            "run_id": "run-123",
+            "output_bucket": "my-audit-bucket",
+        }
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "ENVIRONMENT": "prod",
+                    "S3_BUCKET_NAME": "my-audit-bucket",
+                },
+            ),
+            patch.object(self.module.boto3, "client", return_value=FakeS3Client()),
+        ):
+            self.module.handler(event, None)
+
+        written = json.loads(str(captured["Body"]))
+        assert written["repositories"]["repo-a"]["rating"] == "gold"
+        assert written["scorecard_criteria"] == {
+            "gold": {
+                "min_compliance": 90.0,
+                "required_checks": ["codeowners"],
+            },
+            "silver": {
+                "min_compliance": 70.0,
+                "required_checks": ["readme"],
+            },
+            "bronze": {
+                "min_compliance": 50.0,
+                "required_checks": [],
+            },
+        }
+
     def test_raises_when_s3_bucket_name_missing(self):
         """A missing S3_BUCKET_NAME in prod should raise a ValueError."""
         with patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=False):
@@ -737,9 +983,137 @@ class TestHandlerProd:
             with pytest.raises(ValueError, match="S3_BUCKET_NAME"):
                 self.module.handler({"owner": "test-org"}, None)
 
+    def test_raises_when_bucket_name_missing_at_write_time(self):
+        """Missing bucket_name at the final write step should raise a clear ValueError."""
+        with (
+            patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=True),
+            patch.object(self.module, "load_scorecard_criteria", return_value=[]),
+            patch.object(self.module, "boto3"),
+            pytest.raises(
+                ValueError, match="output_bucket.*environment variable not set"
+            ),
+        ):
+            self.module.handler({"owner": "test-org"}, None)
+
     def test_raises_when_run_id_provided_in_prod_without_bucket(self):
         """Prod run_id aggregation requires an explicit output bucket."""
         event = {"owner": "test-org", "run_id": "run-123"}
         with patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=True):
             with pytest.raises(ValueError, match="required in prod when using run_id"):
                 self.module.handler(event, None)
+
+
+# ---------------------------------------------------------------------------
+# Scorecard rating logic
+# ---------------------------------------------------------------------------
+
+
+class TestScorecardRating:
+    scorecard = importlib.import_module("utils.scorecard")
+
+    CRITERIA = [
+        {
+            "name": "gold",
+            "min_compliance": 90.0,
+            "required_checks": ["readme", "codeowners"],
+        },
+        {
+            "name": "silver",
+            "min_compliance": 70.0,
+            "required_checks": ["readme"],
+        },
+        {
+            "name": "bronze",
+            "min_compliance": 50.0,
+            "required_checks": [],
+        },
+    ]
+
+    def test_compliance_percentage_drives_rating(self):
+        """A repository that meets the compliance threshold receives the matching rating."""
+        checks = {
+            "readme": {"result": "pass"},
+            "codeowners": {"result": "pass"},
+            "license": {"result": "pass"},
+            "dependabot": {"result": "pass"},
+            "gitignore": {"result": "pass"},
+            "pirr": {"result": "pass"},
+            "security": {"result": "pass"},
+            "external_pr": {"result": "pass"},
+            "inactivity": {"result": "pass"},
+            "access": {"result": "pass"},
+        }
+        # 10/10 = 100% -> exceeds gold threshold of 90%
+        assert (
+            self.scorecard.calculate_repository_rating(checks, self.CRITERIA) == "gold"
+        )
+
+    def test_required_check_gates_higher_rating(self):
+        """Failing a required check blocks the rating even if the percentage qualifies."""
+        checks = {
+            "readme": {"result": "pass"},
+            "codeowners": {"result": "fail"},  # required for gold
+            "check_c": {"result": "pass"},
+            "check_d": {"result": "pass"},
+            "check_e": {"result": "pass"},
+            "check_f": {"result": "pass"},
+            "check_g": {"result": "pass"},
+            "check_h": {"result": "pass"},
+            "check_i": {"result": "pass"},
+            "check_j": {"result": "pass"},
+        }
+        # 9/10 = 90% meets gold threshold but codeowners fails -> drops to silver
+        assert (
+            self.scorecard.calculate_repository_rating(checks, self.CRITERIA)
+            == "silver"
+        )
+
+    def test_highest_matching_rating_wins(self):
+        """When a repository meets multiple thresholds, the highest is assigned."""
+        checks = {
+            "readme": {"result": "pass"},
+            "codeowners": {"result": "pass"},
+            "check_c": {"result": "pass"},
+            "check_d": {"result": "pass"},
+            "check_e": {"result": "pass"},
+            "check_f": {"result": "pass"},
+            "check_g": {"result": "pass"},
+            "check_h": {"result": "pass"},
+            "check_i": {"result": "pass"},
+            "check_j": {"result": "pass"},
+        }
+        # 10/10 = 100%, required checks pass -> gold not bronze
+        rating = self.scorecard.calculate_repository_rating(checks, self.CRITERIA)
+        assert rating == "gold"
+        assert rating != "bronze"
+
+    def test_unrated_when_below_lowest_threshold(self):
+        """A repository below every threshold receives unrated."""
+        checks = {
+            "check_a": {"result": "pass"},
+            "check_b": {"result": "fail"},
+            "check_c": {"result": "fail"},
+            "check_d": {"result": "fail"},
+        }
+        # 1/4 = 25% -> below bronze threshold of 50%
+        assert (
+            self.scorecard.calculate_repository_rating(checks, self.CRITERIA)
+            == "unrated"
+        )
+
+    def test_unrated_when_no_criteria_defined(self):
+        """With no criteria configured, all repositories are unrated."""
+        checks = {"readme": {"result": "pass"}}
+        assert self.scorecard.calculate_repository_rating(checks, []) == "unrated"
+
+    def test_required_checks_missing_from_results_treated_as_fail(self):
+        """A required check absent from repository results blocks ratings that need it."""
+        checks = {
+            "codeowners": {"result": "pass"},
+            # readme absent - required for gold and silver
+        }
+        # 100% compliance (1/1) but readme missing -> gold and silver blocked, bronze awarded
+        assert (
+            self.scorecard.calculate_repository_rating(checks, self.CRITERIA)
+            == "bronze"
+        )

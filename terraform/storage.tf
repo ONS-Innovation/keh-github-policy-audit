@@ -66,3 +66,25 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_output" {
     }
   }
 }
+
+resource "aws_s3_object" "scorecard_criteria" {
+  bucket       = aws_s3_bucket.audit_output.id
+  key          = local.scorecard_config_s3_key
+  source       = "${path.module}/../config/scorecard_criteria.json"
+  etag         = filemd5("${path.module}/../config/scorecard_criteria.json")
+  content_type = "application/json"
+
+  lifecycle {
+    ignore_changes = [
+      source,
+      etag,
+    ]
+  }
+}
+
+resource "aws_s3_object" "dependency_layer" {
+  bucket = aws_s3_bucket.audit_output.id
+  key    = local.dependency_layer_s3_key
+  source = "${path.module}/../build/dependency-layer.zip"
+  etag   = filemd5("${path.module}/../build/dependency-layer.zip")
+}
