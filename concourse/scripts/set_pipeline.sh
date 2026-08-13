@@ -1,5 +1,5 @@
 #!/bin/sh
-set -eo pipefail
+set -eu
 # Usage: ./set_pipeline.sh
 
 # Define repository name
@@ -16,7 +16,7 @@ if ! git rev-parse --verify "${branch}" >/dev/null 2>&1; then
 fi
 
 # Name the pipeline based on the branch
-if [[ ${branch} == "main" || ${branch} == "master" ]]; then
+if [ "${branch}" = "main" ] || [ "${branch}" = "master" ]; then
 	pipeline_name=${repo_name}
 else
 	# Remove non-alphanumeric characters and take the first 7 characters
