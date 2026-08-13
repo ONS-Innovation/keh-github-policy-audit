@@ -40,8 +40,8 @@ organisation_schedules=$(echo "$secrets" | jq -c '.organisation_schedules')
 release_version="${tag:-manual}"
 
 # Convert the organisation_schedules array into a Terraform-compatible HCL format
-organisation_schedules_hcl=$(echo "$secrets" | jq -r '
-	[.organisation_schedules[] |
+organisation_schedules_hcl=$(echo "$organisation_schedules" | jq -r '
+	[.[] |
 		"{ owner = " + (.owner | @json) +
 		", schedule_expression = " + (.schedule_expression | @json) +
 		(if (.dependabot_slo_levels // null) != null
