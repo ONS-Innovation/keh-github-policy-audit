@@ -14,6 +14,7 @@ The `release_version` Terraform variable is passed from the Concourse CI pipelin
 - **Manual deployments:** Defaults to `"manual"`
 
 The release version is:
+
 - Embedded in Lambda function descriptions for traceability
 - Added as a CloudWatch tag on all Lambdas
 - Exposed as a `RELEASE_VERSION` environment variable for functions that need it
@@ -35,7 +36,7 @@ release_version="v1.2.3"
 
 Step Functions invokes Lambda functions directly by their unqualified ARN, which automatically uses the latest deployed code (`$LATEST`):
 
-```
+```text
 Function ARN: arn:aws:lambda:eu-west-2:123456789:function:sdp-dev-github-policy-audit-rate-limit
 ```
 
@@ -43,8 +44,8 @@ When you deploy, the new code is available immediately to all new Step Functions
 
 ## Configuration Variables
 
-| Variable | Default | Purpose |
-|----------|---------|------|
+| Variable          | Default    | Purpose                                                                |
+| ----------------- | ---------- | ---------------------------------------------------------------------- |
 | `release_version` | `"manual"` | Identifier for the deployed release, used for tagging and traceability |
 
 This variable is passed from Concourse CI during automated deployments or defaults to `"manual"` for manual Terraform runs, helping identify how the deployment was triggered.
