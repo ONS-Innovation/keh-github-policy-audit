@@ -47,6 +47,12 @@ variable "github_private_key_secret_name" {
   type        = string
 }
 
+variable "release_version" {
+  description = "Release/version identifier for deployment traceability. Default is 'manual' for manual deployments, or the GitHub release tag for automated deployments. Used to tag AWS resources for correlation with GitHub releases."
+  type        = string
+  default     = "manual"
+}
+
 variable "lambda_runtime" {
   description = "Lambda runtime for all functions."
   type        = string

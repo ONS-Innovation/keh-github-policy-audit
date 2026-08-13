@@ -22,6 +22,11 @@ This repository just collects the data for these reports using an AWS Step Funct
       - [Output Handlers](#output-handlers)
   - [Deployment](#deployment)
     - [Deployments with Concourse](#deployments-with-concourse)
+      - [Allowlisting your IP](#allowlisting-your-ip)
+      - [Setting up a pipeline](#setting-up-a-pipeline)
+      - [Prod deployment](#prod-deployment)
+      - [Triggering a pipeline](#triggering-a-pipeline)
+      - [Destroying a pipeline](#destroying-a-pipeline)
     - [Manual Deployment](#manual-deployment)
       - [Building the Lambda Functions](#building-the-lambda-functions)
       - [Terraform Deployment](#terraform-deployment)
@@ -209,7 +214,73 @@ The final summary and terminal Step Functions output also include `rate-limit-st
 
 ### Deployments with Concourse
 
-<!-- Instructions for deploying the project using Concourse go here. This can be copied from other KEH repositories. -->
+#### Allowlisting your IP
+
+To setup the deployment pipeline with concourse, you must first allowlist your IP address on the Concourse server. IP addresses are flushed everyday at 00:00 so this must be done at the beginning of every working day whenever the deployment pipeline needs to be used.
+
+Instructions on this are available within **KEH's Confluence Space**.
+
+All pipelines run within the `sdp-pipeline-prod` AWS account, whereas `sdp-pipeline-dev` is the account used for testing changes to the Concourse instance itself (i.e. configuration changes, not pipeline changes).
+
+#### Setting up a pipeline
+
+Our pipelines use an `sdp-concourse-<env>` IAM role within AWS to interact with our infrastructure (replacing `<env>` appropriately - `dev` or `prod`).
+Credentials/secrets for pipelines are stored within AWS Secrets Manager on the `sdp-pipeline-prod` account, so you do not need to set up anything yourself.
+
+To set the pipeline, run the following script:
+
+```bash
+chmod u+x ./concourse/scripts/set_pipeline.sh
+./concourse/scripts/set_pipeline.sh
+```
+
+**Note:** You only have to run `chmod` the first time running the script in order to give permissions.
+
+This script will set the branch and pipeline name to whatever branch you are currently on.
+It will also set the image tag on ECR to 7 characters of the current branch name if running on a branch other than `main`.
+For `main`, the ECR tag will be the latest release tag on the repository that has semantic versioning (vX.Y.Z).
+
+The pipeline name itself will usually follow a pattern as follows:
+
+- `policy-audit-<branch-name>` for any non-main branch.
+  - When following our branching strategy, pipelines are normally postfixed with the Jira ticket number, e.g. `policy-audit-KEH-1234`.
+- `policy-audit` for the main/master branch.
+
+#### Prod deployment
+
+To deploy to prod, it is required that a Github Release is made on Github. The release is required to follow semantic versioning of vX.Y.Z.
+
+It is required that a dev deployment is made first (triggered by the GitHub Release being created) and that the dev deployment is successful before the prod deployment can be triggered. This is because the prod deployment is dependent on the tag being calculated.
+
+Next, the production deployment step can be triggered manually. This is a manual action to ensure that engineers do not accidentally or unknowingly deploy to production.
+
+More information on our typical deployment patterns in Concourse can be found in our Confluence space.
+
+#### Triggering a pipeline
+
+Once the pipeline has been set, you can manually trigger a dev build on the Concourse UI (preferred), or run the following command for non-main branch deployment:
+
+```bash
+fly -t aws-sdp trigger-job -j policy-audit-<branch-name>/build-and-push-dev
+```
+
+and for main branch deployment:
+
+```bash
+fly -t aws-sdp trigger-job -j policy-audit/build-and-push-dev
+```
+
+#### Destroying a pipeline
+
+To destroy the pipeline, run the following command:
+
+```bash
+fly -t aws-sdp destroy-pipeline -p policy-audit-<branch-name>
+```
+
+**It is unlikely that you will need to destroy a pipeline, but the command is here if needed.**
+
+**Note:** This will not destroy any resources created by Terraform. You must manually destroy these resources using Terraform.
 
 ### Manual Deployment
 
