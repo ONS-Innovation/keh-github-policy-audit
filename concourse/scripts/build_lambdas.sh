@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+apk add --no-cache curl python3 py3-pip zip
+
 # Install Poetry
 curl -sSL https://install.python-poetry.org | python3 -
 
