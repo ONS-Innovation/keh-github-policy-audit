@@ -216,7 +216,7 @@ The final summary and terminal Step Functions output also include `rate-limit-st
 
 #### Allowlisting your IP
 
-To setup the deployment pipeline with concourse, you must first allowlist your IP address on the Concourse server. IP addresses are flushed everyday at 00:00 so this must be done at the beginning of every working day whenever the deployment pipeline needs to be used.
+To set up the deployment pipeline with concourse, you must first allowlist your IP address on the Concourse server. IP addresses are flushed everyday at 00:00 so this must be done at the beginning of every working day whenever the deployment pipeline needs to be used.
 
 Instructions on this are available within **KEH's Confluence Space**.
 
@@ -243,12 +243,12 @@ For `main`, the ECR tag will be the latest release tag on the repository that ha
 The pipeline name itself will usually follow a pattern as follows:
 
 - `policy-audit-<branch-name>` for any non-main branch.
-  - When following our branching strategy, pipelines are normally postfixed with the Jira ticket number, e.g. `policy-audit-KEH-1234`.
+  - When following our branching strategy, pipelines are normally postfixed with the Jira ticket number, e.g. `policy-audit-KEH1234`.
 - `policy-audit` for the main/master branch.
 
 #### Prod deployment
 
-To deploy to prod, it is required that a Github Release is made on Github. The release is required to follow semantic versioning of vX.Y.Z.
+To deploy to prod, it is required that a GitHub Release is made. The release is required to follow semantic versioning of vX.Y.Z.
 
 It is required that a dev deployment is made first (triggered by the GitHub Release being created) and that the dev deployment is successful before the prod deployment can be triggered. This is because the prod deployment is dependent on the tag being calculated.
 

@@ -4,7 +4,7 @@ This document describes how release versions are tagged and traced across GitHub
 
 ## Overview
 
-Each deployment is tagged with a release identifier for correlation between GitHub releases and AWS resources. This ensures you can verify which GitHub commit/tag is running in AWS at any time. There is no versioning or rollback capability—if you need to revert, you redeploy with fixed code.
+Each deployment is tagged with a release identifier for correlation between GitHub releases and AWS resources. This ensures you can verify which GitHub commit/tag is running in AWS at any time.
 
 ## Release Version
 
@@ -16,7 +16,7 @@ The `release_version` Terraform variable is passed from the Concourse CI pipelin
 The release version is:
 
 - Embedded in Lambda function descriptions for traceability
-- Added as a CloudWatch tag on all Lambdas
+- Added as an AWS resource tag (`ReleaseVersion`) on Lambdas and the Step Functions state machine
 - Exposed as a `RELEASE_VERSION` environment variable for functions that need it
 - Included in the Step Functions state machine definition comment
 
@@ -59,10 +59,10 @@ This variable is passed from Concourse CI during automated deployments or defaul
    - Each Lambda is updated with new code
    - Lambda descriptions are updated with release tag
    - Step Functions definition comment includes `(release: v1.5.0)`
-   - All resources tagged with `ReleaseVersion = v1.5.0`
+   - Lambda functions and the Step Functions state machine are tagged with `ReleaseVersion = v1.5.0`
 5. **EventBridge rules:** Trigger Step Functions to invoke Lambdas
 6. **Execution:** All Lambda invocations use the newly deployed code
 
 ## Traceability
 
-To verify which release is running in AWS, simply navigate to the object in the AWS console (Lambda, Step Functions, etc.) and check the description or tags for the `release_version`. This allows you to correlate the deployed code with the corresponding GitHub release.
+To verify which release is running in AWS, simply navigate to the object in the AWS console (Lambda, Step Functions, etc.) and check the description or tags for the `ReleaseVersion`. This allows you to correlate the deployed code with the corresponding GitHub release.
