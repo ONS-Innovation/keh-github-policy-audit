@@ -3,10 +3,10 @@ name: Documentation CI
 on:
   push:
     branches: [main]
-    paths: [docs/**]
+    paths: ["**/*.md"]
   pull_request:
     branches: [main]
-    paths: [docs/**]
+    paths: ["**/*.md"]
 permissions:
   contents: read
 jobs:
@@ -26,7 +26,7 @@ jobs:
           npm install -g markdownlint-cli
       - name: Run markdownlint
         run: |
-          markdownlint ./docs/**/*.md
+          markdownlint .
   verify-build:
     runs-on: ubuntu-latest
     permissions:

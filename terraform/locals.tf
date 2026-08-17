@@ -77,6 +77,10 @@ locals {
       zip_path = "${local.lambda_source_root}/repository_checks-security_scanning.zip"
       handler  = "functions.repository_checks.security_scanning.handler.handler"
     }
+    branch_protection = {
+      zip_path = "${local.lambda_source_root}/repository_checks-branch_protection.zip"
+      handler  = "functions.repository_checks.branch_protection.handler.handler"
+    }
     store_repository_output = {
       zip_path = "${local.lambda_source_root}/store_repository_output.zip"
       handler  = "functions.store_repository_output.handler.handler"
@@ -99,5 +103,6 @@ locals {
     "readme",
     "repository_access",
     "security_scanning",
+    "branch_protection"
   ]
 }

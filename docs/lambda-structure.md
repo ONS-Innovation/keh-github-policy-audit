@@ -48,6 +48,7 @@ import logging
 
 from policy_methods_library.checks.codeowners import check_codeowners
 from utils.lambda_handler import github_handler
+from utils.structured_logging import log_info
 
 
 logger = logging.getLogger(__name__)
@@ -58,8 +59,11 @@ logger.setLevel(logging.INFO)
 def handler(event, context, client):
     result = check_codeowners(client, event["repository_name"])
     result["check_name"] = "codeowners"
-    logger.info(
-        f"Lambda completed check={result['check_name']} result={result.get('result')}"
+    log_info(
+        logger,
+        "lambda_completed",
+        check=result["check_name"],
+        result=result.get("result"),
     )
     return result
 ```

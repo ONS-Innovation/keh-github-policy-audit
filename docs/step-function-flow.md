@@ -73,6 +73,7 @@ flowchart TD
             RC9[readme]
             RC10[repository_access]
             RC11[security_scanning]
+            RC12[branch_protection]
         end
         REPO_WRITE[store_repository_output\nwrite audit-runs owner/run_id/repositories/repo.json]
         REPO_PARALLEL --> REPO_WRITE
@@ -92,7 +93,7 @@ flowchart TD
 | Initialise | `Parallel` | `list_repositories` (writes to S3, returns reference), `list_teams` |
 | Prepare input | `Pass` | None (reshapes root state; promotes S3 ref, teams, and `rate_limit_start`) |
 | Organisation checks | `Parallel` + inner `Map` for teams | `dependabot_slo`, `secret_scanning_slo`, `team_maintainer` |
-| Repository checks | `Map` (Mode=`DISTRIBUTED`, MaxConcurrency=5) + `Parallel` | `codeowners`, `dependabot`, `external_pull_request`, `gitignore`, `inactivity`, `license`, `naming_convention`, `pirr`, `readme`, `repository_access`, `security_scanning` |
+| Repository checks | `Map` (Mode=`DISTRIBUTED`, MaxConcurrency=5) + `Parallel` | `codeowners`, `dependabot`, `external_pull_request`, `gitignore`, `inactivity`, `license`, `naming_convention`, `pirr`, `readme`, `repository_access`, `security_scanning`, `branch_protection` |
 | Repo output write | `Task` | `store_repository_output` |
 | Rate-limit end | `Task` | `rate_limit` (`checkpoint=rate-limit-end`) |
 | Final aggregation | `Task` | `store_output` |
