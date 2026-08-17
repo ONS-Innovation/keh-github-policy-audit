@@ -10,6 +10,7 @@ nav:
   - Logging Patterns: logging-patterns.md
   - Lambda Structure: lambda-structure.md
   - Step Function Flow: step-function-flow.md
+  - Lambda Versioning: lambda-versioning.md
   - Rate Limit Considerations: rate-limit-considerations.md
 theme:
   name: material

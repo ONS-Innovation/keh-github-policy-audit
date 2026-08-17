@@ -107,6 +107,7 @@ resource "aws_lambda_function" "audit" {
   runtime       = var.lambda_runtime
   handler       = each.value.handler
   filename      = each.value.zip_path
+  description   = "GitHub policy audit ${replace(each.key, "_", "-")} (${var.release_version})"
 
   source_code_hash               = filebase64sha256(each.value.zip_path)
   timeout                        = try(each.value.timeout, var.lambda_timeout)
@@ -129,10 +130,15 @@ resource "aws_lambda_function" "audit" {
 
   depends_on = [aws_cloudwatch_log_group.audit]
 
+  tags = {
+    ReleaseVersion = var.release_version
+  }
+
   environment {
     variables = {
       ENVIRONMENT                     = "prod"
       APP_LOG_FORMAT                  = "JSON"
+      RELEASE_VERSION                 = var.release_version
       S3_BUCKET_NAME                  = aws_s3_bucket.audit_output.bucket
       GITHUB_APP_ID_SECRET_NAME       = var.github_app_id_secret_name
       GITHUB_PRIVATE_KEY_SECRET_NAME  = var.github_private_key_secret_name

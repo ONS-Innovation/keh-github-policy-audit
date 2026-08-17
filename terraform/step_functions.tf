@@ -82,7 +82,7 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
   role_arn = aws_iam_role.step_function.arn
 
   definition = jsonencode({
-    Comment = "Weekly GitHub organisation policy audit."
+    Comment = "Weekly GitHub organisation policy audit (release: ${var.release_version})."
     StartAt = "PrepareInitialInput"
     States = {
       PrepareInitialInput = {
@@ -373,6 +373,10 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
       }
     }
   })
+
+  tags = {
+    ReleaseVersion = var.release_version
+  }
 
   tracing_configuration {
     enabled = true
