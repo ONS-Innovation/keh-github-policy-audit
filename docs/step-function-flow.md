@@ -236,6 +236,8 @@ Their combined outputs are collected into `$.organisation_results` as a three-el
 }
 ```
 
+If an organisation check Lambda receives an error payload from the policy methods library (`{"result": "error", ...}`), the handler raises a runtime error and the branch fails instead of returning a normal check result.
+
 All other top-level keys (`owner`, `levels`, `run_id`, `output_bucket`, `repositories_s3_ref`, `teams`) are preserved unchanged.
 
 ### 5. RepositoryChecksMap (Distributed Map)
@@ -258,6 +260,8 @@ Inside each child execution, 11 repository check Lambdas run in parallel. Each c
 ```json
 { "check_name": "readme", "result": "pass", "message": "README exists" }
 ```
+
+If a policy check returns `{"result": "error", ...}`, the Lambda raises and the child execution fails. Error results are therefore not silently persisted as normal check data.
 
 The `ResultSelector` on each check task strips any additional fields, retaining only `check_name`, `result`, and `message`. The `RepositoryChecksParallel` state collects all 11 results into `$.check_results`.
 

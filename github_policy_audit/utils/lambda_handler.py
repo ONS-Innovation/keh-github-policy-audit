@@ -36,3 +36,14 @@ def github_handler(
         return func(event, context, client, *args, **kwargs)
 
     return wrapper
+
+
+def fail_on_error_result(result: dict[str, Any], check_name: str) -> None:
+    """Raise when a policy check explicitly reports an error result."""
+    if str(result.get("result", "")).lower() != "error":
+        return
+
+    error_detail = (
+        result.get("message") or result.get("details") or "No details provided"
+    )
+    raise RuntimeError(f"Policy check '{check_name}' returned an error: {error_detail}")
