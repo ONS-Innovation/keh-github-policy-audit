@@ -94,6 +94,30 @@ class TestRepositoryScopedHandlers:
                 f"Failed for {module_name}"
             )
 
+    def test_raises_when_result_is_error(self) -> None:
+        """Handlers should fail fast when the policy library returns result=error."""
+        for module_name, check_fn_name, check_name in REPO_CHECK_CASES:
+            module = importlib.import_module(module_name)
+            client = object()
+
+            mock_check = create_autospec(
+                getattr(module, check_fn_name),
+                return_value={"result": "error", "message": "boom"},
+            )
+
+            with (
+                patch("utils.github.get_github_client", return_value=client),
+                patch.object(module, check_fn_name, mock_check),
+                pytest.raises(RuntimeError, match=check_name),
+            ):
+                module.handler(
+                    {
+                        "owner": "ONS-Innovation",
+                        "repository_name": "keh-github-policy-audit",
+                    },
+                    None,
+                )
+
 
 # ---------------------------------------------------------------------------
 # inactivity handler
@@ -175,6 +199,26 @@ class TestInactivityHandler:
             "data": None,
         }
         assert result == {"status": "PASS", "check_name": "inactivity"}
+
+    def test_raises_when_result_is_error(self) -> None:
+        """The handler should raise when the policy method returns an error result."""
+        client = object()
+        event = {
+            "owner": "ONS-Innovation",
+            "repository_name": "keh-github-policy-audit",
+        }
+
+        mock_check = create_autospec(
+            self.module.check_inactivity,
+            return_value={"result": "error", "message": "boom"},
+        )
+
+        with (
+            patch("utils.github.get_github_client", return_value=client),
+            patch.object(self.module, "check_inactivity", mock_check),
+            pytest.raises(RuntimeError, match="inactivity"),
+        ):
+            self.module.handler(event, None)
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +308,26 @@ class TestSecurityScanningHandler:
         }
         assert result == {"status": "PASS", "check_name": "security_scanning"}
 
+    def test_raises_when_result_is_error(self) -> None:
+        """The handler should raise when the policy method returns an error result."""
+        client = object()
+        event = {
+            "owner": "ONS-Innovation",
+            "repository_name": "keh-github-policy-audit",
+        }
+
+        mock_check = create_autospec(
+            self.module.check_security_scanning,
+            return_value={"result": "error", "message": "boom"},
+        )
+
+        with (
+            patch("utils.github.get_github_client", return_value=client),
+            patch.object(self.module, "check_security_scanning", mock_check),
+            pytest.raises(RuntimeError, match="security_scanning"),
+        ):
+            self.module.handler(event, None)
+
 
 # ---------------------------------------------------------------------------
 # naming_convention handler
@@ -299,6 +363,18 @@ class TestNamingConventionHandler:
         """A missing repository_name key in the event should raise a KeyError."""
         with pytest.raises(KeyError, match="repository_name"):
             self.module.handler({}, None)
+
+    def test_raises_when_result_is_error(self) -> None:
+        """The handler should raise when the policy method returns an error result."""
+        with (
+            patch.object(
+                self.module,
+                "check_naming_convention",
+                return_value={"result": "error", "message": "boom"},
+            ),
+            pytest.raises(RuntimeError, match="naming_convention"),
+        ):
+            self.module.handler({"repository_name": "keh-github-policy-audit"}, None)
 
 
 # ---------------------------------------------------------------------------
@@ -454,6 +530,27 @@ class TestBranchProtectionHandler:
             pytest.raises(KeyError, match="repository_name"),
         ):
             self.module.handler({"owner": "ONS-Innovation"}, None)
+
+    def test_raises_when_result_is_error(self) -> None:
+        """The handler should raise when the policy method returns an error result."""
+        client = self._make_client(["main"])
+
+        with (
+            patch("utils.github.get_github_client", return_value=client),
+            patch.object(
+                self.module,
+                "check_branch_protection",
+                return_value={"result": "error", "message": "boom"},
+            ),
+            pytest.raises(RuntimeError, match="branch_protection"),
+        ):
+            self.module.handler(
+                {
+                    "owner": "ONS-Innovation",
+                    "repository_name": "keh-github-policy-audit",
+                },
+                None,
+            )
 
 
 # ---------------------------------------------------------------------------
