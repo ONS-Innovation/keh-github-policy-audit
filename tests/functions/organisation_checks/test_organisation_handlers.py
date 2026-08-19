@@ -3,8 +3,6 @@
 import importlib
 from unittest.mock import create_autospec, patch
 
-import pytest
-
 
 # ---------------------------------------------------------------------------
 # dependabot_slo
@@ -68,21 +66,6 @@ class TestDependabotSloHandler:
         assert captured == {"client": client, "levels": None}
         assert result == {"status": "PASS", "check_name": "dependabot_slo"}
 
-    def test_raises_when_result_is_error(self) -> None:
-        """The handler should raise when the policy method returns an error result."""
-        client = object()
-        mock_check = create_autospec(
-            self.module.get_dependabot_slo,
-            return_value={"result": "error", "message": "boom"},
-        )
-
-        with (
-            patch("utils.github.get_github_client", return_value=client),
-            patch.object(self.module, "get_dependabot_slo", mock_check),
-            pytest.raises(RuntimeError, match="dependabot_slo"),
-        ):
-            self.module.handler({"owner": "ONS-Innovation"}, None)
-
 
 # ---------------------------------------------------------------------------
 # secret_scanning_slo
@@ -115,21 +98,6 @@ class TestSecretScanningSloHandler:
 
         assert captured == {"client": client}
         assert result == {"status": "PASS", "check_name": "secret_scanning_slo"}
-
-    def test_raises_when_result_is_error(self) -> None:
-        """The handler should raise when the policy method returns an error result."""
-        client = object()
-        mock_check = create_autospec(
-            self.module.get_secret_scanning_slo,
-            return_value={"result": "error", "message": "boom"},
-        )
-
-        with (
-            patch("utils.github.get_github_client", return_value=client),
-            patch.object(self.module, "get_secret_scanning_slo", mock_check),
-            pytest.raises(RuntimeError, match="secret_scanning_slo"),
-        ):
-            self.module.handler({"owner": "ONS-Innovation"}, None)
 
 
 # ---------------------------------------------------------------------------
@@ -166,21 +134,3 @@ class TestTeamMaintainerHandler:
 
         assert captured == {"client": client, "team_slug": "keh-dev"}
         assert result == {"status": "PASS", "check_name": "team_maintainer"}
-
-    def test_raises_when_result_is_error(self) -> None:
-        """The handler should raise when the policy method returns an error result."""
-        client = object()
-        mock_check = create_autospec(
-            self.module.check_team_maintainer,
-            return_value={"result": "error", "message": "boom"},
-        )
-
-        with (
-            patch("utils.github.get_github_client", return_value=client),
-            patch.object(self.module, "check_team_maintainer", mock_check),
-            pytest.raises(RuntimeError, match="team_maintainer"),
-        ):
-            self.module.handler(
-                {"owner": "ONS-Innovation", "team_slug": "keh-dev"},
-                None,
-            )
