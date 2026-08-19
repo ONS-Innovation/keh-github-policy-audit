@@ -1,4 +1,10 @@
 {
   "owner": "ONS-Innovation",
-  "repository_name": "keh-github-policy-audit"
+  "repository_name": "keh-github-policy-audit",
+  "data": {
+    "default_branch": "main",
+    "updated_at": "2026-08-01T00:00:00Z",
+    "visibility": "public",
+    "security_and_analysis": null
+  }
 }

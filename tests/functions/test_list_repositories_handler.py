@@ -88,7 +88,57 @@ class TestListRepositoriesHandler:
         ):
             self.module.handler({"owner": "ONS-Innovation"}, None)
 
-    def test_writes_repository_list_locally(self, tmp_path, monkeypatch) -> None:
+    def test_repository_summary_includes_default_branch(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Each repository summary must include default_branch from the API response."""
+        monkeypatch.chdir(tmp_path)
+
+        with (
+            patch("utils.github.get_github_client", return_value=object()),
+            patch.object(
+                self.module,
+                "get_paginated_list",
+                return_value=[
+                    {"name": "keh-github-policy-audit", "default_branch": "main"}
+                ],
+            ),
+            patch.dict(os.environ, {"ENVIRONMENT": "local"}, clear=True),
+        ):
+            result = self.module.handler(
+                {"owner": "ONS-Innovation", "run_id": "test-run-123"},
+                None,
+            )
+
+        with open(result["local_output_path"], encoding="utf-8") as output_file:
+            stored_data = self.module.json.load(output_file)
+
+        assert stored_data[0]["data"]["default_branch"] == "main"
+
+    def test_repository_summary_default_branch_none_when_absent(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """default_branch should be None when not present in the API response."""
+        monkeypatch.chdir(tmp_path)
+
+        with (
+            patch("utils.github.get_github_client", return_value=object()),
+            patch.object(
+                self.module,
+                "get_paginated_list",
+                return_value=[{"name": "keh-github-policy-audit"}],
+            ),
+            patch.dict(os.environ, {"ENVIRONMENT": "local"}, clear=True),
+        ):
+            result = self.module.handler(
+                {"owner": "ONS-Innovation", "run_id": "test-run-123"},
+                None,
+            )
+
+        with open(result["local_output_path"], encoding="utf-8") as output_file:
+            stored_data = self.module.json.load(output_file)
+
+        assert stored_data[0]["data"]["default_branch"] is None
         """Local execution should write the repository list to disk."""
         monkeypatch.chdir(tmp_path)
 

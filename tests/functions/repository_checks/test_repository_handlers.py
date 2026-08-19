@@ -311,17 +311,16 @@ class TestBranchProtectionHandler:
         "functions.repository_checks.branch_protection.handler"
     )
 
-    def _make_client(self, branch_names: list[str]) -> GitHubRestClient:
-        """Return a mock GitHub client whose make_request returns the given branch list."""
-        client = create_autospec(GitHubRestClient, instance=True)
-        client.make_request.return_value.json.return_value = [
-            {"name": name} for name in branch_names
-        ]
-        return client
+    def _make_event(self, default_branch: str | None) -> dict:
+        return {
+            "owner": "ONS-Innovation",
+            "repository_name": "keh-github-policy-audit",
+            "data": {"default_branch": default_branch},
+        }
 
-    def test_selects_main_branch(self) -> None:
-        """When 'main' is present it should be passed as the branch name."""
-        client = self._make_client(["feature", "main", "master"])
+    def test_passes_default_branch_from_event_data(self) -> None:
+        """The default_branch from event data should be passed directly to check_branch_protection."""
+        client = create_autospec(GitHubRestClient, instance=True)
         captured: dict[str, object] = {}
 
         def fake_check(
@@ -340,13 +339,7 @@ class TestBranchProtectionHandler:
             patch("utils.github.get_github_client", return_value=client),
             patch.object(self.module, "check_branch_protection", mock_check),
         ):
-            result = self.module.handler(
-                {
-                    "owner": "ONS-Innovation",
-                    "repository_name": "keh-github-policy-audit",
-                },
-                None,
-            )
+            result = self.module.handler(self._make_event("main"), None)
 
         assert captured == {
             "client": client,
@@ -355,9 +348,9 @@ class TestBranchProtectionHandler:
         }
         assert result == {"status": "PASS", "check_name": "branch_protection"}
 
-    def test_selects_master_branch_when_no_main(self) -> None:
-        """When 'main' is absent but 'master' is present it should be passed as the branch name."""
-        client = self._make_client(["master", "develop"])
+    def test_passes_non_standard_default_branch(self) -> None:
+        """Any default_branch value should be forwarded, not just 'main' or 'master'."""
+        client = create_autospec(GitHubRestClient, instance=True)
         captured: dict[str, object] = {}
 
         def fake_check(
@@ -374,20 +367,14 @@ class TestBranchProtectionHandler:
             patch("utils.github.get_github_client", return_value=client),
             patch.object(self.module, "check_branch_protection", mock_check),
         ):
-            result = self.module.handler(
-                {
-                    "owner": "ONS-Innovation",
-                    "repository_name": "keh-github-policy-audit",
-                },
-                None,
-            )
+            result = self.module.handler(self._make_event("develop"), None)
 
-        assert captured["branch_name"] == "master"
+        assert captured["branch_name"] == "develop"
         assert result == {"status": "PASS", "check_name": "branch_protection"}
 
-    def test_passes_none_when_no_default_branch(self) -> None:
-        """When neither 'main' nor 'master' exists the branch name should be None."""
-        client = self._make_client(["develop", "feature"])
+    def test_passes_none_when_default_branch_is_none(self) -> None:
+        """A null default_branch in event data should be forwarded as None."""
+        client = create_autospec(GitHubRestClient, instance=True)
         captured: dict[str, object] = {}
 
         def fake_check(
@@ -404,20 +391,14 @@ class TestBranchProtectionHandler:
             patch("utils.github.get_github_client", return_value=client),
             patch.object(self.module, "check_branch_protection", mock_check),
         ):
-            result = self.module.handler(
-                {
-                    "owner": "ONS-Innovation",
-                    "repository_name": "keh-github-policy-audit",
-                },
-                None,
-            )
+            result = self.module.handler(self._make_event(None), None)
 
         assert captured["branch_name"] is None
         assert result == {"status": "PASS", "check_name": "branch_protection"}
 
-    def test_requests_correct_branches_endpoint(self) -> None:
-        """The handler should call the branches endpoint for the correct owner and repo."""
-        client = self._make_client([])
+    def test_does_not_call_branches_api(self) -> None:
+        """The handler must not make any GitHub API calls to resolve the branch name."""
+        client = create_autospec(GitHubRestClient, instance=True)
 
         with (
             patch("utils.github.get_github_client", return_value=client),
@@ -427,22 +408,20 @@ class TestBranchProtectionHandler:
                 return_value={"status": "PASS"},
             ),
         ):
-            self.module.handler(
-                {
-                    "owner": "ONS-Innovation",
-                    "repository_name": "keh-github-policy-audit",
-                },
-                None,
-            )
+            self.module.handler(self._make_event("main"), None)
 
-        client.make_request.assert_called_once_with(
-            "GET", "/repos/ONS-Innovation/keh-github-policy-audit/branches"
-        )
+        client.make_request.assert_not_called()
 
     def test_raises_for_missing_owner(self) -> None:
         """A missing owner key in the event should raise a KeyError."""
         with pytest.raises(KeyError, match="owner"):
-            self.module.handler({"repository_name": "keh-github-policy-audit"}, None)
+            self.module.handler(
+                {
+                    "repository_name": "keh-github-policy-audit",
+                    "data": {"default_branch": "main"},
+                },
+                None,
+            )
 
     def test_raises_for_missing_repository_name(self) -> None:
         """A missing repository_name key in the event should raise a KeyError."""
@@ -453,7 +432,9 @@ class TestBranchProtectionHandler:
             ),
             pytest.raises(KeyError, match="repository_name"),
         ):
-            self.module.handler({"owner": "ONS-Innovation"}, None)
+            self.module.handler(
+                {"owner": "ONS-Innovation", "data": {"default_branch": "main"}}, None
+            )
 
 
 # ---------------------------------------------------------------------------

@@ -13,23 +13,9 @@ logger.setLevel(logging.INFO)
 
 @github_handler
 def handler(event, context, client):
-    """Step Function invokes with {"owner": "...", "repository_name": "..."}."""
+    """Step Function invokes with {"owner": "...", "repository_name": "...", "data": {...}}."""
 
-    branches = client.make_request(
-        "GET", f"/repos/{event['owner']}/{event['repository_name']}/branches"
-    ).json()
-
-    branch_name = None
-
-    for branch in branches:
-        if branch["name"] == "main":
-            branch_name = "main"
-            break
-        elif branch["name"] == "master":
-            branch_name = "master"
-            break
-        else:
-            continue
+    branch_name = event["data"]["default_branch"]
 
     result = check_branch_protection(client, event["repository_name"], branch_name)
 
