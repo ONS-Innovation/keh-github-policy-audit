@@ -586,6 +586,34 @@ class TestGithubRateLimitHelpers:
 
         assert github._is_retryable_http_error(error) is True
 
+    def test_is_retryable_http_error_returns_true_for_abuse_detection_body(
+        self,
+    ) -> None:
+        """A 403 with an abuse-detection body should be treated as retryable."""
+        response = _response_with_status(403)
+        response._content = (
+            b'{"message": "You have triggered an abuse detection mechanism. '
+            b'Please wait a few minutes before you try again."}'
+        )
+
+        error = HTTPError("Forbidden", response=response)
+
+        assert github._is_retryable_http_error(error) is True
+
+    def test_is_retryable_http_error_returns_true_for_secondary_rate_limit_body(
+        self,
+    ) -> None:
+        """A 403 with a secondary rate-limit body should be treated as retryable."""
+        response = _response_with_status(403)
+        response._content = (
+            b'{"message": "You have exceeded a secondary rate limit and have been '
+            b'temporarily blocked from content creation."}'
+        )
+
+        error = HTTPError("Forbidden", response=response)
+
+        assert github._is_retryable_http_error(error) is True
+
     def test_is_retryable_http_error_returns_true_for_installation_token_403(
         self,
     ) -> None:
@@ -601,6 +629,184 @@ class TestGithubRateLimitHelpers:
         )()
 
         assert github._is_retryable_http_error(error) is True
+
+
+class TestSecondaryRateLimitDelay:
+    def test_retry_after_takes_priority(self) -> None:
+        """Retry-After header should be returned as-is."""
+        response = _response_with_status(403)
+        response.headers["Retry-After"] = "90"
+        response.headers["X-RateLimit-Remaining"] = "0"
+        response.headers["X-RateLimit-Reset"] = "9999999999"
+
+        delay = github._secondary_rate_limit_delay(response, attempt=1)
+
+        assert delay == 90.0
+
+    def test_retry_after_non_numeric_falls_through_to_reset(self) -> None:
+        """A non-numeric Retry-After should be ignored and reset epoch used instead."""
+        from unittest.mock import patch
+
+        reset_epoch = 1_000_000.0
+        response = _response_with_status(403)
+        response.headers["Retry-After"] = "not-a-number"
+        response.headers["X-RateLimit-Remaining"] = "0"
+        response.headers["X-RateLimit-Reset"] = str(reset_epoch)
+
+        with patch.object(github.time, "time", return_value=reset_epoch - 30.0):
+            delay = github._secondary_rate_limit_delay(response, attempt=1)
+
+        assert delay == pytest.approx(30.0)
+
+    def test_rate_limit_reset_used_when_remaining_zero(self) -> None:
+        """When remaining=0 and no Retry-After, wait until reset epoch."""
+        from unittest.mock import patch
+
+        reset_epoch = 1_000_000.0
+        response = _response_with_status(403)
+        response.headers["X-RateLimit-Remaining"] = "0"
+        response.headers["X-RateLimit-Reset"] = str(reset_epoch)
+
+        with patch.object(github.time, "time", return_value=reset_epoch - 45.0):
+            delay = github._secondary_rate_limit_delay(response, attempt=1)
+
+        assert delay == pytest.approx(45.0)
+
+    def test_rate_limit_reset_non_numeric_falls_through_to_backoff(self) -> None:
+        """A non-numeric X-RateLimit-Reset should be ignored and backoff used."""
+        response = _response_with_status(403)
+        response.headers["X-RateLimit-Remaining"] = "0"
+        response.headers["X-RateLimit-Reset"] = "not-a-number"
+
+        with patch.object(github.random, "uniform", return_value=0.0):
+            delay = github._secondary_rate_limit_delay(response, attempt=1)
+
+        assert delay == github._REQUEST_RETRY_BASE_DELAY_SECONDS
+
+    def test_rate_limit_reset_ignored_when_in_the_past(self) -> None:
+        """A reset epoch already in the past should fall through to exponential backoff."""
+        from unittest.mock import patch
+
+        reset_epoch = 1_000_000.0
+        response = _response_with_status(403)
+        response.headers["X-RateLimit-Remaining"] = "0"
+        response.headers["X-RateLimit-Reset"] = str(reset_epoch)
+
+        # time.time() is already past the reset epoch
+        with patch.object(github.time, "time", return_value=reset_epoch + 5.0):
+            with patch.object(github.random, "uniform", return_value=0.0):
+                delay = github._secondary_rate_limit_delay(response, attempt=1)
+
+        assert delay == github._REQUEST_RETRY_BASE_DELAY_SECONDS
+
+    def test_exponential_backoff_doubles_per_attempt(self) -> None:
+        """Fallback delay should double on each attempt (exponent base = 2)."""
+        response = _response_with_status(429)
+
+        with patch.object(github.random, "uniform", return_value=0.0):
+            delay_1 = github._secondary_rate_limit_delay(response, attempt=1)
+            delay_2 = github._secondary_rate_limit_delay(response, attempt=2)
+            delay_3 = github._secondary_rate_limit_delay(response, attempt=3)
+
+        assert delay_1 == github._REQUEST_RETRY_BASE_DELAY_SECONDS * 1
+        assert delay_2 == github._REQUEST_RETRY_BASE_DELAY_SECONDS * 2
+        assert delay_3 == github._REQUEST_RETRY_BASE_DELAY_SECONDS * 4
+
+    def test_base_delay_is_at_least_one_minute(self) -> None:
+        """GitHub requires waiting at least 1 minute when no header guidance is present."""
+        assert github._REQUEST_RETRY_BASE_DELAY_SECONDS >= 60.0
+
+
+class TestMakeRequestWithRetry:
+    def _make_client(self, make_request_side_effect):
+        """Return a mock GitHubRestClient with the given make_request side effect."""
+        from unittest.mock import MagicMock
+
+        client = MagicMock(spec=github.GitHubRestClient)
+        client.make_request.side_effect = make_request_side_effect
+        return client
+
+    def test_returns_response_on_success(self) -> None:
+        """A successful request should be returned immediately."""
+        from unittest.mock import MagicMock
+
+        response = MagicMock()
+        client = self._make_client([response])
+
+        result = github.make_request_with_retry(
+            client, "GET", "/repos/owner/repo/branches"
+        )
+
+        assert result is response
+        assert client.make_request.call_count == 1
+
+    def test_retries_on_retryable_403_and_succeeds(self) -> None:
+        """A retryable 403 should be retried until success."""
+        from unittest.mock import MagicMock, patch
+
+        rate_limited = _response_with_status(403)
+        rate_limited.headers["X-RateLimit-Remaining"] = "0"
+        rate_limited.headers["X-RateLimit-Reset"] = "0"  # past — falls to backoff
+        error = HTTPError("Forbidden", response=rate_limited)
+
+        success_response = MagicMock()
+        client = self._make_client([error, success_response])
+
+        with (
+            patch.object(github.time, "sleep") as mocked_sleep,
+            patch.object(github.time, "time", return_value=9_999_999.0),
+            patch.object(github.random, "uniform", return_value=0.0),
+        ):
+            result = github.make_request_with_retry(client, "GET", "/some/path")
+
+        assert result is success_response
+        assert client.make_request.call_count == 2
+        mocked_sleep.assert_called_once()
+
+    def test_uses_retry_after_header_when_present(self) -> None:
+        """The Retry-After header value should be used as the sleep duration."""
+        from unittest.mock import MagicMock, patch
+
+        rate_limited = _response_with_status(403)
+        rate_limited.headers["Retry-After"] = "42"
+        error = HTTPError("Forbidden", response=rate_limited)
+
+        success_response = MagicMock()
+        client = self._make_client([error, success_response])
+
+        with patch.object(github.time, "sleep") as mocked_sleep:
+            github.make_request_with_retry(client, "GET", "/some/path")
+
+        mocked_sleep.assert_called_once_with(42.0)
+
+    def test_raises_immediately_on_non_retryable_error(self) -> None:
+        """A non-retryable 403 (plain auth failure) should propagate immediately."""
+        response = _response_with_status(403)
+        error = HTTPError("Forbidden", response=response)
+        client = self._make_client([error])
+
+        with pytest.raises(HTTPError):
+            github.make_request_with_retry(client, "GET", "/some/path")
+
+        assert client.make_request.call_count == 1
+
+    def test_raises_after_all_retries_exhausted(self) -> None:
+        """If all retry attempts fail, the final error should propagate."""
+        from unittest.mock import patch
+
+        rate_limited = _response_with_status(403)
+        rate_limited.headers["Retry-After"] = "1"
+        error = HTTPError("Forbidden", response=rate_limited)
+
+        client = self._make_client([error] * github._REQUEST_MAX_RETRIES)
+
+        with (
+            patch.object(github.time, "sleep"),
+            pytest.raises(HTTPError),
+        ):
+            github.make_request_with_retry(client, "GET", "/some/path")
+
+        assert client.make_request.call_count == github._REQUEST_MAX_RETRIES
 
 
 class TestGithubCacheTtlHelpers:

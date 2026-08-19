@@ -21,6 +21,13 @@ logger.setLevel(logging.INFO)
 # Transient errors can occur when many Lambdas request installation tokens in parallel.
 _CLIENT_INIT_RETRY_DELAYS_SECONDS = [0.5, 1.0, 2.0]
 _RETRYABLE_STATUS_CODES = {403, 429, 500, 502, 503, 504}
+
+# Secondary rate-limit retries for regular API requests.
+# GitHub docs: wait at least 1 minute when no header guidance is present, and
+# use exponentially increasing delays between retries.
+_REQUEST_MAX_RETRIES = 3
+_REQUEST_RETRY_BASE_DELAY_SECONDS = 60.0
+_REQUEST_RETRY_EXPONENT_BASE = 2
 _CLIENT_INIT_JITTER_FACTOR = 0.25
 _DEFAULT_CLIENT_CACHE_TTL_SECONDS = 300.0
 _CLIENT_CACHE: dict[str, tuple[float, GitHubRestClient]] = {}
@@ -142,7 +149,7 @@ def _is_retryable_http_error(error: HTTPError) -> bool:
         except Exception:  # pragma: no cover
             response_body = ""
 
-        if "rate limit" in response_body:
+        if "rate limit" in response_body or "abuse" in response_body:
             return True
 
         # GitHub App installation token creation can return transient 403 responses
@@ -150,6 +157,43 @@ def _is_retryable_http_error(error: HTTPError) -> bool:
         return _is_installation_access_token_url(url)
 
     return True
+
+
+def _secondary_rate_limit_delay(response: Any, attempt: int) -> float:
+    """Return the number of seconds to wait before the next request retry.
+
+    Priority order follows GitHub's secondary rate-limit guidance:
+
+    1. ``Retry-After`` header — wait exactly that many seconds.
+    2. ``X-RateLimit-Remaining: 0`` + ``X-RateLimit-Reset`` — wait until the
+       reset epoch; fall through if the value cannot be parsed or is in the
+       past.
+    3. Exponential backoff starting at ``_REQUEST_RETRY_BASE_DELAY_SECONDS``
+       (≥ 1 minute), doubled on each attempt, with bounded jitter.
+    """
+    headers = getattr(response, "headers", {}) or {}
+
+    retry_after_raw = headers.get("Retry-After")
+    if retry_after_raw:
+        try:
+            return float(retry_after_raw)
+        except ValueError:
+            pass
+
+    if headers.get("X-RateLimit-Remaining") == "0":
+        reset_raw = headers.get("X-RateLimit-Reset")
+        if reset_raw:
+            try:
+                wait = float(reset_raw) - time.time()
+                if wait > 0:
+                    return wait
+            except ValueError:
+                pass
+
+    base = _REQUEST_RETRY_BASE_DELAY_SECONDS * (
+        _REQUEST_RETRY_EXPONENT_BASE ** (attempt - 1)
+    )
+    return _retry_delay_with_jitter(base)
 
 
 def _http_error_context(error: HTTPError) -> tuple[str, str]:
@@ -166,6 +210,52 @@ def _http_error_context(error: HTTPError) -> tuple[str, str]:
             body_snippet = ""
 
     return url, body_snippet
+
+
+def make_request_with_retry(
+    client: GitHubRestClient,
+    method: str,
+    path: str,
+    **kwargs: Any,
+) -> Any:
+    """Make a GitHub API request, retrying on secondary rate-limit responses.
+
+    Delay strategy follows GitHub's secondary rate-limit documentation:
+
+    1. ``Retry-After`` header present → sleep that many seconds.
+    2. ``X-RateLimit-Remaining: 0`` → sleep until ``X-RateLimit-Reset``.
+    3. Otherwise → exponential backoff starting at
+       ``_REQUEST_RETRY_BASE_DELAY_SECONDS`` (≥ 1 minute), doubled per retry.
+
+    Docs: https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api?apiVersion=2026-03-10#exceeding-the-rate-limit
+
+    Raises the final ``HTTPError`` after ``_REQUEST_MAX_RETRIES`` attempts.
+    """
+    for attempt in range(1, _REQUEST_MAX_RETRIES + 1):
+        try:
+            return client.make_request(method, path, **kwargs)
+        except HTTPError as error:
+            if not _is_retryable_http_error(error):
+                raise
+
+            if attempt == _REQUEST_MAX_RETRIES:
+                raise
+
+            response = getattr(error, "response", None)
+            retry_delay_seconds = _secondary_rate_limit_delay(response, attempt)
+            status_code = getattr(response, "status_code", "unknown")
+            url, body_snippet = _http_error_context(error)
+            log_warning(
+                logger,
+                "github_request_retry",
+                url=url,
+                status=status_code,
+                attempt=attempt,
+                max_attempts=_REQUEST_MAX_RETRIES,
+                retry_delay_seconds=retry_delay_seconds,
+                body=body_snippet,
+            )
+            time.sleep(retry_delay_seconds)
 
 
 def get_github_client(owner: str) -> GitHubRestClient:
