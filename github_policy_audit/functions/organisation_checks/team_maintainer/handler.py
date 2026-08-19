@@ -3,7 +3,6 @@
 import logging
 
 from policy_methods_library.checks.team_maintainer import check_team_maintainer
-from utils.lambda_handler import fail_on_error_result
 from utils.lambda_handler import github_handler
 from utils.structured_logging import log_info
 
@@ -17,7 +16,6 @@ def handler(event, context, client):
     """Step Function invokes with {"owner": "...", "team_slug": "..."}."""
     result = check_team_maintainer(client, event["team_slug"])
     result["check_name"] = "team_maintainer"
-    fail_on_error_result(result, result["check_name"])
     log_info(
         logger,
         "lambda_completed",

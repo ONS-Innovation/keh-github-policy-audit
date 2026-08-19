@@ -3,7 +3,6 @@
 import logging
 
 from policy_methods_library.checks.dependabot_slo import get_dependabot_slo
-from utils.lambda_handler import fail_on_error_result
 from utils.lambda_handler import github_handler
 from utils.structured_logging import log_info
 
@@ -20,7 +19,6 @@ def handler(event, context, client):
     """
     result = get_dependabot_slo(client, event.get("levels"))
     result["check_name"] = "dependabot_slo"
-    fail_on_error_result(result, result["check_name"])
     log_info(
         logger,
         "lambda_completed",

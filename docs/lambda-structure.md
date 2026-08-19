@@ -47,7 +47,6 @@ Example:
 import logging
 
 from policy_methods_library.checks.codeowners import check_codeowners
-from utils.lambda_handler import fail_on_error_result
 from utils.lambda_handler import github_handler
 from utils.structured_logging import log_info
 
@@ -60,7 +59,6 @@ logger.setLevel(logging.INFO)
 def handler(event, context, client):
     result = check_codeowners(client, event["repository_name"])
     result["check_name"] = "codeowners"
-    fail_on_error_result(result, result["check_name"])
     log_info(
         logger,
         "lambda_completed",
@@ -81,13 +79,9 @@ Those handlers should remain simple and undecorated.
 Example:
 
 ```python
-from utils.lambda_handler import fail_on_error_result
-
-
 def handler(event, context):
     result = check_naming_convention(event["repository_name"])
     result["check_name"] = "naming_convention"
-    fail_on_error_result(result, result["check_name"])
     return result
 ```
 
@@ -104,12 +98,6 @@ It currently does three things:
 - logs GitHub rate-limit state at the start and end of the handler
 
 This keeps the handler focused on its specific check, while still providing consistent logging and telemetry across all GitHub-backed handlers.
-
-## Error Result Handling
-
-Policy check handlers that call `policy_methods_library` checks must fail fast when a check returns `{"result": "error"}`.
-
-Use `fail_on_error_result(result, check_name)` immediately after adding `check_name` to the result object. This prevents error payloads from being treated as normal check data in downstream aggregation.
 
 ## Writing a New Handler
 
