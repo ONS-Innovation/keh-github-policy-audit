@@ -1363,7 +1363,7 @@ requests = ">=2.33.1,<3.0.0"
 type = "git"
 url = "https://github.com/ONS-Innovation/keh-policy-methods-library.git"
 reference = "HEAD"
-resolved_reference = "4703d17e60783a664cd909155452f9cbb1c7a9a7"
+resolved_reference = "bc7ab1b4e8df72a37abaa597f15b8c98b3f0c3b3"
 
 [[package]]
 name = "pycparser"
