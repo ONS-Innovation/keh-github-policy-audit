@@ -3,7 +3,6 @@
 import logging
 
 from policy_methods_library.checks.branch_protection import check_branch_protection
-from utils.github import make_request_with_retry
 from utils.lambda_handler import github_handler
 from utils.structured_logging import log_info
 
@@ -16,8 +15,8 @@ logger.setLevel(logging.INFO)
 def handler(event, context, client):
     """Step Function invokes with {"owner": "...", "repository_name": "..."}."""
 
-    branches = make_request_with_retry(
-        client, "GET", f"/repos/{event['owner']}/{event['repository_name']}/branches"
+    branches = client.make_request(
+        "GET", f"/repos/{event['owner']}/{event['repository_name']}/branches"
     ).json()
 
     branch_name = None
