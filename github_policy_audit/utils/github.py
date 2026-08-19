@@ -21,6 +21,7 @@ logger.setLevel(logging.INFO)
 # Transient errors can occur when many Lambdas request installation tokens in parallel.
 _CLIENT_INIT_RETRY_DELAYS_SECONDS = [0.5, 1.0, 2.0]
 _RETRYABLE_STATUS_CODES = {403, 429, 500, 502, 503, 504}
+
 _CLIENT_INIT_JITTER_FACTOR = 0.25
 _DEFAULT_CLIENT_CACHE_TTL_SECONDS = 300.0
 _CLIENT_CACHE: dict[str, tuple[float, GitHubRestClient]] = {}
@@ -142,7 +143,7 @@ def _is_retryable_http_error(error: HTTPError) -> bool:
         except Exception:  # pragma: no cover
             response_body = ""
 
-        if "rate limit" in response_body:
+        if "rate limit" in response_body or "abuse" in response_body:
             return True
 
         # GitHub App installation token creation can return transient 403 responses

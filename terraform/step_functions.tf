@@ -99,6 +99,28 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
       RateLimitStart = {
         Type     = "Task"
         Resource = aws_lambda_function.audit["rate_limit"].arn
+        Retry = [
+          {
+            ErrorEquals = [
+              "Lambda.ServiceException",
+              "Lambda.SdkClientException",
+              "Lambda.TooManyRequestsException",
+            ]
+            IntervalSeconds = 2
+            BackoffRate     = 2.0
+            MaxAttempts     = 3
+          },
+          {
+            ErrorEquals = [
+              "Lambda.AWSLambdaException",
+              "States.TaskFailed",
+            ]
+            IntervalSeconds = 60
+            BackoffRate     = 2.0
+            MaxAttempts     = 3
+            JitterStrategy  = "FULL"
+          }
+        ]
         Parameters = {
           "owner.$"    = "$.initial_input.owner"
           "checkpoint" = "rate-limit-start"
@@ -119,13 +141,22 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                   {
                     ErrorEquals = [
                       "Lambda.ServiceException",
-                      "Lambda.AWSLambdaException",
                       "Lambda.SdkClientException",
-                      "States.TaskFailed",
+                      "Lambda.TooManyRequestsException",
                     ]
                     IntervalSeconds = 2
                     BackoffRate     = 2.0
                     MaxAttempts     = 3
+                  },
+                  {
+                    ErrorEquals = [
+                      "Lambda.AWSLambdaException",
+                      "States.TaskFailed",
+                    ]
+                    IntervalSeconds = 60
+                    BackoffRate     = 2.0
+                    MaxAttempts     = 3
+                    JitterStrategy  = "FULL"
                   }
                 ]
                 Parameters = {
@@ -147,13 +178,22 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                   {
                     ErrorEquals = [
                       "Lambda.ServiceException",
-                      "Lambda.AWSLambdaException",
                       "Lambda.SdkClientException",
-                      "States.TaskFailed",
+                      "Lambda.TooManyRequestsException",
                     ]
                     IntervalSeconds = 2
                     BackoffRate     = 2.0
                     MaxAttempts     = 3
+                  },
+                  {
+                    ErrorEquals = [
+                      "Lambda.AWSLambdaException",
+                      "States.TaskFailed",
+                    ]
+                    IntervalSeconds = 60
+                    BackoffRate     = 2.0
+                    MaxAttempts     = 3
+                    JitterStrategy  = "FULL"
                   }
                 ]
                 Parameters = {
@@ -190,6 +230,28 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
               dependabot_slo = {
                 Type     = "Task"
                 Resource = aws_lambda_function.audit["dependabot_slo"].arn
+                Retry = [
+                  {
+                    ErrorEquals = [
+                      "Lambda.ServiceException",
+                      "Lambda.SdkClientException",
+                      "Lambda.TooManyRequestsException",
+                    ]
+                    IntervalSeconds = 2
+                    BackoffRate     = 2.0
+                    MaxAttempts     = 3
+                  },
+                  {
+                    ErrorEquals = [
+                      "Lambda.AWSLambdaException",
+                      "States.TaskFailed",
+                    ]
+                    IntervalSeconds = 60
+                    BackoffRate     = 2.0
+                    MaxAttempts     = 3
+                    JitterStrategy  = "FULL"
+                  }
+                ]
                 Parameters = {
                   "owner.$"  = "$.owner"
                   "levels.$" = "$.levels"
@@ -204,6 +266,28 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
               secret_scanning_slo = {
                 Type     = "Task"
                 Resource = aws_lambda_function.audit["secret_scanning_slo"].arn
+                Retry = [
+                  {
+                    ErrorEquals = [
+                      "Lambda.ServiceException",
+                      "Lambda.SdkClientException",
+                      "Lambda.TooManyRequestsException",
+                    ]
+                    IntervalSeconds = 2
+                    BackoffRate     = 2.0
+                    MaxAttempts     = 3
+                  },
+                  {
+                    ErrorEquals = [
+                      "Lambda.AWSLambdaException",
+                      "States.TaskFailed",
+                    ]
+                    IntervalSeconds = 60
+                    BackoffRate     = 2.0
+                    MaxAttempts     = 3
+                    JitterStrategy  = "FULL"
+                  }
+                ]
                 Parameters = {
                   "owner.$" = "$.owner"
                 }
@@ -231,6 +315,28 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                     team_maintainer = {
                       Type     = "Task"
                       Resource = aws_lambda_function.audit["team_maintainer"].arn
+                      Retry = [
+                        {
+                          ErrorEquals = [
+                            "Lambda.ServiceException",
+                            "Lambda.SdkClientException",
+                            "Lambda.TooManyRequestsException",
+                          ]
+                          IntervalSeconds = 2
+                          BackoffRate     = 2.0
+                          MaxAttempts     = 3
+                        },
+                        {
+                          ErrorEquals = [
+                            "Lambda.AWSLambdaException",
+                            "States.TaskFailed",
+                          ]
+                          IntervalSeconds = 60
+                          BackoffRate     = 2.0
+                          MaxAttempts     = 3
+                          JitterStrategy  = "FULL"
+                        }
+                      ]
                       Parameters = {
                         "owner.$"     = "$.owner"
                         "team_slug.$" = "$.team.slug"
@@ -286,13 +392,22 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                         {
                           ErrorEquals = [
                             "Lambda.ServiceException",
-                            "Lambda.AWSLambdaException",
                             "Lambda.SdkClientException",
-                            "States.TaskFailed",
+                            "Lambda.TooManyRequestsException",
                           ]
                           IntervalSeconds = 2
                           BackoffRate     = 2.0
                           MaxAttempts     = 3
+                        },
+                        {
+                          ErrorEquals = [
+                            "Lambda.AWSLambdaException",
+                            "States.TaskFailed",
+                          ]
+                          IntervalSeconds = 60
+                          BackoffRate     = 2.0
+                          MaxAttempts     = 3
+                          JitterStrategy  = "FULL"
                         }
                       ]
                       Parameters = {
@@ -331,6 +446,20 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
             store_repository_output = {
               Type     = "Task"
               Resource = aws_lambda_function.audit["store_repository_output"].arn
+              Retry = [
+                {
+                  ErrorEquals = [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException",
+                    "Lambda.TooManyRequestsException",
+                    "States.TaskFailed",
+                  ]
+                  IntervalSeconds = 2
+                  BackoffRate     = 2.0
+                  MaxAttempts     = 3
+                }
+              ]
               Parameters = {
                 "owner.$"           = "$.owner"
                 "run_id.$"          = "$.run_id"
@@ -349,6 +478,28 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
       RateLimitEnd = {
         Type     = "Task"
         Resource = aws_lambda_function.audit["rate_limit"].arn
+        Retry = [
+          {
+            ErrorEquals = [
+              "Lambda.ServiceException",
+              "Lambda.SdkClientException",
+              "Lambda.TooManyRequestsException",
+            ]
+            IntervalSeconds = 2
+            BackoffRate     = 2.0
+            MaxAttempts     = 3
+          },
+          {
+            ErrorEquals = [
+              "Lambda.AWSLambdaException",
+              "States.TaskFailed",
+            ]
+            IntervalSeconds = 60
+            BackoffRate     = 2.0
+            MaxAttempts     = 3
+            JitterStrategy  = "FULL"
+          }
+        ]
         Parameters = {
           "owner.$"    = "$.owner"
           "checkpoint" = "rate-limit-end"
@@ -359,6 +510,20 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
       store_output = {
         Type     = "Task"
         Resource = aws_lambda_function.audit["store_output"].arn
+        Retry = [
+          {
+            ErrorEquals = [
+              "Lambda.ServiceException",
+              "Lambda.AWSLambdaException",
+              "Lambda.SdkClientException",
+              "Lambda.TooManyRequestsException",
+              "States.TaskFailed",
+            ]
+            IntervalSeconds = 2
+            BackoffRate     = 2.0
+            MaxAttempts     = 3
+          }
+        ]
         Parameters = {
           "run_id.$"               = "$.run_id"
           "output_bucket.$"        = "$.output_bucket"

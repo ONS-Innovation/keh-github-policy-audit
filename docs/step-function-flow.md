@@ -249,7 +249,7 @@ Each item in the array spawns a child execution. The item selector passes only w
     "owner": "ONS-Innovation",
     "run_id": "<sfn-execution-name>",
     "output_bucket": "<s3-bucket-name>",
-    "repository": { "name": "repo-a", "data": { "updated_at": "...", "security_and_analysis": {} } }
+    "repository": { "name": "repo-a", "data": { "default_branch": "main", "updated_at": "...", "security_and_analysis": {} } }
 }
 ```
 

@@ -586,6 +586,34 @@ class TestGithubRateLimitHelpers:
 
         assert github._is_retryable_http_error(error) is True
 
+    def test_is_retryable_http_error_returns_true_for_abuse_detection_body(
+        self,
+    ) -> None:
+        """A 403 with an abuse-detection body should be treated as retryable."""
+        response = _response_with_status(403)
+        response._content = (
+            b'{"message": "You have triggered an abuse detection mechanism. '
+            b'Please wait a few minutes before you try again."}'
+        )
+
+        error = HTTPError("Forbidden", response=response)
+
+        assert github._is_retryable_http_error(error) is True
+
+    def test_is_retryable_http_error_returns_true_for_secondary_rate_limit_body(
+        self,
+    ) -> None:
+        """A 403 with a secondary rate-limit body should be treated as retryable."""
+        response = _response_with_status(403)
+        response._content = (
+            b'{"message": "You have exceeded a secondary rate limit and have been '
+            b'temporarily blocked from content creation."}'
+        )
+
+        error = HTTPError("Forbidden", response=response)
+
+        assert github._is_retryable_http_error(error) is True
+
     def test_is_retryable_http_error_returns_true_for_installation_token_403(
         self,
     ) -> None:

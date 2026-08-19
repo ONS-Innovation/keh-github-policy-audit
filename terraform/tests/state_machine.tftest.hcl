@@ -101,13 +101,23 @@ run "state_machine_concurrency" {
   }
 
   assert {
-    condition     = length(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.RepositoryChecksMap.ItemProcessor.States.RepositoryChecksParallel.Branches[0].States.codeowners.Retry) == 1
-    error_message = "Repository check tasks should define a retry policy for transient failures."
+    condition     = length(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.RepositoryChecksMap.ItemProcessor.States.RepositoryChecksParallel.Branches[0].States.codeowners.Retry) == 2
+    error_message = "Repository check tasks should define two retry tiers (fast infra, slow rate-limit)."
   }
 
   assert {
-    condition     = contains(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.RepositoryChecksMap.ItemProcessor.States.RepositoryChecksParallel.Branches[0].States.codeowners.Retry[0].ErrorEquals, "States.TaskFailed")
-    error_message = "Repository check task retry policy should include States.TaskFailed."
+    condition     = contains(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.RepositoryChecksMap.ItemProcessor.States.RepositoryChecksParallel.Branches[0].States.codeowners.Retry[1].ErrorEquals, "States.TaskFailed")
+    error_message = "Repository check slow retry tier should include States.TaskFailed."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.RepositoryChecksMap.ItemProcessor.States.RepositoryChecksParallel.Branches[0].States.codeowners.Retry[1].IntervalSeconds == 60
+    error_message = "Repository check slow retry tier should start at 60 seconds."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.RepositoryChecksMap.ItemProcessor.States.RepositoryChecksParallel.Branches[0].States.codeowners.Retry[1].JitterStrategy == "FULL"
+    error_message = "Repository check slow retry tier should use FULL jitter strategy."
   }
 }
 

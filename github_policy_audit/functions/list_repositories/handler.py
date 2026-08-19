@@ -73,6 +73,7 @@ def handler(event, context, client):
         {
             "name": repo["name"],
             "data": {
+                "default_branch": repo.get("default_branch"),
                 "updated_at": repo.get("updated_at"),
                 "visibility": repo.get("visibility"),
                 "security_and_analysis": _slim_security_and_analysis(
