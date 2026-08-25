@@ -1104,10 +1104,7 @@ class TestScorecardRating:
     def test_non_compliant_when_no_criteria_defined(self):
         """With no criteria configured, all repositories are non-compliant."""
         checks = {"readme": {"result": "pass"}}
-        assert (
-            self.scorecard.calculate_repository_rating(checks, [])
-            == "non-compliant"
-        )
+        assert self.scorecard.calculate_repository_rating(checks, []) == "non-compliant"
 
     def test_required_checks_missing_from_results_treated_as_fail(self):
         """A required check absent from repository results blocks ratings that need it."""
