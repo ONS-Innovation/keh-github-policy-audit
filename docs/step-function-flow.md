@@ -340,7 +340,7 @@ The summary file structure:
                 }
             },
             "is_compliant": true,
-            "rating": "unrated"
+            "rating": "non-compliant"
         }
     },
     "organisation_checks": {

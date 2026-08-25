@@ -263,7 +263,7 @@ def handler(event, context):
     # Calculate repository ratings and tally scorecard status counts
 
     scorecard_status_counts = {rating["name"]: 0 for rating in scorecard_ratings}
-    scorecard_status_counts["unrated"] = 0
+    scorecard_status_counts["non-compliant"] = 0
 
     for repository_name, repository_checks in repositories.items():
         if not isinstance(repository_checks, dict):
