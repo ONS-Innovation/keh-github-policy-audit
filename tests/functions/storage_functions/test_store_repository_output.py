@@ -11,7 +11,7 @@ import pytest
 
 
 class TestStoreRepositoryOutputValidation:
-    module = importlib.import_module("functions.store_repository_output.handler")
+    module = importlib.import_module("functions.storage_functions.store_repository_output.handler")
 
     def test_requires_owner(self) -> None:
         with pytest.raises(KeyError):
@@ -67,7 +67,7 @@ class TestStoreRepositoryOutputValidation:
 
 
 class TestStoreRepositoryOutputLocal:
-    module = importlib.import_module("functions.store_repository_output.handler")
+    module = importlib.import_module("functions.storage_functions.store_repository_output.handler")
 
     def setup_method(self) -> None:
         self._tmp_dir = tempfile.TemporaryDirectory()
@@ -123,7 +123,7 @@ class TestStoreRepositoryOutputLocal:
 
 
 class TestStoreRepositoryOutputProd:
-    module = importlib.import_module("functions.store_repository_output.handler")
+    module = importlib.import_module("functions.storage_functions.store_repository_output.handler")
 
     def test_puts_to_s3(self) -> None:
         captured: dict[str, object] = {}

@@ -167,12 +167,12 @@ run "lambda_handlers" {
   }
 
   assert {
-    condition     = aws_lambda_function.audit["store_output"].handler == "functions.store_output.handler.handler"
+    condition     = aws_lambda_function.audit["store_output"].handler == "functions.storage_functions.store_output.handler.handler"
     error_message = "store_output handler path is incorrect."
   }
 
   assert {
-    condition     = aws_lambda_function.audit["store_repository_output"].handler == "functions.store_repository_output.handler.handler"
+    condition     = aws_lambda_function.audit["store_repository_output"].handler == "functions.storage_functions.store_repository_output.handler.handler"
     error_message = "store_repository_output handler path is incorrect."
   }
 }

@@ -16,7 +16,7 @@ import pytest
 
 
 class TestIsPass:
-    module = importlib.import_module("functions.store_output.handler")
+    module = importlib.import_module("functions.storage_functions.store_output.handler")
 
     def test_returns_true_for_pass_result(self):
         """A dict with result 'pass' should be considered passing."""
@@ -48,7 +48,7 @@ class TestIsPass:
 
 
 class TestHandlerValidation:
-    module = importlib.import_module("functions.store_output.handler")
+    module = importlib.import_module("functions.storage_functions.store_output.handler")
 
     def test_raises_for_missing_owner(self):
         """A missing owner key in the event should raise a KeyError."""
@@ -91,7 +91,7 @@ class TestHandlerValidation:
 
 
 class TestNormaliseRepositoryChecks:
-    module = importlib.import_module("functions.store_output.handler")
+    module = importlib.import_module("functions.storage_functions.store_output.handler")
 
     def test_skips_non_dict_repository_result_entries(self):
         """Non-dict entries in repository_results should be silently skipped."""
@@ -132,7 +132,7 @@ class TestNormaliseRepositoryChecks:
 
 
 class TestNormaliseTeamChecks:
-    module = importlib.import_module("functions.store_output.handler")
+    module = importlib.import_module("functions.storage_functions.store_output.handler")
 
     def test_skips_non_dict_team_result_entries(self):
         """Non-dict entries in team_results should be silently skipped."""
@@ -162,7 +162,7 @@ class TestNormaliseTeamChecks:
 
 
 class TestHandlerLocal:
-    module = importlib.import_module("functions.store_output.handler")
+    module = importlib.import_module("functions.storage_functions.store_output.handler")
 
     def setup_method(self):
         self._tmp_dir = tempfile.TemporaryDirectory()
@@ -170,7 +170,7 @@ class TestHandlerLocal:
         self._original_cwd = os.getcwd()
         os.chdir(self.tmp_path)
         self._scorecard_patcher = patch(
-            "functions.store_output.handler.load_scorecard_criteria",
+            "functions.storage_functions.store_output.handler.load_scorecard_criteria",
             return_value=[],
         )
         self._scorecard_patcher.start()
@@ -636,7 +636,7 @@ class TestHandlerLocal:
 
 
 class TestHandlerProd:
-    module = importlib.import_module("functions.store_output.handler")
+    module = importlib.import_module("functions.storage_functions.store_output.handler")
 
     def test_s3_loader_skips_non_dict_payload_and_handles_fallback_paths(self) -> None:
         """Loader should skip non-dict payloads, fallback repo name from key, and allow empty checks payloads."""

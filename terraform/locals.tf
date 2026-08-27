@@ -30,8 +30,8 @@ locals {
       timeout  = 300
     }
     team_maintainer = {
-      zip_path = "${local.lambda_source_root}/organisation_checks-team_maintainer.zip"
-      handler  = "functions.organisation_checks.team_maintainer.handler.handler"
+      zip_path = "${local.lambda_source_root}/team_checks-team_maintainer.zip"
+      handler  = "functions.team_checks.team_maintainer.handler.handler"
     }
     codeowners = {
       zip_path = "${local.lambda_source_root}/repository_checks-codeowners.zip"
@@ -82,20 +82,20 @@ locals {
       handler  = "functions.repository_checks.branch_protection.handler.handler"
     }
     store_repository_output = {
-      zip_path = "${local.lambda_source_root}/store_repository_output.zip"
-      handler  = "functions.store_repository_output.handler.handler"
+      zip_path = "${local.lambda_source_root}/storage_functions-store_repository_output.zip"
+      handler  = "functions.storage_functions.store_repository_output.handler.handler"
     }
     store_output = {
-      zip_path = "${local.lambda_source_root}/store_output.zip"
-      handler  = "functions.store_output.handler.handler"
+      zip_path = "${local.lambda_source_root}/storage_functions-store_output.zip"
+      handler  = "functions.storage_functions.store_output.handler.handler"
     }
     store_team_checks = {
-      zip_path = "${local.lambda_source_root}/organisation_checks-store_team_checks.zip"
-      handler  = "functions.organisation_checks.store_team_checks.handler.handler"
+      zip_path = "${local.lambda_source_root}/storage_functions-store_team_checks.zip"
+      handler  = "functions.storage_functions.store_team_checks.handler.handler"
     }
     store_organisation_checks = {
-      zip_path = "${local.lambda_source_root}/organisation_checks-store_organisation_checks.zip"
-      handler  = "functions.organisation_checks.store_organisation_checks.handler.handler"
+      zip_path = "${local.lambda_source_root}/storage_functions-store_organisation_checks.zip"
+      handler  = "functions.storage_functions.store_organisation_checks.handler.handler"
     }
   }
 

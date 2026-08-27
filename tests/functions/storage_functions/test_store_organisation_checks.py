@@ -12,7 +12,7 @@ import pytest
 
 class TestStoreOrganisationChecksValidation:
     module = importlib.import_module(
-        "functions.organisation_checks.store_organisation_checks.handler"
+        "functions.storage_functions.store_organisation_checks.handler"
     )
 
     def test_requires_owner(self) -> None:
@@ -81,7 +81,7 @@ class TestStoreOrganisationChecksValidation:
 
 class TestStoreOrganisationChecksLocal:
     module = importlib.import_module(
-        "functions.organisation_checks.store_organisation_checks.handler"
+        "functions.storage_functions.store_organisation_checks.handler"
     )
 
     def setup_method(self) -> None:
