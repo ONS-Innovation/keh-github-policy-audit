@@ -157,8 +157,8 @@ run "state_machine_concurrency" {
   }
 
   assert {
-    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.TeamChecksMap.ItemProcessor.ProcessorConfig.Mode == "INLINE"
-    error_message = "TeamChecksMap should run in INLINE mode (smaller scale than repositories)."
+    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.TeamChecksMap.ItemProcessor.ProcessorConfig.Mode == "DISTRIBUTED"
+    error_message = "TeamChecksMap should run in DISTRIBUTED mode to support ItemReader for S3 data fetching."
   }
 
   assert {

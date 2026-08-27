@@ -316,7 +316,8 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
         }
         ItemProcessor = {
           ProcessorConfig = {
-            Mode = "INLINE"
+            Mode          = "DISTRIBUTED"
+            ExecutionType = "STANDARD"
           }
           StartAt = "TeamChecksParallel"
           States = {
