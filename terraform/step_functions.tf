@@ -413,7 +413,7 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
             }
           }
         }
-        End = true
+        Next = "RepositoryChecksMap"
       }
       RepositoryChecksMap = {
         Type           = "Map"
