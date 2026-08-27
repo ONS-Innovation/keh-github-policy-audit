@@ -38,6 +38,14 @@ resource "aws_iam_role_policy" "step_function_invoke_lambda" {
         Resource = "${aws_s3_bucket.audit_output.arn}/audit-runs/*/repositories-list.json"
       },
       {
+        Sid    = "AllowReadTeamsList"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+        ]
+        Resource = "${aws_s3_bucket.audit_output.arn}/audit-runs/*/teams-list.json"
+      },
+      {
         Sid    = "AllowDistributedMapChildExecutions"
         Effect = "Allow"
         Action = [

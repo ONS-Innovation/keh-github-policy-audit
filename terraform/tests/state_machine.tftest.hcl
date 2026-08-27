@@ -279,6 +279,14 @@ run "step_function_and_eventbridge_iam" {
 
   assert {
     condition = alltrue([
+      strcontains(aws_iam_role_policy.step_function_invoke_lambda.policy, "\"AllowReadTeamsList\""),
+      strcontains(aws_iam_role_policy.step_function_invoke_lambda.policy, "\"s3:GetObject\""),
+    ])
+    error_message = "Step Function policy should allow reading teams list object from S3."
+  }
+
+  assert {
+    condition = alltrue([
       strcontains(aws_iam_role_policy.step_function_invoke_lambda.policy, "\"AllowDistributedMapChildExecutions\""),
       strcontains(aws_iam_role_policy.step_function_invoke_lambda.policy, "\"states:StartExecution\""),
       strcontains(aws_iam_role_policy.step_function_invoke_lambda.policy, "\"states:DescribeExecution\""),
