@@ -27,9 +27,7 @@ class TestInactivityHandler:
             captured["data"] = data
             return {"status": "PASS"}
 
-        mock_check = create_autospec(
-            module.check_inactivity, side_effect=fake_check
-        )
+        mock_check = create_autospec(module.check_inactivity, side_effect=fake_check)
 
         with (
             patch("utils.github.get_github_client", return_value=client),
@@ -63,9 +61,7 @@ class TestInactivityHandler:
             captured["data"] = data
             return {"status": "PASS"}
 
-        mock_check = create_autospec(
-            module.check_inactivity, side_effect=fake_check
-        )
+        mock_check = create_autospec(module.check_inactivity, side_effect=fake_check)
 
         with (
             patch("utils.github.get_github_client", return_value=client),

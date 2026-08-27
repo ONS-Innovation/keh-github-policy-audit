@@ -199,6 +199,12 @@ class TestStoreTeamChecksLocal:
         assert result["bucket"] == "test-bucket"
         assert result["key"] == "audit-runs/test-org/run-1/teams/team-a.json"
 
+        # Verify S3 put_object was called with correct parameters
+        mock_s3_client.put_object.assert_called_once()
+        call_kwargs = mock_s3_client.put_object.call_args[1]
+        assert call_kwargs["Bucket"] == "test-bucket"
+        assert call_kwargs["Key"] == "audit-runs/test-org/run-1/teams/team-a.json"
+
 
 class TestNormaliseChecks:
     module = importlib.import_module(

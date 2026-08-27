@@ -21,9 +21,7 @@ class TestCodeownersHandler:
             _captured["repository_name"] = repository_name
             return {"status": "PASS"}
 
-        mock_check = create_autospec(
-            module.check_codeowners, side_effect=fake_check
-        )
+        mock_check = create_autospec(module.check_codeowners, side_effect=fake_check)
 
         with (
             patch("utils.github.get_github_client", return_value=client),

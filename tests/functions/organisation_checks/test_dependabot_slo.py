@@ -3,9 +3,7 @@
 import importlib
 from unittest.mock import create_autospec, patch
 
-module = importlib.import_module(
-    "functions.organisation_checks.dependabot_slo.handler"
-)
+module = importlib.import_module("functions.organisation_checks.dependabot_slo.handler")
 
 
 class TestDependabotSloHandler:
@@ -21,9 +19,7 @@ class TestDependabotSloHandler:
             captured["levels"] = levels
             return {"status": "PASS"}
 
-        mock_check = create_autospec(
-            module.get_dependabot_slo, side_effect=fake_check
-        )
+        mock_check = create_autospec(module.get_dependabot_slo, side_effect=fake_check)
 
         with (
             patch("utils.github.get_github_client", return_value=client),
@@ -48,9 +44,7 @@ class TestDependabotSloHandler:
             captured["levels"] = levels
             return {"status": "PASS"}
 
-        mock_check = create_autospec(
-            module.get_dependabot_slo, side_effect=fake_check
-        )
+        mock_check = create_autospec(module.get_dependabot_slo, side_effect=fake_check)
 
         with (
             patch("utils.github.get_github_client", return_value=client),
