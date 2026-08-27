@@ -417,7 +417,8 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
             }
           }
         }
-        Next = "RepositoryChecksMap"
+        ResultPath = "$.team_checks"
+        Next       = "RepositoryChecksMap"
       }
       RepositoryChecksMap = {
         Type           = "Map"
