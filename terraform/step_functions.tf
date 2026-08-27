@@ -594,13 +594,11 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
           }
         ]
         Parameters = {
-          "run_id.$"               = "$.run_id"
-          "output_bucket.$"        = "$.output_bucket"
-          "owner.$"                = "$.owner"
-          "teams_s3_ref.$"         = "$.teams_s3_ref"
-          "organisation_results.$" = "$.organisation_results"
-          "rate_limit_start.$"     = "$.rate_limit_start"
-          "rate_limit_end.$"       = "$.rate_limit_end"
+          "owner.$"            = "$.owner"
+          "run_id.$"           = "$.run_id"
+          "output_bucket.$"    = "$.output_bucket"
+          "rate_limit_start.$" = "$.rate_limit_start"
+          "rate_limit_end.$"   = "$.rate_limit_end"
         }
         End = true
       }
