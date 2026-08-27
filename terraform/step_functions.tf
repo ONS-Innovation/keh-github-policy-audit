@@ -256,13 +256,8 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                   "owner.$"  = "$.owner"
                   "levels.$" = "$.levels"
                 }
-                ResultSelector = {
-                  "check_name.$" = "$.check_name"
-                  "result.$"     = "$.result"
-                  "message.$"    = "$.message"
-                  "details.$"    = "$.details"
-                }
-                Next = "store_${check_name}"
+                ResultPath = "$.check_result"
+                Next       = "store_${check_name}"
               }
               "store_${check_name}" = {
                 Type     = "Task"
@@ -285,10 +280,10 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                   "owner.$"         = "$.owner"
                   "run_id.$"        = "$.run_id"
                   "output_bucket.$" = "$.output_bucket"
-                  "check_name.$"    = "$.check_name"
-                  "result.$"        = "$.result"
-                  "message.$"       = "$.message"
-                  "details.$"       = "$.details"
+                  "check_name.$"    = "$.check_result.check_name"
+                  "result.$"        = "$.check_result.result"
+                  "message.$"       = "$.check_result.message"
+                  "details.$"       = "$.check_result.details"
                 }
                 ResultPath = null
                 OutputPath = null
