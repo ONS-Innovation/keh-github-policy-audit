@@ -285,10 +285,10 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                   "owner.$"         = "$.owner"
                   "run_id.$"        = "$.run_id"
                   "output_bucket.$" = "$.output_bucket"
-                  "check_name.$"    = "$[0].check_name"
-                  "result.$"        = "$[0].result"
-                  "message.$"       = "$[0].message"
-                  "details.$"       = "$[0].details"
+                  "check_name.$"    = "$.check_name"
+                  "result.$"        = "$.result"
+                  "message.$"       = "$.message"
+                  "details.$"       = "$.details"
                 }
                 ResultPath = null
                 OutputPath = null
