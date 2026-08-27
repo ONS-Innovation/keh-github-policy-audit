@@ -419,7 +419,7 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
             }
           }
         }
-        ResultPath = "$.team_checks"
+        ResultPath = null
         Next       = "RepositoryChecksMap"
       }
       RepositoryChecksMap = {
