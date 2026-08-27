@@ -728,19 +728,32 @@ class TestHandlerProd:
                 return json.dumps(self.payload)
 
         captured: dict[str, object] = {}
+        captured_prefixes: list[str] = []
 
         class FakePaginator:
             def paginate(self, **kwargs):
-                captured["prefix"] = kwargs.get("Prefix")
-                return [
-                    {
-                        "Contents": [
-                            {
-                                "Key": "audit-runs/test-org/run-123/repositories/repo-a.json",
-                            },
-                        ],
-                    }
-                ]
+                prefix = kwargs.get("Prefix")
+                captured_prefixes.append(prefix)
+                captured["prefix"] = prefix  # Last one wins for backward compatibility
+
+                # Return repository results if requesting repositories prefix
+                if prefix == "audit-runs/test-org/run-123/repositories/":
+                    return [
+                        {
+                            "Contents": [
+                                {
+                                    "Key": "audit-runs/test-org/run-123/repositories/repo-a.json",
+                                },
+                            ],
+                        }
+                    ]
+
+                # Return empty results for organisation-checks prefix
+                if prefix == "audit-runs/test-org/run-123/organisation-checks/":
+                    return [{"Contents": []}]
+
+                # Fallback for other prefixes
+                return [{"Contents": []}]
 
         class FakeS3Client:
             def get_paginator(self, operation_name):
@@ -802,7 +815,7 @@ class TestHandlerProd:
             result = self.module.handler(event, None)
 
         assert result["status"] == "success"
-        assert captured["prefix"] == "audit-runs/test-org/run-123/repositories/"
+        assert "audit-runs/test-org/run-123/repositories/" in captured_prefixes
         written = json.loads(str(captured["Body"]))
         assert written["summary"]["total_repositories"] == 1
         assert written["summary"]["compliant_repositories"] == 1

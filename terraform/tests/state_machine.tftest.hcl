@@ -235,8 +235,8 @@ run "terraform_outputs" {
   }
 
   assert {
-    condition     = length(output.lambda_function_names) == 20
-    error_message = "lambda_function_names output should include all 20 Lambda functions."
+    condition     = length(output.lambda_function_names) == 22
+    error_message = "lambda_function_names output should include all 22 Lambda functions."
   }
 
   assert {

@@ -89,6 +89,14 @@ locals {
       zip_path = "${local.lambda_source_root}/store_output.zip"
       handler  = "functions.store_output.handler.handler"
     }
+    store_team_checks = {
+      zip_path = "${local.lambda_source_root}/organisation_checks-store_team_checks.zip"
+      handler  = "functions.organisation_checks.store_team_checks.handler.handler"
+    }
+    store_organisation_checks = {
+      zip_path = "${local.lambda_source_root}/organisation_checks-store_organisation_checks.zip"
+      handler  = "functions.organisation_checks.store_organisation_checks.handler.handler"
+    }
   }
 
   repository_check_names = [

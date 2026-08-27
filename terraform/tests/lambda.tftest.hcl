@@ -62,13 +62,13 @@ override_data {
 
 run "lambda_definitions_complete" {
   assert {
-    condition     = length(local.lambda_definitions) == 20
-    error_message = "Expected 20 Lambda function definitions."
+    condition     = length(local.lambda_definitions) == 22
+    error_message = "Expected 22 Lambda function definitions."
   }
 
   assert {
-    condition     = length(aws_lambda_function.audit) == 20
-    error_message = "Expected 20 Lambda functions to be provisioned."
+    condition     = length(aws_lambda_function.audit) == 22
+    error_message = "Expected 22 Lambda functions to be provisioned."
   }
 
   assert {

@@ -215,7 +215,7 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
           "run_id.$"              = "$.initial_input.run_id"
           "output_bucket"         = aws_s3_bucket.audit_output.bucket
           "repositories_s3_ref.$" = "$.initial_data[0]"
-          "teams.$"               = "$.initial_data[1]"
+          "teams_s3_ref.$"        = "$.initial_data[1]"
           "rate_limit_start.$"    = "$.rate_limit_start"
         }
         ResultPath = "$"
@@ -256,7 +256,38 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                   "owner.$"  = "$.owner"
                   "levels.$" = "$.levels"
                 }
-                End = true
+                ResultPath = "$.dependabot_slo_result"
+                Next       = "store_dependabot_slo"
+              }
+              store_dependabot_slo = {
+                Type     = "Task"
+                Resource = aws_lambda_function.audit["store_organisation_checks"].arn
+                Retry = [
+                  {
+                    ErrorEquals = [
+                      "Lambda.ServiceException",
+                      "Lambda.AWSLambdaException",
+                      "Lambda.SdkClientException",
+                      "Lambda.TooManyRequestsException",
+                      "States.TaskFailed",
+                    ]
+                    IntervalSeconds = 2
+                    BackoffRate     = 2.0
+                    MaxAttempts     = 3
+                  }
+                ]
+                Parameters = {
+                  "owner.$"         = "$.owner"
+                  "run_id.$"        = "$.run_id"
+                  "output_bucket.$" = "$.output_bucket"
+                  "check_name.$"    = "$.dependabot_slo_result.check_name"
+                  "result.$"        = "$.dependabot_slo_result.result"
+                  "message.$"       = "$.dependabot_slo_result.message"
+                  "details.$"       = "$.dependabot_slo_result.details"
+                }
+                ResultPath = null
+                OutputPath = null
+                End        = true
               }
             }
           },
@@ -291,7 +322,38 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                 Parameters = {
                   "owner.$" = "$.owner"
                 }
-                End = true
+                ResultPath = "$.secret_scanning_slo_result"
+                Next       = "store_secret_scanning_slo"
+              }
+              store_secret_scanning_slo = {
+                Type     = "Task"
+                Resource = aws_lambda_function.audit["store_organisation_checks"].arn
+                Retry = [
+                  {
+                    ErrorEquals = [
+                      "Lambda.ServiceException",
+                      "Lambda.AWSLambdaException",
+                      "Lambda.SdkClientException",
+                      "Lambda.TooManyRequestsException",
+                      "States.TaskFailed",
+                    ]
+                    IntervalSeconds = 2
+                    BackoffRate     = 2.0
+                    MaxAttempts     = 3
+                  }
+                ]
+                Parameters = {
+                  "owner.$"         = "$.owner"
+                  "run_id.$"        = "$.run_id"
+                  "output_bucket.$" = "$.output_bucket"
+                  "check_name.$"    = "$.secret_scanning_slo_result.check_name"
+                  "result.$"        = "$.secret_scanning_slo_result.result"
+                  "message.$"       = "$.secret_scanning_slo_result.message"
+                  "details.$"       = "$.secret_scanning_slo_result.details"
+                }
+                ResultPath = null
+                OutputPath = null
+                End        = true
               }
             }
           },
@@ -300,11 +362,22 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
             States = {
               TeamMaintainerMap = {
                 Type           = "Map"
-                ItemsPath      = "$.teams"
                 MaxConcurrency = var.team_map_max_concurrency
+                ItemReader = {
+                  Resource = "arn:${data.aws_partition.current.partition}:states:::s3:getObject"
+                  ReaderConfig = {
+                    InputType = "JSON"
+                  }
+                  Parameters = {
+                    "Bucket.$" = "$.teams_s3_ref.s3_bucket"
+                    "Key.$"    = "$.teams_s3_ref.s3_key"
+                  }
+                }
                 ItemSelector = {
-                  "owner.$" = "$.owner"
-                  "team.$"  = "$$.Map.Item.Value"
+                  "owner.$"         = "$.owner"
+                  "run_id.$"        = "$.run_id"
+                  "output_bucket.$" = "$.output_bucket"
+                  "team.$"          = "$$.Map.Item.Value"
                 }
                 ItemProcessor = {
                   ProcessorConfig = {
@@ -341,7 +414,38 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                         "owner.$"     = "$.owner"
                         "team_slug.$" = "$.team.slug"
                       }
-                      End = true
+                      ResultPath = "$.team_check_result"
+                      Next       = "store_team_check"
+                    }
+                    store_team_check = {
+                      Type     = "Task"
+                      Resource = aws_lambda_function.audit["store_team_checks"].arn
+                      Retry = [
+                        {
+                          ErrorEquals = [
+                            "Lambda.ServiceException",
+                            "Lambda.AWSLambdaException",
+                            "Lambda.SdkClientException",
+                            "Lambda.TooManyRequestsException",
+                            "States.TaskFailed",
+                          ]
+                          IntervalSeconds = 2
+                          BackoffRate     = 2.0
+                          MaxAttempts     = 3
+                        }
+                      ]
+                      Parameters = {
+                        "owner.$"         = "$.owner"
+                        "run_id.$"        = "$.run_id"
+                        "output_bucket.$" = "$.output_bucket"
+                        "team_slug.$"     = "$.team.slug"
+                        "check_name.$"    = "$.team_check_result.check_name"
+                        "result.$"        = "$.team_check_result.result"
+                        "message.$"       = "$.team_check_result.message"
+                      }
+                      ResultPath = null
+                      OutputPath = "$.team_check_result"
+                      End        = true
                     }
                   }
                 }
@@ -350,7 +454,7 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
             }
           },
         ]
-        ResultPath = "$.organisation_results"
+        ResultPath = null
         Next       = "RepositoryChecksMap"
       }
       RepositoryChecksMap = {
@@ -528,9 +632,8 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
           "run_id.$"               = "$.run_id"
           "output_bucket.$"        = "$.output_bucket"
           "owner.$"                = "$.owner"
-          "teams.$"                = "$.teams"
+          "teams_s3_ref.$"         = "$.teams_s3_ref"
           "organisation_results.$" = "$.organisation_results"
-          "team_results.$"         = "$.organisation_results[2]"
           "rate_limit_start.$"     = "$.rate_limit_start"
           "rate_limit_end.$"       = "$.rate_limit_end"
         }

@@ -177,6 +177,76 @@ def _load_repository_checks_from_s3(
     return repository_checks
 
 
+def _load_teams_list_from_s3(
+    *,
+    s3_client,
+    bucket_name: str,
+    teams_s3_key: str,
+) -> list[dict]:
+    """Load teams list from S3 and return as list of team objects.
+
+    Returns empty list if file cannot be found or parsed.
+    """
+    try:
+        raw_body = s3_client.get_object(Bucket=bucket_name, Key=teams_s3_key)[
+            "Body"
+        ].read()
+        payload = json.loads(raw_body)
+        if isinstance(payload, list):
+            return payload
+    except Exception:
+        pass
+    return []
+
+
+def _load_organisation_checks_from_s3(
+    *,
+    s3_client,
+    bucket_name: str,
+    owner: str,
+    run_id: str,
+) -> dict[str, dict]:
+    """Load organisation check results from S3 and return as dictionary.
+
+    Reads all JSON objects from audit-runs/{owner}/{run_id}/organisation-checks/
+    and returns them keyed by check name.
+    """
+    prefix = f"audit-runs/{owner}/{run_id}/organisation-checks/"
+    organisation_checks: dict[str, dict] = {}
+
+    paginator = s3_client.get_paginator("list_objects_v2")
+    try:
+        for response in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+            for obj in response.get("Contents", []):
+                key = obj.get("Key")
+                if not isinstance(key, str) or not key.endswith(".json"):
+                    continue
+
+                try:
+                    raw_body = s3_client.get_object(Bucket=bucket_name, Key=key)[
+                        "Body"
+                    ].read()
+                    payload = json.loads(raw_body)
+                    if not isinstance(payload, dict):
+                        continue
+
+                    # Extract check name from filename or payload
+                    check_name = payload.get("check_name")
+                    if not isinstance(check_name, str) or not check_name:
+                        check_name = key.rsplit("/", 1)[-1].removesuffix(".json")
+
+                    if check_name:
+                        organisation_checks[check_name] = {
+                            k: v for k, v in payload.items() if k != "check_name"
+                        }
+                except Exception:
+                    continue
+    except Exception:
+        pass
+
+    return organisation_checks
+
+
 def _normalise_team_checks(teams, team_results) -> dict[str, dict]:
     """Return teams keyed by slug or name with nested check results."""
     if isinstance(teams, dict):
@@ -275,9 +345,44 @@ def handler(event, context):
         repositories[repository_name]["rating"] = rating
         scorecard_status_counts[rating] = scorecard_status_counts.get(rating, 0) + 1
 
-    teams = _normalise_team_checks(event.get("teams"), event.get("team_results"))
+    teams_input = event.get("teams")
+
+    # If teams not in event but teams_s3_ref provided, load from S3
+    if not teams_input and isinstance(run_id, str) and run_id:
+        teams_s3_ref = event.get("teams_s3_ref")
+        if isinstance(teams_s3_ref, dict):
+            teams_s3_key = teams_s3_ref.get("s3_key")
+            if isinstance(teams_s3_key, str) and teams_s3_key:
+                if environment == "prod":
+                    if not bucket_name:
+                        raise ValueError(
+                            "output_bucket (or S3_BUCKET_NAME) is required in prod when using teams_s3_ref"
+                        )
+                    teams_input = _load_teams_list_from_s3(
+                        s3_client=s3_client,
+                        bucket_name=bucket_name,
+                        teams_s3_key=teams_s3_key,
+                    )
+
+    teams = _normalise_team_checks(teams_input, event.get("team_results"))
+
+    # If organisation_checks not in event but run_id provided, load from S3
+    organisation_checks_input = event.get("organisation_checks")
+    if not organisation_checks_input and isinstance(run_id, str) and run_id:
+        if environment == "prod":
+            if not bucket_name:
+                raise ValueError(
+                    "output_bucket (or S3_BUCKET_NAME) is required in prod when using run_id"
+                )
+            organisation_checks_input = _load_organisation_checks_from_s3(
+                s3_client=s3_client,
+                bucket_name=bucket_name,
+                owner=owner,
+                run_id=run_id,
+            )
+
     organisation_checks = _normalise_organisation_checks(
-        event.get("organisation_checks"), event.get("organisation_results")
+        organisation_checks_input, event.get("organisation_results")
     )
 
     now = datetime.now(timezone.utc)

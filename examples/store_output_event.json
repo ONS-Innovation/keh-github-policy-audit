@@ -1,46 +1,28 @@
 {
   "owner": "ONS-Innovation",
-  "run_id": "manual-test-run-2026-07-16",
+  "run_id": "manual-test-run-2026-08-27",
   "output_bucket": "sdp-dev-github-policy-audit",
-  "teams": [
-    {
-      "slug": "knowledge-exchange-hub",
-      "name": "Knowledge Exchange Hub"
-    }
-  ],
-  "organisation_results": [
-    {
-      "check_name": "dependabot_slo",
-      "result": "pass",
-      "message": "Dependabot meets SLO"
-    },
-    {
-      "check_name": "secret_scanning_slo",
-      "result": "pass",
-      "message": "Secret scanning meets SLO"
-    },
-    [
-      {
-        "check_name": "team_maintainer",
-        "result": "pass",
-        "message": "Team has maintainers"
-      }
-    ]
-  ],
-  "team_results": [
-    {
-      "check_name": "team_maintainer",
-      "result": "pass",
-      "message": "Team has maintainers"
-    }
-  ],
+  "repositories_s3_ref": {
+    "s3_bucket": "sdp-dev-github-policy-audit",
+    "s3_key": "audit-runs/ONS-Innovation/manual-test-run-2026-08-27/repositories-list.json",
+    "repository_count": 103,
+    "environment": "prod",
+    "local_output_path": null
+  },
+  "teams_s3_ref": {
+    "s3_bucket": "sdp-dev-github-policy-audit",
+    "s3_key": "audit-runs/ONS-Innovation/manual-test-run-2026-08-27/teams-list.json",
+    "team_count": 16,
+    "environment": "prod",
+    "local_output_path": null
+  },
   "rate_limit_start": {
     "checkpoint": "rate-limit-start",
     "limit": 5000,
     "remaining": 4988,
     "reset": 1721668800,
     "used": 12,
-    "retrieved_at": "2026-07-16T08:00:00+00:00"
+    "retrieved_at": "2026-08-27T08:00:00+00:00"
   },
   "rate_limit_end": {
     "checkpoint": "rate-limit-end",
@@ -48,6 +30,6 @@
     "remaining": 4321,
     "reset": 1721668800,
     "used": 679,
-    "retrieved_at": "2026-07-16T08:17:00+00:00"
+    "retrieved_at": "2026-08-27T08:17:00+00:00"
   }
 }
