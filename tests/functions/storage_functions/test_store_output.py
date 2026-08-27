@@ -1,6 +1,7 @@
 """Unit tests for store_output handler with parametrized tests."""
 
 import json
+from typing import Any
 from unittest.mock import Mock, patch, MagicMock
 
 import pytest
@@ -317,7 +318,7 @@ class TestNormalizers:
 
     def test_normalise_organisation_checks_skips_non_dict(self) -> None:
         """Should skip non-dict check results."""
-        org_checks = {
+        org_checks: dict[str, Any] = {
             "valid": {"result": "pass"},
             "invalid": "not a dict",
         }
@@ -516,7 +517,7 @@ class TestOutputGenerator:
                 "checks": {"maintainer": {"result": "pass"}},
             },
         }
-        ratings = []
+        ratings: list[Any] = []
 
         summary = build_summary(repo_checks, org_checks, team_checks, ratings)
 
@@ -552,11 +553,11 @@ class TestOutputGenerator:
 
     def test_build_summary_handles_non_dict_items(self) -> None:
         """Summary should skip non-dict items in collections."""
-        repo_checks = {
+        repo_checks: dict[str, Any] = {
             "repo1": {"is_compliant": True},
             "invalid": "not a dict",
         }
-        team_checks = {
+        team_checks: dict[str, Any] = {
             "team1": {"is_compliant": True},
             "invalid": "not a dict",
         }
@@ -570,11 +571,11 @@ class TestOutputGenerator:
 
     def test_build_summary_skips_non_dict_in_check_summary(self) -> None:
         """Should skip non-dict items when building check summary."""
-        repo_checks = {
+        repo_checks: dict[str, Any] = {
             "repo1": {"checks": {"readme": {"result": "pass"}}},
             "invalid": "not a dict",
         }
-        team_checks = {
+        team_checks: dict[str, Any] = {
             "team1": {"checks": {"maintainer": {"result": "pass"}}},
             "invalid": "not a dict",
         }

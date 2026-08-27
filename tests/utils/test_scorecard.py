@@ -283,7 +283,7 @@ class TestCalculateRepositoryRating:
 
     def test_empty_checks_still_evaluates(self) -> None:
         """Empty checks dict should be evaluated against ratings."""
-        checks = {}
+        checks: dict = {}
         ratings = [
             {"name": "gold", "min_compliance": 0.0, "required_checks": []},
         ]
