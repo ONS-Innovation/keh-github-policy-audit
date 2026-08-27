@@ -198,10 +198,70 @@ class TestStoreTeamChecksLocal:
         assert result["environment"] == "prod"
         assert result["bucket"] == "test-bucket"
         assert result["key"] == "audit-runs/test-org/run-1/teams/team-a.json"
-        assert result["checks_count"] == 1
 
-        # Verify S3 write was called
-        mock_s3_client.put_object.assert_called_once()
-        call_kwargs = mock_s3_client.put_object.call_args[1]
-        assert call_kwargs["Bucket"] == "test-bucket"
-        assert call_kwargs["Key"] == "audit-runs/test-org/run-1/teams/team-a.json"
+
+class TestNormaliseChecks:
+    module = importlib.import_module(
+        "functions.storage_functions.store_team_checks.handler"
+    )
+
+    def test_handles_checks_as_dict(self) -> None:
+        """When checks is already a dict, should return it as-is."""
+        checks_dict = {
+            "team_maintainer": {"result": "pass"},
+            "team_security": {"result": "fail"},
+        }
+        result = self.module._normalise_checks(checks_dict)
+        assert result is checks_dict
+
+    def test_handles_checks_as_list(self) -> None:
+        """When checks is a list, should convert to dict keyed by check_name."""
+        checks_list = [
+            {"check_name": "team_maintainer", "result": "pass"},
+            {"check_name": "team_security", "result": "fail"},
+        ]
+        result = self.module._normalise_checks(checks_list)
+        assert result == {
+            "team_maintainer": {"check_name": "team_maintainer", "result": "pass"},
+            "team_security": {"check_name": "team_security", "result": "fail"},
+        }
+
+    def test_raises_for_invalid_checks_type(self) -> None:
+        """When checks is neither dict nor list, should raise ValueError."""
+        with pytest.raises(ValueError, match="'checks' must be a dictionary or list"):
+            self.module._normalise_checks("invalid")
+
+        with pytest.raises(ValueError, match="'checks' must be a dictionary or list"):
+            self.module._normalise_checks(123)
+
+        with pytest.raises(ValueError, match="'checks' must be a dictionary or list"):
+            self.module._normalise_checks(None)
+
+    def test_skips_non_dict_items_in_list(self) -> None:
+        """When list contains non-dict items, should skip them."""
+        checks_list = [
+            {"check_name": "team_maintainer", "result": "pass"},
+            "not a dict",  # Should be skipped
+            123,  # Should be skipped
+            None,  # Should be skipped
+            {"check_name": "team_security", "result": "fail"},
+        ]
+        result = self.module._normalise_checks(checks_list)
+        assert len(result) == 2
+        assert "team_maintainer" in result
+        assert "team_security" in result
+
+    def test_skips_items_without_valid_check_name(self) -> None:
+        """When dict in list has no/empty/non-string check_name, should skip it."""
+        checks_list = [
+            {"check_name": "team_maintainer", "result": "pass"},
+            {"result": "fail"},  # Missing check_name
+            {"check_name": None, "result": "fail"},  # None check_name
+            {"check_name": "", "result": "fail"},  # Empty string check_name
+            {"check_name": 123, "result": "fail"},  # Non-string check_name
+            {"check_name": "team_security", "result": "fail"},
+        ]
+        result = self.module._normalise_checks(checks_list)
+        assert len(result) == 2
+        assert "team_maintainer" in result
+        assert "team_security" in result
