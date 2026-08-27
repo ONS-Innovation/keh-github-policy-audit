@@ -204,7 +204,7 @@ def calculate_repository_rating(
 
     Returns:
         The name of the first rating whose ``min_compliance`` threshold and
-        ``required_checks`` are all satisfied. Returns ``"unrated"`` if no
+        ``required_checks`` are all satisfied. Returns ``"non-compliant"`` if no
         rating is satisfied.
     """
     compliance_percentage = _calculate_repository_compliance_percentage(
@@ -220,7 +220,7 @@ def calculate_repository_rating(
         if compliance_percentage >= rating["min_compliance"] and meets_required_checks:
             return rating["name"]
 
-    return "unrated"
+    return "non-compliant"
 
 
 def serialise_scorecard_criteria(

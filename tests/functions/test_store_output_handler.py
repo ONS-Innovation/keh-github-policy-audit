@@ -519,12 +519,12 @@ class TestHandlerLocal:
                     "readme": {"result": "fail"},
                 },
                 "is_compliant": False,
-                "rating": "unrated",
+                "rating": "non-compliant",
             },
             "repo-b": {
                 "checks": {"codeowners": {"result": "pass"}},
                 "is_compliant": True,
-                "rating": "unrated",
+                "rating": "non-compliant",
             },
         }
         assert written["teams"] == {
@@ -1087,8 +1087,8 @@ class TestScorecardRating:
         assert rating == "gold"
         assert rating != "bronze"
 
-    def test_unrated_when_below_lowest_threshold(self):
-        """A repository below every threshold receives unrated."""
+    def test_non_compliant_when_below_lowest_threshold(self):
+        """A repository below every threshold receives non-compliant."""
         checks = {
             "check_a": {"result": "pass"},
             "check_b": {"result": "fail"},
@@ -1098,13 +1098,13 @@ class TestScorecardRating:
         # 1/4 = 25% -> below bronze threshold of 50%
         assert (
             self.scorecard.calculate_repository_rating(checks, self.CRITERIA)
-            == "unrated"
+            == "non-compliant"
         )
 
-    def test_unrated_when_no_criteria_defined(self):
-        """With no criteria configured, all repositories are unrated."""
+    def test_non_compliant_when_no_criteria_defined(self):
+        """With no criteria configured, all repositories are non-compliant."""
         checks = {"readme": {"result": "pass"}}
-        assert self.scorecard.calculate_repository_rating(checks, []) == "unrated"
+        assert self.scorecard.calculate_repository_rating(checks, []) == "non-compliant"
 
     def test_required_checks_missing_from_results_treated_as_fail(self):
         """A required check absent from repository results blocks ratings that need it."""

@@ -1,6 +1,6 @@
 # Repository Scorecards
 
-Repository scorecards provide a simple Platinum, Gold, Silver, Bronze, or unrated status for each repository in an audit run. The score is derived from the repository check results that are already collected by the workflow.
+Repository scorecards provide a simple Platinum, Gold, Silver, Bronze, or non-compliant status for each repository in an audit run. The score is derived from the repository check results that are already collected by the workflow.
 
 ## Purpose
 
@@ -11,7 +11,7 @@ A repository rating is based on:
 - percentage compliance across repository checks
 - required checks for each rating level
 
-A repository only receives a rating if it meets both conditions for that level. Any repositories that do not meet the minimum requirements for any rating are marked as `unrated`.
+A repository only receives a rating if it meets both conditions for that level. Any repositories that do not meet the minimum requirements for any rating are marked as `non-compliant`.
 
 Providing a Platinum, Gold, Silver, or Bronze rating allows for a simple summary of repository compliance without requiring the reader to understand the underlying checks.
 It can also help teams prioritise remediation work by focusing on the repositories with a lower rating.
@@ -78,7 +78,7 @@ Example output excerpt:
         }
       },
       "is_compliant": false,
-      "rating": "unrated"
+      "rating": "non-compliant"
     },
     "repo-b": {
       "checks": {
@@ -125,7 +125,7 @@ Example output excerpt:
       "gold": 1,
       "silver": 0,
       "bronze": 0,
-      "unrated": 1
+      "non-compliant": 1
     }
   }
 }
