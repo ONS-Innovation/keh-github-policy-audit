@@ -205,7 +205,9 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                   }
                 ]
                 Parameters = {
-                  "owner.$" = "$.initial_input.owner"
+                  "owner.$"         = "$.initial_input.owner"
+                  "run_id.$"        = "$.initial_input.run_id"
+                  "output_bucket.$" = "$.initial_input.output_bucket"
                 }
                 End = true
               }
