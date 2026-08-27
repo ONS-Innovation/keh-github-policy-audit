@@ -1,1132 +1,825 @@
-"""Unit tests for store_output Lambda handler."""
+"""Unit tests for store_output handler with parametrized tests."""
 
-import importlib
 import json
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch, MagicMock
 
 import pytest
 
-
-# ---------------------------------------------------------------------------
-# _is_pass helper
-# ---------------------------------------------------------------------------
-
-
-class TestIsPass:
-    module = importlib.import_module("functions.storage_functions.store_output.handler")
-
-    def test_returns_true_for_pass_result(self):
-        """A dict with result 'pass' should be considered passing."""
-        assert self.module._is_pass({"result": "pass"})
-
-    def test_is_case_insensitive(self):
-        """Result matching should be case-insensitive."""
-        assert self.module._is_pass({"result": "PASS"})
-        assert self.module._is_pass({"result": "Pass"})
-
-    def test_returns_false_for_fail_result(self):
-        """A dict with result 'fail' should not be considered passing."""
-        assert not self.module._is_pass({"result": "fail"})
-
-    def test_returns_false_for_missing_result(self):
-        """A dict without a result key should not be considered passing."""
-        assert not self.module._is_pass({})
-
-    def test_returns_false_for_non_dict(self):
-        """Non-dict values should not be considered passing."""
-        assert not self.module._is_pass("pass")
-        assert not self.module._is_pass(None)
-        assert not self.module._is_pass(["pass"])
+from functions.storage_functions.store_output.handler import (
+    DataLoader,
+    is_pass,
+    normalise_organisation_checks,
+    normalise_repository_checks,
+    normalise_team_checks,
+    build_summary,
+    handler,
+)
 
 
-# ---------------------------------------------------------------------------
-# Input validation
-# ---------------------------------------------------------------------------
+class TestDataLoader:
+    """Test DataLoader functionality."""
+
+    def test_local_environment_returns_empty_dicts(self) -> None:
+        """Local environment should return empty dicts from S3 loaders."""
+        loader = DataLoader(environment="local", bucket_name=None, s3_client=None)
+
+        assert loader.load_organisation_checks("owner", "run-id") == {}
+        assert loader.load_repository_checks("owner", "run-id") == {}
+        assert loader.load_team_checks("owner", "run-id") == {}
+
+    def test_prod_environment_requires_bucket_and_s3_client(self) -> None:
+        """Prod environment should require bucket_name and s3_client."""
+        loader = DataLoader(environment="prod", bucket_name="my-bucket", s3_client=None)
+
+        assert loader.environment == "prod"
+        assert loader.bucket_name == "my-bucket"
 
 
-class TestHandlerValidation:
-    module = importlib.import_module("functions.storage_functions.store_output.handler")
+@pytest.mark.parametrize(
+    "method_name,prefix,field_name,log_context,key_example",
+    [
+        (
+            "load_organisation_checks",
+            "audit-runs/test-org/run-1/organisation-checks/",
+            "check_name",
+            "organisation_checks",
+            "audit-runs/test-org/run-1/organisation-checks/dependabot.json",
+        ),
+        (
+            "load_repository_checks",
+            "audit-runs/test-org/run-1/repositories/",
+            "repository_name",
+            "repositories",
+            "audit-runs/test-org/run-1/repositories/test-repo.json",
+        ),
+        (
+            "load_team_checks",
+            "audit-runs/test-org/run-1/teams/",
+            "team_slug",
+            "teams",
+            "audit-runs/test-org/run-1/teams/team-slug.json",
+        ),
+    ],
+)
+class TestDataLoaderParametrized:
+    """Parametrized tests for data loading methods."""
 
-    def test_raises_for_missing_owner(self):
-        """A missing owner key in the event should raise a KeyError."""
-        with pytest.raises(KeyError):
-            self.module.handler({}, None)
+    def test_load_checks_from_s3(
+        self, method_name, prefix, field_name, log_context, key_example
+    ) -> None:
+        """Should load checks from S3 with derived names."""
+        mock_s3 = Mock()
+        mock_s3.get_paginator.return_value.paginate.return_value = [
+            {"Contents": [{"Key": key_example}]}
+        ]
+        payload = {field_name: "test-value", "result": "pass"}
+        mock_s3.get_object.return_value = {
+            "Body": Mock(read=Mock(return_value=json.dumps(payload).encode()))
+        }
 
-    def test_raises_when_repositories_not_a_dict(self):
-        """A non-dict repositories value should raise a ValueError."""
-        with pytest.raises(ValueError, match="repositories"):
-            self.module.handler({"owner": "test-org", "repositories": ["repo1"]}, None)
+        loader = DataLoader(
+            environment="prod", bucket_name="my-bucket", s3_client=mock_s3
+        )
+        method = getattr(loader, method_name)
+        result = method("test-org", "run-1")
 
-    def test_raises_when_teams_not_a_dict(self):
-        """A non-dict teams value should raise a ValueError."""
-        with pytest.raises(ValueError, match="teams"):
-            self.module.handler({"owner": "test-org", "teams": "bad"}, None)
+        assert "test-value" in result
 
-    def test_raises_when_organisation_checks_not_a_dict(self):
-        """A non-dict organisation_checks value should raise a ValueError."""
-        with pytest.raises(ValueError, match="organisation_checks"):
-            self.module.handler({"owner": "test-org", "organisation_checks": 42}, None)
+    def test_load_checks_derives_name_from_key_when_missing(
+        self, method_name, prefix, field_name, log_context, key_example
+    ) -> None:
+        """Should derive name from key when field_name not in payload."""
+        mock_s3 = Mock()
+        mock_s3.get_paginator.return_value.paginate.return_value = [
+            {"Contents": [{"Key": key_example}]}
+        ]
+        payload = {"result": "pass"}  # Missing field_name
+        mock_s3.get_object.return_value = {
+            "Body": Mock(read=Mock(return_value=json.dumps(payload).encode()))
+        }
 
-    def test_raises_for_invalid_environment(self):
-        """An unrecognised ENVIRONMENT value should raise a ValueError."""
-        with patch.dict(os.environ, {"ENVIRONMENT": "staging"}):
-            with pytest.raises(ValueError, match="ENVIRONMENT"):
-                self.module.handler({"owner": "test-org"}, None)
+        loader = DataLoader(
+            environment="prod", bucket_name="my-bucket", s3_client=mock_s3
+        )
+        method = getattr(loader, method_name)
+        result = method("test-org", "run-1")
 
-    def test_raises_when_teams_list_without_team_results(self):
-        """A teams list without team_results should raise a ValueError."""
-        with pytest.raises(ValueError, match="team_results"):
-            self.module.handler(
-                {"owner": "test-org", "teams": [{"slug": "team-a"}]},
-                None,
+        # Should derive name from key (last part before .json)
+        expected_name = key_example.rsplit("/", 1)[-1].removesuffix(".json")
+        assert expected_name in result
+
+    def test_load_checks_handles_list_exception(
+        self, method_name, prefix, field_name, log_context, key_example
+    ) -> None:
+        """Should handle exceptions during list_objects_v2."""
+        mock_s3 = Mock()
+        mock_s3.get_paginator.return_value.paginate.side_effect = Exception("S3 error")
+
+        loader = DataLoader(
+            environment="prod", bucket_name="my-bucket", s3_client=mock_s3
+        )
+        method = getattr(loader, method_name)
+        result = method("test-org", "run-1")
+
+        assert result == {}
+
+    def test_load_checks_skips_non_dict_payload(
+        self, method_name, prefix, field_name, log_context, key_example
+    ) -> None:
+        """Should skip payloads that are not dicts."""
+        mock_s3 = Mock()
+        mock_s3.get_paginator.return_value.paginate.return_value = [
+            {"Contents": [{"Key": key_example}]}
+        ]
+        mock_s3.get_object.return_value = {
+            "Body": Mock(read=Mock(return_value=json.dumps(["array"]).encode()))
+        }
+
+        loader = DataLoader(
+            environment="prod", bucket_name="my-bucket", s3_client=mock_s3
+        )
+        method = getattr(loader, method_name)
+        result = method("test-org", "run-1")
+
+        assert result == {}
+
+    def test_load_checks_skips_invalid_key_type(
+        self, method_name, prefix, field_name, log_context, key_example
+    ) -> None:
+        """Should skip entries where Key is not a string."""
+        mock_s3 = Mock()
+        mock_s3.get_paginator.return_value.paginate.return_value = [
+            {"Contents": [{"Key": 123}, {"Key": None}]}
+        ]
+
+        loader = DataLoader(
+            environment="prod", bucket_name="my-bucket", s3_client=mock_s3
+        )
+        method = getattr(loader, method_name)
+        result = method("test-org", "run-1")
+
+        assert result == {}
+
+    def test_load_checks_skips_empty_derived_name(
+        self, method_name, prefix, field_name, log_context, key_example
+    ) -> None:
+        """Should skip checks with empty derived names."""
+        mock_s3 = Mock()
+        # Key ends with .json after / so derives to empty string
+        mock_s3.get_paginator.return_value.paginate.return_value = [
+            {"Contents": [{"Key": prefix + ".json"}]}
+        ]
+        mock_s3.get_object.return_value = {
+            "Body": Mock(
+                read=Mock(return_value=json.dumps({"result": "pass"}).encode())
             )
+        }
 
-
-# ---------------------------------------------------------------------------
-# Normalise helpers - bad-input continue branches
-# ---------------------------------------------------------------------------
-
-
-class TestNormaliseRepositoryChecks:
-    module = importlib.import_module("functions.storage_functions.store_output.handler")
-
-    def test_skips_non_dict_repository_result_entries(self):
-        """Non-dict entries in repository_results should be silently skipped."""
-        result = self.module._normalise_repository_checks(
-            None,
-            ["not-a-dict", {"repository_name": "repo-a", "checks": []}],
+        loader = DataLoader(
+            environment="prod", bucket_name="my-bucket", s3_client=mock_s3
         )
-        assert result == {"repo-a": {"checks": {}, "is_compliant": True}}
+        method = getattr(loader, method_name)
+        result = method("test-org", "run-1")
 
-    def test_skips_repository_result_with_missing_name(self):
-        """Entries without a repository_name should be silently skipped."""
-        result = self.module._normalise_repository_checks(
-            None,
-            [{"checks": [{"check_name": "readme", "result": "pass"}]}],
-        )
         assert result == {}
 
-    def test_skips_non_dict_check_result_entries(self):
-        """Non-dict check entries within a repository result should be skipped."""
-        result = self.module._normalise_repository_checks(
-            None,
-            [
-                {
-                    "repository_name": "repo-a",
-                    "checks": [
-                        "not-a-dict",
-                        {"check_name": "readme", "result": "pass"},
-                    ],
+    def test_load_checks_skips_non_json_files(
+        self, method_name, prefix, field_name, log_context, key_example
+    ) -> None:
+        """Should skip non-JSON files."""
+        mock_s3 = Mock()
+        mock_s3.get_paginator.return_value.paginate.return_value = [
+            {"Contents": [{"Key": prefix + "file.txt"}]}
+        ]
+
+        loader = DataLoader(
+            environment="prod", bucket_name="my-bucket", s3_client=mock_s3
+        )
+        method = getattr(loader, method_name)
+        result = method("test-org", "run-1")
+
+        assert result == {}
+
+    def test_load_checks_handles_get_object_exception(
+        self, method_name, prefix, field_name, log_context, key_example
+    ) -> None:
+        """Should handle exceptions when getting objects."""
+        mock_s3 = Mock()
+        mock_s3.get_paginator.return_value.paginate.return_value = [
+            {"Contents": [{"Key": key_example}]}
+        ]
+        mock_s3.get_object.side_effect = Exception("S3 error")
+
+        loader = DataLoader(
+            environment="prod", bucket_name="my-bucket", s3_client=mock_s3
+        )
+        method = getattr(loader, method_name)
+        result = method("test-org", "run-1")
+
+        assert result == {}
+
+    def test_load_checks_handles_json_parse_exception(
+        self, method_name, prefix, field_name, log_context, key_example
+    ) -> None:
+        """Should handle JSON parsing exceptions."""
+        mock_s3 = Mock()
+        mock_s3.get_paginator.return_value.paginate.return_value = [
+            {"Contents": [{"Key": key_example}]}
+        ]
+        mock_s3.get_object.return_value = {
+            "Body": Mock(read=Mock(return_value=b"invalid json {"))
+        }
+
+        loader = DataLoader(
+            environment="prod", bucket_name="my-bucket", s3_client=mock_s3
+        )
+        method = getattr(loader, method_name)
+        result = method("test-org", "run-1")
+
+        assert result == {}
+
+    def test_load_checks_handles_empty_response(
+        self, method_name, prefix, field_name, log_context, key_example
+    ) -> None:
+        """Should handle S3 responses with no Contents key."""
+        mock_s3 = Mock()
+        mock_s3.get_paginator.return_value.paginate.return_value = [{"Contents": []}]
+
+        loader = DataLoader(
+            environment="prod", bucket_name="my-bucket", s3_client=mock_s3
+        )
+        method = getattr(loader, method_name)
+        result = method("test-org", "run-1")
+
+        assert result == {}
+
+    def test_load_checks_handles_missing_contents_key(
+        self, method_name, prefix, field_name, log_context, key_example
+    ) -> None:
+        """Should handle S3 responses without Contents key."""
+        mock_s3 = Mock()
+        mock_s3.get_paginator.return_value.paginate.return_value = [{}]
+
+        loader = DataLoader(
+            environment="prod", bucket_name="my-bucket", s3_client=mock_s3
+        )
+        method = getattr(loader, method_name)
+        result = method("test-org", "run-1")
+
+        assert result == {}
+
+
+class TestNormalizers:
+    """Test data normalization functions."""
+
+    def test_is_pass_recognizes_pass_result(self) -> None:
+        """is_pass should return True for 'pass' result."""
+        assert is_pass({"result": "pass"}) is True
+        assert is_pass({"result": "PASS"}) is True
+        assert is_pass({"result": "fail"}) is False
+        assert is_pass({}) is False
+        assert is_pass({"no_result": True}) is False
+
+    def test_normalise_organisation_checks_extracts_result_and_message(self) -> None:
+        """Should extract result and message from organisation checks."""
+        org_checks = {
+            "dependabot": {
+                "result": "pass",
+                "message": "Dependabot is enabled",
+                "timestamp": "2024-01-01T00:00:00Z",
+                "extra_field": "ignored",
+            }
+        }
+
+        result = normalise_organisation_checks(org_checks)
+
+        assert result == {
+            "dependabot": {
+                "result": "pass",
+                "message": "Dependabot is enabled",
+                "details": {},
+            }
+        }
+
+    def test_normalise_organisation_checks_with_missing_fields(self) -> None:
+        """Should provide defaults for missing fields."""
+        org_checks = {
+            "check1": {},
+            "check2": {"result": "pass"},
+        }
+
+        result = normalise_organisation_checks(org_checks)
+
+        assert result["check1"]["result"] == "unknown"
+        assert result["check1"]["message"] == ""
+        assert result["check2"]["result"] == "pass"
+        assert result["check2"]["message"] == ""
+
+    def test_normalise_organisation_checks_skips_non_dict(self) -> None:
+        """Should skip non-dict check results."""
+        org_checks = {
+            "valid": {"result": "pass"},
+            "invalid": "not a dict",
+        }
+
+        result = normalise_organisation_checks(org_checks)
+
+        assert "valid" in result
+        assert "invalid" not in result
+
+    @pytest.mark.parametrize(
+        "normalise_func,item_key",
+        [
+            (normalise_repository_checks, "repo1"),
+            (normalise_team_checks, "team1"),
+        ],
+    )
+    def test_normalise_items_with_compliance(self, normalise_func, item_key) -> None:
+        """Should include is_compliant field."""
+        items = {
+            item_key: {
+                "checks": {"check1": {"result": "pass"}},
+            }
+        }
+
+        result = normalise_func(items)
+
+        assert "is_compliant" in result[item_key]
+        assert result[item_key]["is_compliant"] is True
+
+    @pytest.mark.parametrize(
+        "normalise_func,item_key",
+        [
+            (normalise_repository_checks, "repo1"),
+            (normalise_team_checks, "team1"),
+        ],
+    )
+    def test_normalise_items_non_compliant_on_fail(
+        self, normalise_func, item_key
+    ) -> None:
+        """Should be non-compliant when any check fails."""
+        items = {
+            item_key: {
+                "checks": {
+                    "check1": {"result": "pass"},
+                    "check2": {"result": "fail"},
                 }
-            ],
-        )
-        assert result == {
-            "repo-a": {
-                "checks": {"readme": {"result": "pass"}},
-                "is_compliant": True,
             }
         }
 
+        result = normalise_func(items)
 
-class TestNormaliseTeamChecks:
-    module = importlib.import_module("functions.storage_functions.store_output.handler")
+        assert result[item_key]["is_compliant"] is False
 
-    def test_skips_non_dict_team_result_entries(self):
-        """Non-dict entries in team_results should be silently skipped."""
-        result = self.module._normalise_team_checks(
-            [{"slug": "team-a"}, {"slug": "team-b"}],
-            ["not-a-dict", {"check_name": "team_maintainer", "result": "pass"}],
-        )
-        assert result == {
-            "team-b": {
-                "checks": {"team_maintainer": {"result": "pass"}},
-                "is_compliant": True,
+    @pytest.mark.parametrize(
+        "normalise_func,item_key",
+        [
+            (normalise_repository_checks, "repo1"),
+            (normalise_team_checks, "team1"),
+        ],
+    )
+    def test_normalise_items_with_invalid_checks_dict(
+        self, normalise_func, item_key
+    ) -> None:
+        """Should handle non-dict checks field."""
+        items = {item_key: {"checks": "not a dict"}}
+
+        result = normalise_func(items)
+
+        assert item_key in result
+        assert result[item_key]["checks"] == {}
+
+    @pytest.mark.parametrize(
+        "normalise_func,item_key",
+        [
+            (normalise_repository_checks, "repo1"),
+            (normalise_team_checks, "team1"),
+        ],
+    )
+    def test_normalise_items_skips_non_dict_items(
+        self, normalise_func, item_key
+    ) -> None:
+        """Should skip non-dict items."""
+        items = {
+            "valid": {"checks": {"check1": {"result": "pass"}}},
+            "invalid": "not a dict",
+        }
+
+        result = normalise_func(items)
+
+        assert "valid" in result
+        assert "invalid" not in result
+
+    @pytest.mark.parametrize(
+        "normalise_func,item_key",
+        [
+            (normalise_repository_checks, "repo1"),
+            (normalise_team_checks, "team1"),
+        ],
+    )
+    def test_normalise_items_with_missing_check_fields(
+        self, normalise_func, item_key
+    ) -> None:
+        """Should provide defaults for missing check fields."""
+        items = {
+            item_key: {
+                "checks": {
+                    "check1": {},
+                    "check2": {"result": "pass"},
+                }
             }
         }
 
-    def test_skips_team_result_with_missing_check_name(self):
-        """Team results without a check_name should be silently skipped."""
-        result = self.module._normalise_team_checks(
-            [{"slug": "team-a"}],
-            [{"result": "pass"}],
-        )
-        assert result == {}
+        result = normalise_func(items)
 
+        assert result[item_key]["checks"]["check1"]["result"] == "unknown"
+        assert result[item_key]["checks"]["check1"]["message"] == ""
+        assert result[item_key]["checks"]["check2"]["result"] == "pass"
 
-# ---------------------------------------------------------------------------
-# Local environment
-# ---------------------------------------------------------------------------
-
-
-class TestHandlerLocal:
-    module = importlib.import_module("functions.storage_functions.store_output.handler")
-
-    def setup_method(self):
-        self._tmp_dir = tempfile.TemporaryDirectory()
-        self.tmp_path = Path(self._tmp_dir.name)
-        self._original_cwd = os.getcwd()
-        os.chdir(self.tmp_path)
-        self._scorecard_patcher = patch(
-            "functions.storage_functions.store_output.handler.load_scorecard_criteria",
-            return_value=[],
-        )
-        self._scorecard_patcher.start()
-
-    def teardown_method(self):
-        self._scorecard_patcher.stop()
-        os.chdir(self._original_cwd)
-        self._tmp_dir.cleanup()
-
-    def test_writes_json_file(self):
-        """The handler should write a JSON output file in the local environment."""
-        event = {
-            "owner": "test-org",
-            "repositories": {
-                "repo-a": {"naming_convention": {"result": "pass"}},
-                "repo-b": {"naming_convention": {"result": "fail"}},
-            },
-            "teams": {},
-            "organisation_checks": {"dependabot_slo": {"result": "pass"}},
+    @pytest.mark.parametrize(
+        "normalise_func,item_key",
+        [
+            (normalise_repository_checks, "repo1"),
+            (normalise_team_checks, "team1"),
+        ],
+    )
+    def test_normalise_items_with_non_string_keys(
+        self, normalise_func, item_key
+    ) -> None:
+        """Should handle non-string keys."""
+        items = {
+            "valid": {"checks": {"check1": {"result": "pass"}}},
+            123: {"checks": {"check1": {"result": "pass"}}},
         }
 
-        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
-            result = self.module.handler(event, None)
+        result = normalise_func(items)
 
-        assert result["status"] == "success"
-        assert result["environment"] == "local"
-        assert result["bucket"] is None
-        assert result["owner"] == "test-org"
+        assert "valid" in result
+        assert 123 in result
 
-        output_file = self.tmp_path / result["local_output_path"]
-        assert output_file.exists()
 
-        written = json.loads(output_file.read_text())
-        assert written["owner"] == "test-org"
-        assert "timestamp" in written
-        assert "summary" in written
+class TestOutputGenerator:
+    """Test output generation and summary building."""
 
-    def test_summary_counts_compliant_repositories(self):
-        """The summary should count only repositories where all checks pass."""
-        event = {
-            "owner": "test-org",
-            "repositories": {
-                "repo-a": {
-                    "check_x": {"result": "pass"},
-                    "check_y": {"result": "pass"},
+    def test_build_summary_counts_compliant_items(self) -> None:
+        """Summary should count compliant repositories and teams."""
+        repo_checks = {
+            "repo1": {"is_compliant": True},
+            "repo2": {"is_compliant": False},
+        }
+        team_checks = {
+            "team1": {"is_compliant": True},
+            "team2": {"is_compliant": True},
+            "team3": {"is_compliant": False},
+        }
+        org_checks = {"check1": {"result": "pass"}}
+        ratings = [{"name": "gold", "min_compliance": 100.0, "required_checks": []}]
+
+        summary = build_summary(repo_checks, org_checks, team_checks, ratings)
+
+        assert summary["compliant_repositories"] == 1
+        assert summary["total_repositories"] == 2
+        assert summary["compliant_teams"] == 2
+        assert summary["total_teams"] == 3
+
+    def test_build_summary_handles_empty_data(self) -> None:
+        """Summary should handle empty data gracefully."""
+        summary = build_summary({}, {}, {}, [])
+
+        assert summary["compliant_repositories"] == 0
+        assert summary["total_repositories"] == 0
+        assert summary["compliant_teams"] == 0
+        assert summary["total_teams"] == 0
+
+    def test_build_summary_builds_check_summaries(self) -> None:
+        """Summary should include check summaries."""
+        repo_checks = {
+            "repo1": {
+                "is_compliant": True,
+                "checks": {
+                    "readme": {"result": "pass"},
+                    "codeowners": {"result": "pass"},
                 },
-                "repo-b": {
-                    "check_x": {"result": "pass"},
-                    "check_y": {"result": "fail"},
-                },
-                "repo-c": {
-                    "check_x": {"result": "pass"},
-                    "check_y": {"result": "pass"},
+            },
+            "repo2": {
+                "is_compliant": False,
+                "checks": {
+                    "readme": {"result": "pass"},
+                    "codeowners": {"result": "fail"},
                 },
             },
         }
-
-        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
-            self.module.handler(event, None)
-
-        output_dir = self.tmp_path / "outputs" / "test-org"
-        files = list(output_dir.glob("*.json"))
-        assert len(files) == 1
-        written = json.loads(files[0].read_text())
-
-        summary = written["summary"]
-        assert summary["total_repositories"] == 3
-        assert summary["compliant_repositories"] == 2
-
-    def test_non_dict_repository_checks_normalised_to_non_compliant(self):
-        """Non-dict repository check values are normalised to {is_compliant: False}."""
-        event = {
-            "owner": "test-org",
-            "repositories": {
-                "repo-a": {"naming_convention": {"result": "pass"}},
-                "repo-b": "not-a-dict",
+        org_checks = {"dependabot": {"result": "pass"}}
+        team_checks = {
+            "team1": {
+                "is_compliant": True,
+                "checks": {"maintainer": {"result": "pass"}},
             },
         }
+        ratings = []
 
-        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
-            self.module.handler(event, None)
+        summary = build_summary(repo_checks, org_checks, team_checks, ratings)
 
-        output_dir = self.tmp_path / "outputs" / "test-org"
-        files = list(output_dir.glob("*.json"))
-        written = json.loads(files[0].read_text())
+        # Check repository check summary
+        assert summary["repository_checks"]["readme"]["total"] == 2
+        assert summary["repository_checks"]["readme"]["compliant"] == 2
+        assert summary["repository_checks"]["codeowners"]["total"] == 2
+        assert summary["repository_checks"]["codeowners"]["compliant"] == 1
 
-        summary = written["summary"]
+        # Check organisation check summary
+        assert summary["organisation_checks"]["dependabot"]["compliant"] is True
+
+        # Check team check summary
+        assert summary["team_checks"]["maintainer"]["total"] == 1
+        assert summary["team_checks"]["maintainer"]["compliant"] == 1
+
+    def test_build_summary_calculates_ratings(self) -> None:
+        """Summary should calculate repository ratings."""
+        repo_checks = {
+            "repo1": {"is_compliant": True, "checks": {}},
+            "repo2": {"is_compliant": False, "checks": {}},
+        }
+        ratings = [
+            {"name": "gold", "min_compliance": 100.0, "required_checks": []},
+            {"name": "silver", "min_compliance": 50.0, "required_checks": []},
+        ]
+
+        summary = build_summary(repo_checks, {}, {}, ratings)
+
+        assert "repository_ratings" in summary
+        assert "gold" in summary["repository_ratings"]
+        assert "silver" in summary["repository_ratings"]
+
+    def test_build_summary_handles_non_dict_items(self) -> None:
+        """Summary should skip non-dict items in collections."""
+        repo_checks = {
+            "repo1": {"is_compliant": True},
+            "invalid": "not a dict",
+        }
+        team_checks = {
+            "team1": {"is_compliant": True},
+            "invalid": "not a dict",
+        }
+
+        summary = build_summary(repo_checks, {}, team_checks, [])
+
         assert summary["total_repositories"] == 2
         assert summary["compliant_repositories"] == 1
-        check_summary = summary["repository_checks"]["naming_convention"]
-        assert check_summary["total"] == 1
-        assert check_summary["compliant"] == 1
-
-    def test_summary_aggregates_repository_checks(self):
-        """The summary should aggregate pass/fail counts per check across all repositories."""
-        event = {
-            "owner": "test-org",
-            "repositories": {
-                "repo-a": {"naming_convention": {"result": "pass"}},
-                "repo-b": {"naming_convention": {"result": "fail"}},
-                "repo-c": {"naming_convention": {"result": "pass"}},
-            },
-        }
-
-        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
-            self.module.handler(event, None)
-
-        output_dir = self.tmp_path / "outputs" / "test-org"
-        files = list(output_dir.glob("*.json"))
-        written = json.loads(files[0].read_text())
-
-        check_summary = written["summary"]["repository_checks"]["naming_convention"]
-        assert check_summary["total"] == 3
-        assert check_summary["compliant"] == 2
-
-    def test_summary_repository_checks_excludes_is_compliant_key(self):
-        """Repository-level is_compliant should not be treated as a per-check summary entry."""
-        event = {
-            "owner": "test-org",
-            "repositories": {
-                "repo-a": {
-                    "naming_convention": {"result": "pass"},
-                    "is_compliant": True,
-                },
-                "repo-b": {
-                    "naming_convention": {"result": "fail"},
-                    "is_compliant": False,
-                },
-            },
-        }
-
-        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
-            self.module.handler(event, None)
-
-        output_dir = self.tmp_path / "outputs" / "test-org"
-        files = list(output_dir.glob("*.json"))
-        written = json.loads(files[0].read_text())
-
-        repository_checks = written["summary"]["repository_checks"]
-        assert "is_compliant" not in repository_checks
-        assert repository_checks["naming_convention"]["total"] == 2
-        assert repository_checks["naming_convention"]["compliant"] == 1
-
-    def test_summary_includes_organisation_checks(self):
-        """The summary should include organisation-level check compliance."""
-        event = {
-            "owner": "test-org",
-            "organisation_checks": {
-                "dependabot_slo": {"result": "pass"},
-                "secret_scanning_slo": {"result": "fail"},
-            },
-        }
-
-        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
-            self.module.handler(event, None)
-
-        output_dir = self.tmp_path / "outputs" / "test-org"
-        files = list(output_dir.glob("*.json"))
-        written = json.loads(files[0].read_text())
-
-        org_checks = written["summary"]["organisation_checks"]
-        assert org_checks["dependabot_slo"]["compliant"]
-        assert not org_checks["secret_scanning_slo"]["compliant"]
-
-    def test_summary_aggregates_team_checks(self):
-        """The summary should aggregate pass/fail counts per check across all teams."""
-        event = {
-            "owner": "test-org",
-            "teams": {
-                "team-a": {"team_maintainer": {"result": "pass"}},
-                "team-b": {"team_maintainer": {"result": "fail"}},
-                "team-c": {"team_maintainer": {"result": "pass"}},
-            },
-        }
-
-        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
-            self.module.handler(event, None)
-
-        output_dir = self.tmp_path / "outputs" / "test-org"
-        files = list(output_dir.glob("*.json"))
-        written = json.loads(files[0].read_text())
-
-        check_summary = written["summary"]["team_checks"]["team_maintainer"]
-        assert check_summary["total"] == 3
-        assert check_summary["compliant"] == 2
-
-    def test_summary_team_checks_excludes_is_compliant_key(self):
-        """Team-level is_compliant should not be treated as a per-check summary entry."""
-        event = {
-            "owner": "test-org",
-            "teams": {
-                "team-a": {"team_maintainer": {"result": "pass"}, "is_compliant": True},
-                "team-b": {
-                    "team_maintainer": {"result": "fail"},
-                    "is_compliant": False,
-                },
-            },
-        }
-
-        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
-            self.module.handler(event, None)
-
-        output_dir = self.tmp_path / "outputs" / "test-org"
-        files = list(output_dir.glob("*.json"))
-        written = json.loads(files[0].read_text())
-
-        team_checks = written["summary"]["team_checks"]
-        assert "is_compliant" not in team_checks
-        assert team_checks["team_maintainer"]["total"] == 2
-        assert team_checks["team_maintainer"]["compliant"] == 1
-
-    def test_summary_counts_compliant_teams(self):
-        """The summary should count only teams where all checks pass."""
-        event = {
-            "owner": "test-org",
-            "teams": {
-                "team-a": {"maintainer_check": {"result": "pass"}},
-                "team-b": {"maintainer_check": {"result": "fail"}},
-            },
-        }
-
-        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
-            self.module.handler(event, None)
-
-        output_dir = self.tmp_path / "outputs" / "test-org"
-        files = list(output_dir.glob("*.json"))
-        written = json.loads(files[0].read_text())
-
-        summary = written["summary"]
         assert summary["total_teams"] == 2
         assert summary["compliant_teams"] == 1
 
-    def test_summary_derives_compliance_from_check_results(self):
-        """Summary counts should derive compliance from check results."""
-        event = {
-            "owner": "test-org",
-            "repositories": {
-                "repo-a": {
-                    "naming_convention": {"result": "pass"},
-                    "is_compliant": True,
-                },
-                "repo-b": {
-                    "naming_convention": {"result": "fail"},
-                    "is_compliant": False,
-                },
-            },
-            "teams": {
-                "team-a": {
-                    "maintainer_check": {"result": "pass"},
-                    "is_compliant": True,
-                },
-                "team-b": {
-                    "maintainer_check": {"result": "fail"},
-                    "is_compliant": False,
-                },
-            },
+    def test_build_summary_skips_non_dict_in_check_summary(self) -> None:
+        """Should skip non-dict items when building check summary."""
+        repo_checks = {
+            "repo1": {"checks": {"readme": {"result": "pass"}}},
+            "invalid": "not a dict",
+        }
+        team_checks = {
+            "team1": {"checks": {"maintainer": {"result": "pass"}}},
+            "invalid": "not a dict",
         }
 
-        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
-            self.module.handler(event, None)
+        summary = build_summary(repo_checks, {}, team_checks, [])
 
-        output_dir = self.tmp_path / "outputs" / "test-org"
-        files = list(output_dir.glob("*.json"))
-        written = json.loads(files[0].read_text())
+        assert summary["repository_checks"]["readme"]["total"] == 1
+        assert summary["team_checks"]["maintainer"]["total"] == 1
 
-        summary = written["summary"]
-        assert summary["compliant_repositories"] == 1
-        assert summary["compliant_teams"] == 1
 
-    def test_defaults_to_local_environment(self):
-        """The handler should default to the local environment when ENVIRONMENT is not set."""
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("ENVIRONMENT", None)
-            result = self.module.handler({"owner": "test-org"}, None)
+class TestHandlerFunction:
+    """Test main handler function."""
 
-        assert result["environment"] == "local"
-        assert result["local_output_path"] is not None
+    def test_handler_raises_on_invalid_environment(self, monkeypatch) -> None:
+        """Handler should raise ValueError for invalid ENVIRONMENT."""
+        monkeypatch.setenv("ENVIRONMENT", "invalid")
 
-    def test_includes_rate_limit_checkpoints_in_output(self):
-        """Rate-limit checkpoints should be included in both persisted and returned output."""
-        event = {
-            "owner": "test-org",
-            "rate_limit_start": {
-                "checkpoint": "rate-limit-start",
-                "remaining": 4990,
+        with pytest.raises(ValueError, match="ENVIRONMENT must be either"):
+            handler({"owner": "test-org", "run_id": "run-1"}, None)
+
+    def test_handler_raises_on_prod_without_bucket(self, monkeypatch) -> None:
+        """Handler should raise ValueError in prod without output_bucket."""
+        monkeypatch.setenv("ENVIRONMENT", "prod")
+
+        with pytest.raises(ValueError, match="output_bucket is required"):
+            handler({"owner": "test-org", "run_id": "run-1"}, None)
+
+    @patch("functions.storage_functions.store_output.handler.boto3")
+    @patch("functions.storage_functions.store_output.handler.load_scorecard_criteria")
+    def test_handler_local_mode_returns_success(
+        self, mock_load_criteria, mock_boto3, monkeypatch, tmp_path
+    ) -> None:
+        """Handler should process successfully in local mode."""
+        monkeypatch.setenv("ENVIRONMENT", "local")
+        monkeypatch.chdir(tmp_path)
+
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        config_file = config_dir / "scorecard_criteria.json"
+        config_file.write_text(
+            json.dumps({"gold": {"min_compliance": 90, "required_checks": []}})
+        )
+
+        mock_load_criteria.return_value = [
+            {"name": "gold", "min_compliance": 90.0, "required_checks": []}
+        ]
+
+        result = handler(
+            {
+                "owner": "test-org",
+                "run_id": "run-1",
+                "rate_limit_start": "2024-01-01T00:00:00Z",
+                "rate_limit_end": "2024-01-01T01:00:00Z",
             },
-            "rate_limit_end": {
-                "checkpoint": "rate-limit-end",
-                "remaining": 4321,
-            },
-        }
-
-        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
-            result = self.module.handler(event, None)
-
-        assert result["rate-limit-start"] == event["rate_limit_start"]
-        assert result["rate-limit-end"] == event["rate_limit_end"]
-
-        output_file = self.tmp_path / result["local_output_path"]
-        written = json.loads(output_file.read_text())
-        assert written["rate-limit-start"] == event["rate_limit_start"]
-        assert written["rate-limit-end"] == event["rate_limit_end"]
-
-    def test_normalises_step_function_raw_results(self):
-        """The handler should reshape Step Function array outputs into keyed dictionaries."""
-        event = {
-            "owner": "test-org",
-            "teams": [{"slug": "team-a"}, {"slug": "team-b"}],
-            "organisation_results": [
-                {"check_name": "dependabot_slo", "result": "pass"},
-                {"check_name": "secret_scanning_slo", "result": "fail"},
-                [
-                    {"check_name": "team_maintainer", "result": "pass"},
-                    {"check_name": "team_maintainer", "result": "fail"},
-                ],
-            ],
-            "repository_results": [
-                {
-                    "repository_name": "repo-a",
-                    "checks": [
-                        {"check_name": "codeowners", "result": "pass"},
-                        {"check_name": "readme", "result": "fail"},
-                    ],
-                },
-                {
-                    "repository_name": "repo-b",
-                    "checks": [{"check_name": "codeowners", "result": "pass"}],
-                },
-            ],
-            "team_results": [
-                {"check_name": "team_maintainer", "result": "pass"},
-                {"check_name": "team_maintainer", "result": "fail"},
-            ],
-        }
-
-        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
-            result = self.module.handler(event, None)
-
-        output_file = self.tmp_path / result["local_output_path"]
-        written = json.loads(output_file.read_text())
-
-        assert written["repositories"] == {
-            "repo-a": {
-                "checks": {
-                    "codeowners": {"result": "pass"},
-                    "readme": {"result": "fail"},
-                },
-                "is_compliant": False,
-                "rating": "non-compliant",
-            },
-            "repo-b": {
-                "checks": {"codeowners": {"result": "pass"}},
-                "is_compliant": True,
-                "rating": "non-compliant",
-            },
-        }
-        assert written["teams"] == {
-            "team-a": {
-                "checks": {"team_maintainer": {"result": "pass"}},
-                "is_compliant": True,
-            },
-            "team-b": {
-                "checks": {"team_maintainer": {"result": "fail"}},
-                "is_compliant": False,
-            },
-        }
-        assert written["organisation_checks"] == {
-            "dependabot_slo": {"result": "pass"},
-            "secret_scanning_slo": {"result": "fail"},
-        }
-        assert written["summary"]["total_repositories"] == 2
-        assert written["summary"]["compliant_repositories"] == 1
-        assert written["summary"]["total_teams"] == 2
-        assert written["summary"]["compliant_teams"] == 1
-
-    def test_repository_rating_added_to_output(self):
-        """Each repository in the output should include a rating key."""
-        event = {
-            "owner": "test-org",
-            "repositories": {"repo-a": {"readme": {"result": "pass"}}},
-        }
-
-        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
-            result = self.module.handler(event, None)
-
-        output_file = self.tmp_path / result["local_output_path"]
-        written = json.loads(output_file.read_text())
-        assert "rating" in written["repositories"]["repo-a"]
-
-    def test_summary_includes_repository_ratings_counts(self):
-        """Summary should include a repository_ratings key with per-rating counts."""
-        event = {
-            "owner": "test-org",
-            "repositories": {"repo-a": {"readme": {"result": "pass"}}},
-        }
-
-        with patch.dict(os.environ, {"ENVIRONMENT": "local"}):
-            result = self.module.handler(event, None)
-
-        output_file = self.tmp_path / result["local_output_path"]
-        written = json.loads(output_file.read_text())
-        assert "repository_ratings" in written["summary"]
-
-    def test_skips_non_dict_repository_checks_in_rating_loop(self):
-        """Non-dict values injected into the repositories map are silently skipped in the rating loop."""
-
-        # Must fail isinstance(..., dict) to trigger the continue on line 259,
-        # but must still expose .items() so the summary aggregation loop doesn't crash.
-        class NonDictChecks:
-            def items(self):
-                return []
-
-        # json.dump is patched to avoid serialization failure on the non-dict value;
-        # we assert only on the returned result, not the written file.
-        with (
-            patch.dict(os.environ, {"ENVIRONMENT": "local"}),
-            patch.object(
-                self.module,
-                "_normalise_repository_checks",
-                return_value={"repo-a": NonDictChecks()},
-            ),
-            patch.object(self.module.json, "dump"),
-        ):
-            result = self.module.handler({"owner": "test-org"}, None)
+            None,
+        )
 
         assert result["status"] == "success"
         assert result["environment"] == "local"
+        assert result["key"] is None
 
-    def test_non_dict_checks_value_skipped_in_rating_and_summary_loops(self):
-        """A repository entry with a non-dict checks value falls back to empty in the rating loop
-        and is excluded from the summary aggregation loop."""
-        # _normalise_repository_checks always produces a dict checks value, so we inject
-        # a non-dict entry directly to exercise the defensive branches on lines 283 and 319.
-        with (
-            patch.dict(os.environ, {"ENVIRONMENT": "local"}),
-            patch.object(
-                self.module,
-                "_normalise_repository_checks",
-                return_value={
-                    "repo-a": {
-                        "checks": {"readme": {"result": "pass"}},
-                        "is_compliant": True,
-                    },
-                    "repo-b": {"checks": "not-a-dict", "is_compliant": False},
-                },
-            ),
-        ):
-            result = self.module.handler({"owner": "test-org"}, None)
+    @patch("functions.storage_functions.store_output.handler.boto3")
+    @patch("functions.storage_functions.store_output.handler.load_scorecard_criteria")
+    def test_handler_prod_mode_stores_to_s3(
+        self, mock_load_criteria, mock_boto3, monkeypatch
+    ) -> None:
+        """Handler should store results to S3 in prod mode."""
+        monkeypatch.setenv("ENVIRONMENT", "prod")
 
-        output_file = self.tmp_path / result["local_output_path"]
-        written = json.loads(output_file.read_text())
-        # repo-b has a non-dict checks value; its check should not appear in the summary
-        check_summary = written["summary"]["repository_checks"]
-        assert check_summary["readme"]["total"] == 1
-        assert check_summary["readme"]["compliant"] == 1
-        # repo-b should still have a rating (calculated with empty checks fallback)
-        assert "rating" in written["repositories"]["repo-b"]
+        mock_s3_client = MagicMock()
+        mock_boto3.client.return_value = mock_s3_client
 
+        mock_load_criteria.return_value = [
+            {"name": "gold", "min_compliance": 90.0, "required_checks": []}
+        ]
 
-# ---------------------------------------------------------------------------
-# Prod environment
-# ---------------------------------------------------------------------------
+        with patch(
+            "functions.storage_functions.store_output.handler.DataLoader"
+        ) as MockLoader:
+            mock_loader = MagicMock()
+            MockLoader.return_value = mock_loader
+            mock_loader.load_organisation_checks.return_value = {}
+            mock_loader.load_repository_checks.return_value = {}
+            mock_loader.load_team_checks.return_value = {}
 
-
-class TestHandlerProd:
-    module = importlib.import_module("functions.storage_functions.store_output.handler")
-
-    def test_s3_loader_skips_non_dict_payload_and_handles_fallback_paths(self) -> None:
-        """Loader should skip non-dict payloads, fallback repo name from key, and allow empty checks payloads."""
-
-        class FakeBody:
-            def __init__(self, payload):
-                self.payload = payload
-
-            def read(self):
-                return json.dumps(self.payload)
-
-        class FakePaginator:
-            def paginate(self, **kwargs):
-                del kwargs
-                return [
-                    {
-                        "Contents": [
-                            {
-                                "Key": "audit-runs/test-org/run-123/repositories/repo-a.json"
-                            },
-                            {
-                                "Key": "audit-runs/test-org/run-123/repositories/repo-b.json"
-                            },
-                            {
-                                "Key": "audit-runs/test-org/run-123/repositories/repo-c.json"
-                            },
-                            {"Key": "audit-runs/test-org/run-123/repositories/.json"},
-                        ]
-                    }
-                ]
-
-        class FakeS3Client:
-            def get_paginator(self, operation_name):
-                assert operation_name == "list_objects_v2"
-                return FakePaginator()
-
-            def get_object(self, **kwargs):
-                key = kwargs["Key"]
-                if key.endswith("repo-a.json"):
-                    return {
-                        "Body": FakeBody(
-                            {
-                                "checks": {
-                                    "readme": {
-                                        "check_name": "readme",
-                                        "result": "pass",
-                                    }
-                                }
-                            }
-                        )
-                    }
-                if key.endswith("repo-b.json"):
-                    return {
-                        "Body": FakeBody(
-                            {
-                                "repository_name": "repo-b",
-                                "checks": "unexpected-type",
-                            }
-                        )
-                    }
-                if key.endswith("repo-c.json"):
-                    return {"Body": FakeBody("not-a-dict")}
-                # Empty filename fallback (/.json) should be ignored.
-                return {"Body": FakeBody({})}
-
-        result = self.module._load_repository_checks_from_s3(
-            s3_client=FakeS3Client(),
-            bucket_name="bucket",
-            owner="test-org",
-            run_id="run-123",
-        )
-
-        assert result == {
-            "repo-a": {
-                "checks": {"readme": {"result": "pass"}},
-                "is_compliant": True,
-            },
-            "repo-b": {"checks": {}, "is_compliant": False},
-        }
-
-    def test_loads_repository_results_from_run_prefix(self) -> None:
-        """When run_id is provided, repository results should be loaded from audit-runs S3 objects."""
-
-        class FakeBody:
-            def __init__(self, payload: dict):
-                self.payload = payload
-
-            def read(self):
-                return json.dumps(self.payload)
-
-        captured: dict[str, object] = {}
-        captured_prefixes: list[str] = []
-
-        class FakePaginator:
-            def paginate(self, **kwargs):
-                prefix = kwargs.get("Prefix")
-                captured_prefixes.append(prefix)
-                captured["prefix"] = prefix  # Last one wins for backward compatibility
-
-                # Return repository results if requesting repositories prefix
-                if prefix == "audit-runs/test-org/run-123/repositories/":
-                    return [
-                        {
-                            "Contents": [
-                                {
-                                    "Key": "audit-runs/test-org/run-123/repositories/repo-a.json",
-                                },
-                            ],
-                        }
-                    ]
-
-                # Return empty results for organisation-checks prefix
-                if prefix == "audit-runs/test-org/run-123/organisation-checks/":
-                    return [{"Contents": []}]
-
-                # Fallback for other prefixes
-                return [{"Contents": []}]
-
-        class FakeS3Client:
-            def get_paginator(self, operation_name):
-                assert operation_name == "list_objects_v2"
-                return FakePaginator()
-
-            def get_object(self, **kwargs):
-                if kwargs["Key"] == "config/scorecard_criteria.json":
-                    return {
-                        "Body": FakeBody(
-                            {
-                                "gold": {
-                                    "min_compliance": 90,
-                                    "required_checks": ["readme"],
-                                },
-                                "silver": {
-                                    "min_compliance": 70,
-                                    "required_checks": ["readme"],
-                                },
-                                "bronze": {
-                                    "min_compliance": 50,
-                                    "required_checks": [],
-                                },
-                            }
-                        )
-                    }
-
-                assert kwargs["Key"].endswith("repo-a.json")
-                return {
-                    "Body": FakeBody(
-                        {
-                            "repository_name": "repo-a",
-                            "checks": {
-                                "readme": {
-                                    "check_name": "readme",
-                                    "result": "pass",
-                                }
-                            },
-                        }
-                    )
-                }
-
-            def put_object(self, **kwargs):
-                captured.update(kwargs)
-
-        event = {
-            "owner": "test-org",
-            "run_id": "run-123",
-            "output_bucket": "my-audit-bucket",
-        }
-
-        with (
-            patch.dict(
-                os.environ,
-                {"ENVIRONMENT": "prod", "S3_BUCKET_NAME": "my-audit-bucket"},
-            ),
-            patch.object(self.module.boto3, "client", return_value=FakeS3Client()),
-        ):
-            result = self.module.handler(event, None)
-
-        assert result["status"] == "success"
-        assert "audit-runs/test-org/run-123/repositories/" in captured_prefixes
-        written = json.loads(str(captured["Body"]))
-        assert written["summary"]["total_repositories"] == 1
-        assert written["summary"]["compliant_repositories"] == 1
-
-    def test_calls_s3_put_object(self) -> None:
-        """In the prod environment the handler should upload the result to S3."""
-        captured: dict[str, object] = {}
-
-        class FakeBody:
-            def __init__(self, payload):
-                self.payload = payload
-
-            def read(self):
-                return json.dumps(self.payload)
-
-        class FakeS3Client:
-            def get_object(self, **kwargs: object):
-                if kwargs["Key"] == "config/scorecard_criteria.json":
-                    return {
-                        "Body": FakeBody(
-                            {
-                                "gold": {
-                                    "min_compliance": 90,
-                                    "required_checks": [],
-                                },
-                                "silver": {
-                                    "min_compliance": 70,
-                                    "required_checks": [],
-                                },
-                                "bronze": {
-                                    "min_compliance": 50,
-                                    "required_checks": [],
-                                },
-                            }
-                        )
-                    }
-                raise AssertionError(f"Unexpected key: {kwargs['Key']}")
-
-            def put_object(self, **kwargs: object) -> None:
-                captured.update(kwargs)
-
-        event = {
-            "owner": "test-org",
-            "repositories": {"repo-a": {"check_x": {"result": "pass"}}},
-        }
-
-        with (
-            patch.dict(
-                os.environ,
-                {"ENVIRONMENT": "prod", "S3_BUCKET_NAME": "my-audit-bucket"},
-            ),
-            patch.object(self.module.boto3, "client", return_value=FakeS3Client()),
-        ):
-            result = self.module.handler(event, None)
-
-        assert result["status"] == "success"
-        assert result["environment"] == "prod"
-        assert result["bucket"] == "my-audit-bucket"
-        assert result["local_output_path"] is None
-
-        assert captured["Bucket"] == "my-audit-bucket"
-        assert captured["ContentType"] == "application/json"
-        assert "audit-results/test-org/" in str(captured["Key"])
-        written = json.loads(str(captured["Body"]))
-        assert written["owner"] == "test-org"
-
-    def test_loads_scorecard_criteria_from_s3_in_prod(self) -> None:
-        """Prod mode should load scorecard criteria from S3 config key."""
-        captured: dict[str, object] = {}
-
-        class FakeBody:
-            def __init__(self, payload):
-                self.payload = payload
-
-            def read(self):
-                return json.dumps(self.payload)
-
-        class FakeS3Client:
-            def get_object(self, **kwargs):
-                if kwargs["Key"] == "config/scorecard_criteria.json":
-                    return {
-                        "Body": FakeBody(
-                            {
-                                "gold": {
-                                    "min_compliance": 90,
-                                    "required_checks": ["codeowners"],
-                                },
-                                "silver": {
-                                    "min_compliance": 70,
-                                    "required_checks": ["readme"],
-                                },
-                                "bronze": {
-                                    "min_compliance": 50,
-                                    "required_checks": [],
-                                },
-                            }
-                        )
-                    }
-
-                return {
-                    "Body": FakeBody(
-                        {
-                            "repository_name": "repo-a",
-                            "checks": {
-                                "codeowners": {
-                                    "check_name": "codeowners",
-                                    "result": "pass",
-                                },
-                                "readme": {
-                                    "check_name": "readme",
-                                    "result": "pass",
-                                },
-                            },
-                        }
-                    )
-                }
-
-            def get_paginator(self, operation_name):
-                assert operation_name == "list_objects_v2"
-
-                class FakePaginator:
-                    def paginate(self, **kwargs):
-                        del kwargs
-                        return [
-                            {
-                                "Contents": [
-                                    {
-                                        "Key": "audit-runs/test-org/run-123/repositories/repo-a.json"
-                                    }
-                                ]
-                            }
-                        ]
-
-                return FakePaginator()
-
-            def put_object(self, **kwargs):
-                captured.update(kwargs)
-
-        event = {
-            "owner": "test-org",
-            "run_id": "run-123",
-            "output_bucket": "my-audit-bucket",
-        }
-
-        with (
-            patch.dict(
-                os.environ,
+            handler(
                 {
-                    "ENVIRONMENT": "prod",
-                    "S3_BUCKET_NAME": "my-audit-bucket",
+                    "owner": "test-org",
+                    "run_id": "run-1",
+                    "output_bucket": "my-bucket",
+                    "rate_limit_start": "2024-01-01T00:00:00Z",
+                    "rate_limit_end": "2024-01-01T01:00:00Z",
                 },
-            ),
-            patch.object(self.module.boto3, "client", return_value=FakeS3Client()),
-        ):
-            self.module.handler(event, None)
+                None,
+            )
 
-        written = json.loads(str(captured["Body"]))
-        assert written["repositories"]["repo-a"]["rating"] == "gold"
-        assert written["scorecard_criteria"] == {
-            "gold": {
-                "min_compliance": 90.0,
-                "required_checks": ["codeowners"],
+            assert mock_s3_client.put_object.called
+            call_args = mock_s3_client.put_object.call_args
+            assert call_args[1]["Bucket"] == "my-bucket"
+            assert "audit-results/test-org/run-1.json" in call_args[1]["Key"]
+
+    def test_handler_default_environment_is_local(self, monkeypatch, tmp_path) -> None:
+        """Handler should default to local environment if ENVIRONMENT not set."""
+        monkeypatch.delenv("ENVIRONMENT", raising=False)
+        monkeypatch.chdir(tmp_path)
+
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        config_file = config_dir / "scorecard_criteria.json"
+        config_file.write_text(
+            json.dumps({"gold": {"min_compliance": 90, "required_checks": []}})
+        )
+
+        with patch(
+            "functions.storage_functions.store_output.handler.load_scorecard_criteria"
+        ) as mock_load:
+            mock_load.return_value = [
+                {"name": "gold", "min_compliance": 90.0, "required_checks": []}
+            ]
+
+            result = handler(
+                {"owner": "test-org", "run_id": "run-1"},
+                None,
+            )
+
+            assert result["environment"] == "local"
+
+    @patch("functions.storage_functions.store_output.handler.boto3")
+    @patch("functions.storage_functions.store_output.handler.load_scorecard_criteria")
+    def test_handler_includes_all_required_output_fields(
+        self, mock_load_criteria, mock_boto3, monkeypatch, tmp_path
+    ) -> None:
+        """Handler should include all required fields in output."""
+        monkeypatch.setenv("ENVIRONMENT", "local")
+        monkeypatch.chdir(tmp_path)
+
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        config_file = config_dir / "scorecard_criteria.json"
+        config_file.write_text(
+            json.dumps({"gold": {"min_compliance": 90, "required_checks": []}})
+        )
+
+        mock_load_criteria.return_value = [
+            {"name": "gold", "min_compliance": 90.0, "required_checks": []}
+        ]
+
+        handler(
+            {
+                "owner": "test-org",
+                "run_id": "run-1",
+                "rate_limit_start": "2024-01-01T00:00:00Z",
+                "rate_limit_end": "2024-01-01T01:00:00Z",
             },
-            "silver": {
-                "min_compliance": 70.0,
-                "required_checks": ["readme"],
-            },
-            "bronze": {
-                "min_compliance": 50.0,
-                "required_checks": [],
-            },
-        }
-
-    def test_raises_when_s3_bucket_name_missing(self):
-        """A missing S3_BUCKET_NAME in prod should raise a ValueError."""
-        with patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=False):
-            os.environ.pop("S3_BUCKET_NAME", None)
-            with pytest.raises(ValueError, match="S3_BUCKET_NAME"):
-                self.module.handler({"owner": "test-org"}, None)
-
-    def test_raises_when_bucket_name_missing_at_write_time(self):
-        """Missing bucket_name at the final write step should raise a clear ValueError."""
-        with (
-            patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=True),
-            patch.object(self.module, "load_scorecard_criteria", return_value=[]),
-            patch.object(self.module, "boto3"),
-            pytest.raises(
-                ValueError, match="output_bucket.*environment variable not set"
-            ),
-        ):
-            self.module.handler({"owner": "test-org"}, None)
-
-    def test_raises_when_run_id_provided_in_prod_without_bucket(self):
-        """Prod run_id aggregation requires an explicit output bucket."""
-        event = {"owner": "test-org", "run_id": "run-123"}
-        with patch.dict(os.environ, {"ENVIRONMENT": "prod"}, clear=True):
-            with pytest.raises(ValueError, match="required in prod when using run_id"):
-                self.module.handler(event, None)
-
-
-# ---------------------------------------------------------------------------
-# Scorecard rating logic
-# ---------------------------------------------------------------------------
-
-
-class TestScorecardRating:
-    scorecard = importlib.import_module("utils.scorecard")
-
-    CRITERIA = [
-        {
-            "name": "gold",
-            "min_compliance": 90.0,
-            "required_checks": ["readme", "codeowners"],
-        },
-        {
-            "name": "silver",
-            "min_compliance": 70.0,
-            "required_checks": ["readme"],
-        },
-        {
-            "name": "bronze",
-            "min_compliance": 50.0,
-            "required_checks": [],
-        },
-    ]
-
-    def test_compliance_percentage_drives_rating(self):
-        """A repository that meets the compliance threshold receives the matching rating."""
-        checks = {
-            "readme": {"result": "pass"},
-            "codeowners": {"result": "pass"},
-            "license": {"result": "pass"},
-            "dependabot": {"result": "pass"},
-            "gitignore": {"result": "pass"},
-            "pirr": {"result": "pass"},
-            "security": {"result": "pass"},
-            "external_pr": {"result": "pass"},
-            "inactivity": {"result": "pass"},
-            "access": {"result": "pass"},
-        }
-        # 10/10 = 100% -> exceeds gold threshold of 90%
-        assert (
-            self.scorecard.calculate_repository_rating(checks, self.CRITERIA) == "gold"
+            None,
         )
 
-    def test_required_check_gates_higher_rating(self):
-        """Failing a required check blocks the rating even if the percentage qualifies."""
-        checks = {
-            "readme": {"result": "pass"},
-            "codeowners": {"result": "fail"},  # required for gold
-            "check_c": {"result": "pass"},
-            "check_d": {"result": "pass"},
-            "check_e": {"result": "pass"},
-            "check_f": {"result": "pass"},
-            "check_g": {"result": "pass"},
-            "check_h": {"result": "pass"},
-            "check_i": {"result": "pass"},
-            "check_j": {"result": "pass"},
-        }
-        # 9/10 = 90% meets gold threshold but codeowners fails -> drops to silver
-        assert (
-            self.scorecard.calculate_repository_rating(checks, self.CRITERIA)
-            == "silver"
+        output_dir = tmp_path / "outputs" / "test-org"
+        output_file = output_dir / "run-1.json"
+        assert output_file.exists()
+
+        with open(output_file, "r") as f:
+            output = json.load(f)
+
+        assert output["owner"] == "test-org"
+        assert output["run_id"] == "run-1"
+        assert "repositories" in output
+        assert "scorecard_criteria" in output
+        assert "organisation_checks" in output
+        assert "teams" in output
+        assert "summary" in output
+        assert "timestamp" in output
+        assert output["rate_limit_start"] == "2024-01-01T00:00:00Z"
+        assert output["rate_limit_end"] == "2024-01-01T01:00:00Z"
+
+    @patch("functions.storage_functions.store_output.handler.boto3")
+    @patch("functions.storage_functions.store_output.handler.load_scorecard_criteria")
+    def test_handler_adds_ratings_to_repositories(
+        self, mock_load_criteria, mock_boto3, monkeypatch, tmp_path
+    ) -> None:
+        """Handler should add ratings to repository checks."""
+        monkeypatch.setenv("ENVIRONMENT", "local")
+        monkeypatch.chdir(tmp_path)
+
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        config_file = config_dir / "scorecard_criteria.json"
+        config_file.write_text(
+            json.dumps({"gold": {"min_compliance": 90, "required_checks": []}})
         )
 
-    def test_highest_matching_rating_wins(self):
-        """When a repository meets multiple thresholds, the highest is assigned."""
-        checks = {
-            "readme": {"result": "pass"},
-            "codeowners": {"result": "pass"},
-            "check_c": {"result": "pass"},
-            "check_d": {"result": "pass"},
-            "check_e": {"result": "pass"},
-            "check_f": {"result": "pass"},
-            "check_g": {"result": "pass"},
-            "check_h": {"result": "pass"},
-            "check_i": {"result": "pass"},
-            "check_j": {"result": "pass"},
-        }
-        # 10/10 = 100%, required checks pass -> gold not bronze
-        rating = self.scorecard.calculate_repository_rating(checks, self.CRITERIA)
-        assert rating == "gold"
-        assert rating != "bronze"
+        mock_load_criteria.return_value = [
+            {"name": "gold", "min_compliance": 100.0, "required_checks": []},
+            {"name": "silver", "min_compliance": 50.0, "required_checks": []},
+        ]
 
-    def test_non_compliant_when_below_lowest_threshold(self):
-        """A repository below every threshold receives non-compliant."""
-        checks = {
-            "check_a": {"result": "pass"},
-            "check_b": {"result": "fail"},
-            "check_c": {"result": "fail"},
-            "check_d": {"result": "fail"},
-        }
-        # 1/4 = 25% -> below bronze threshold of 50%
-        assert (
-            self.scorecard.calculate_repository_rating(checks, self.CRITERIA)
-            == "non-compliant"
+        with patch(
+            "functions.storage_functions.store_output.handler.DataLoader"
+        ) as MockLoader:
+            mock_loader = MagicMock()
+            MockLoader.return_value = mock_loader
+            mock_loader.load_organisation_checks.return_value = {}
+            mock_loader.load_repository_checks.return_value = {
+                "test-repo": {
+                    "repository_name": "test-repo",
+                    "checks": {"readme": {"result": "pass"}},
+                }
+            }
+            mock_loader.load_team_checks.return_value = {}
+
+            handler(
+                {"owner": "test-org", "run_id": "run-1"},
+                None,
+            )
+
+            output_dir = tmp_path / "outputs" / "test-org"
+            output_file = output_dir / "run-1.json"
+
+            with open(output_file, "r") as f:
+                output = json.load(f)
+
+            assert "rating" in output["repositories"]["test-repo"]
+
+    def test_handler_case_insensitive_environment(self, monkeypatch, tmp_path) -> None:
+        """Handler should accept uppercase ENVIRONMENT values."""
+        monkeypatch.setenv("ENVIRONMENT", "LOCAL")
+        monkeypatch.chdir(tmp_path)
+
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        config_file = config_dir / "scorecard_criteria.json"
+        config_file.write_text(
+            json.dumps({"gold": {"min_compliance": 90, "required_checks": []}})
         )
 
-    def test_non_compliant_when_no_criteria_defined(self):
-        """With no criteria configured, all repositories are non-compliant."""
-        checks = {"readme": {"result": "pass"}}
-        assert self.scorecard.calculate_repository_rating(checks, []) == "non-compliant"
+        with patch(
+            "functions.storage_functions.store_output.handler.load_scorecard_criteria"
+        ) as mock_load:
+            mock_load.return_value = [
+                {"name": "gold", "min_compliance": 90.0, "required_checks": []}
+            ]
 
-    def test_required_checks_missing_from_results_treated_as_fail(self):
-        """A required check absent from repository results blocks ratings that need it."""
-        checks = {
-            "codeowners": {"result": "pass"},
-            # readme absent - required for gold and silver
-        }
-        # 100% compliance (1/1) but readme missing -> gold and silver blocked, bronze awarded
-        assert (
-            self.scorecard.calculate_repository_rating(checks, self.CRITERIA)
-            == "bronze"
-        )
+            result = handler(
+                {"owner": "test-org", "run_id": "run-1"},
+                None,
+            )
+
+            assert result["environment"] == "local"

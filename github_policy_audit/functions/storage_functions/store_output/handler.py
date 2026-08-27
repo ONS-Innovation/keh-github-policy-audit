@@ -1,9 +1,19 @@
-"""Lambda handler to store check results to S3."""
+"""Lambda handler to aggregate and store audit output from S3.
+
+This handler:
+1. Loads individual check results from S3 (produced during the audit run)
+2. Aggregates and normalises the data
+3. Calculates compliance scores and ratings
+4. Stores the final output to S3
+
+For local testing, load data from event instead.
+"""
 
 import json
 import logging
 import os
 from datetime import datetime, timezone
+from typing import Any
 
 import boto3
 
@@ -17,489 +27,315 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
-def _normalise_environment(raw_environment: str | None) -> str:
-    """Normalise supported environments."""
-    environment = (raw_environment or "local").lower()
-    if environment in {"local", "prod"}:
-        return environment
-    raise ValueError("ENVIRONMENT must be either 'local' or 'prod'")
+class DataLoader:
+    """Load audit data from S3 or event depending on environment."""
 
+    def __init__(self, environment: str, bucket_name: str | None, s3_client=None):
+        self.environment = environment
+        self.bucket_name = bucket_name
+        self.s3_client = s3_client
 
-def _is_pass(check_output):
-    """Return True when a check result reports a passing result."""
-    return (
-        isinstance(check_output, dict)
-        and str(check_output.get("result", "")).lower() == "pass"
-    )
+    def _load_from_s3(
+        self, prefix: str, field_name: str, log_context: str
+    ) -> dict[str, dict]:
+        """Generic loader for S3 objects with field-based naming."""
+        result: dict[str, dict] = {}
 
-
-def _calculate_entity_compliance(entity_checks: dict) -> bool:
-    """Return compliance derived from all check outputs.
-
-    Compliance is always calculated in this function from check results.
-    """
-    return all(
-        _is_pass(check_output)
-        for check_name, check_output in entity_checks.items()
-        if check_name != "is_compliant"
-    )
-
-
-def _normalise_repository_entry(repository_data) -> dict[str, dict | bool]:
-    """Return repository entry with nested checks and computed compliance."""
-    if not isinstance(repository_data, dict):
-        return {"checks": {}, "is_compliant": False}
-
-    checks_source = repository_data.get("checks")
-    if not isinstance(checks_source, dict):
-        checks_source = repository_data
-
-    checks = {
-        check_name: {k: v for k, v in check_output.items() if k != "check_name"}
-        if isinstance(check_output, dict)
-        else check_output
-        for check_name, check_output in checks_source.items()
-        if check_name not in {"is_compliant", "rating"}
-    }
-
-    return {
-        "checks": checks,
-        "is_compliant": _calculate_entity_compliance(checks),
-    }
-
-
-def _normalise_organisation_checks(
-    organisation_checks, organisation_results
-) -> dict[str, dict]:
-    """Return organisation checks as a dictionary keyed by check name."""
-    if isinstance(organisation_checks, dict):
-        return organisation_checks
-    if organisation_checks is not None:
-        raise ValueError("'organisation_checks' must be a dictionary")
-
-    if not isinstance(organisation_results, list):
-        return {}
-
-    checks: dict[str, dict] = {}
-    for result in organisation_results:
-        if not isinstance(result, dict):
-            continue
-        check_name = result.get("check_name")
-        if isinstance(check_name, str) and check_name:
-            checks[check_name] = {k: v for k, v in result.items() if k != "check_name"}
-    return checks
-
-
-def _normalise_repository_checks(repositories, repository_results) -> dict[str, dict]:
-    """Return repositories keyed by name with nested check results."""
-    if isinstance(repositories, dict):
-        return {
-            repository_name: _normalise_repository_entry(repository_checks)
-            for repository_name, repository_checks in repositories.items()
-        }
-    if repositories is not None:
-        raise ValueError("'repositories' must be a dictionary keyed by repository name")
-
-    if not isinstance(repository_results, list):
-        return {}
-
-    repository_checks: dict[str, dict] = {}
-    for repository_result in repository_results:
-        if not isinstance(repository_result, dict):
-            continue
-
-        repository_name = repository_result.get("repository_name")
-        if not isinstance(repository_name, str) or not repository_name:
-            continue
-
-        checks_by_name: dict[str, dict] = {}
-        for check_result in repository_result.get("checks", []):
-            if not isinstance(check_result, dict):
-                continue
-            check_name = check_result.get("check_name")
-            if isinstance(check_name, str) and check_name:
-                checks_by_name[check_name] = check_result
-
-        repository_checks[repository_name] = _normalise_repository_entry(
-            {"checks": checks_by_name}
-        )
-
-    return repository_checks
-
-
-def _load_repository_checks_from_s3(
-    *,
-    s3_client,
-    bucket_name: str,
-    owner: str,
-    run_id: str,
-) -> dict[str, dict]:
-    """Load per-repository results from S3 and return keyed repository checks.
-
-    Flow:
-    1. List all JSON objects for the run prefix.
-    2. Iterate object keys.
-    3. Read each object body.
-    4. Normalise checks payload and build repository map.
-    """
-    prefix = f"audit-runs/{owner}/{run_id}/repositories/"
-    repository_checks: dict[str, dict] = {}
-    repository_keys: list[str] = []
-
-    paginator = s3_client.get_paginator("list_objects_v2")
-    for response in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
-        for obj in response.get("Contents", []):
-            key = obj.get("Key")
-            if isinstance(key, str) and key.endswith(".json"):
-                repository_keys.append(key)
-
-    for key in repository_keys:
-        raw_body = s3_client.get_object(Bucket=bucket_name, Key=key)["Body"].read()
-        payload = json.loads(raw_body)
-        if not isinstance(payload, dict):
-            continue
-
-        # Prefer explicit field, fallback to filename for resilience.
-        repository_name = payload.get("repository_name")
-        if not isinstance(repository_name, str) or not repository_name:
-            repository_name = key.rsplit("/", 1)[-1].removesuffix(".json")
-        if not repository_name:
-            continue
-
-        checks_payload = payload.get("checks")
-        if isinstance(checks_payload, dict):
-            repository_checks[repository_name] = _normalise_repository_entry(
-                {"checks": checks_payload}
-            )
-        else:
-            repository_checks[repository_name] = {"checks": {}, "is_compliant": False}
-
-    return repository_checks
-
-
-def _load_teams_list_from_s3(
-    *,
-    s3_client,
-    bucket_name: str,
-    teams_s3_key: str,
-) -> list[dict]:
-    """Load teams list from S3 and return as list of team objects.
-
-    Returns empty list if file cannot be found or parsed.
-    """
-    try:
-        raw_body = s3_client.get_object(Bucket=bucket_name, Key=teams_s3_key)[
-            "Body"
-        ].read()
-        payload = json.loads(raw_body)
-        if isinstance(payload, list):
-            return payload
-    except Exception:
-        pass
-    return []
-
-
-def _load_organisation_checks_from_s3(
-    *,
-    s3_client,
-    bucket_name: str,
-    owner: str,
-    run_id: str,
-) -> dict[str, dict]:
-    """Load organisation check results from S3 and return as dictionary.
-
-    Reads all JSON objects from audit-runs/{owner}/{run_id}/organisation-checks/
-    and returns them keyed by check name.
-    """
-    prefix = f"audit-runs/{owner}/{run_id}/organisation-checks/"
-    organisation_checks: dict[str, dict] = {}
-
-    paginator = s3_client.get_paginator("list_objects_v2")
-    try:
-        for response in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
-            for obj in response.get("Contents", []):
-                key = obj.get("Key")
-                if not isinstance(key, str) or not key.endswith(".json"):
-                    continue
-
-                try:
-                    raw_body = s3_client.get_object(Bucket=bucket_name, Key=key)[
-                        "Body"
-                    ].read()
-                    payload = json.loads(raw_body)
-                    if not isinstance(payload, dict):
+        try:
+            paginator = self.s3_client.get_paginator("list_objects_v2")
+            for response in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix):
+                for obj in response.get("Contents", []):
+                    key = obj.get("Key")
+                    if not isinstance(key, str) or not key.endswith(".json"):
                         continue
 
-                    # Extract check name from filename or payload
-                    check_name = payload.get("check_name")
-                    if not isinstance(check_name, str) or not check_name:
-                        check_name = key.rsplit("/", 1)[-1].removesuffix(".json")
+                    try:
+                        body = self.s3_client.get_object(
+                            Bucket=self.bucket_name, Key=key
+                        )["Body"].read()
+                        payload = json.loads(body)
 
-                    if check_name:
-                        organisation_checks[check_name] = {
-                            k: v for k, v in payload.items() if k != "check_name"
-                        }
-                except Exception:
-                    continue
-    except Exception:
-        pass
+                        if not isinstance(payload, dict):
+                            continue
 
-    return organisation_checks
+                        # Extract name from payload, fallback to key
+                        name = payload.get(field_name)
+                        if not isinstance(name, str) or not name:
+                            name = key.rsplit("/", 1)[-1].removesuffix(".json")
 
+                        if name:
+                            result[name] = payload
+                    except Exception as e:
+                        log_info(
+                            logger,
+                            f"failed_to_load_{log_context}",
+                            key=key,
+                            error=str(e),
+                        )
+                        continue
+        except Exception as e:
+            log_info(logger, f"failed_to_list_{log_context}", error=str(e))
 
-def _normalise_team_checks(teams, team_results) -> dict[str, dict]:
-    """Return teams keyed by slug or name with nested check results."""
-    if isinstance(teams, dict):
-        return {
-            team_name: _normalise_repository_entry(team_checks)
-            for team_name, team_checks in teams.items()
-        }
-    if teams is None:
-        return {}
+        return result
 
-    if not isinstance(teams, list):
-        raise ValueError(
-            "'teams' must be a dictionary, or a list when 'team_results' is provided"
-        )
-    if not isinstance(team_results, list):
-        raise ValueError(
-            "'team_results' must be provided as a list when 'teams' is a list"
-        )
+    def load_organisation_checks(self, owner: str, run_id: str) -> dict[str, dict]:
+        """Load organisation check results from S3."""
+        if self.environment == "local":
+            return {}
 
-    checks_by_team: dict[str, dict] = {}
-    for index, team_result in enumerate(team_results):
-        if not isinstance(team_result, dict):
-            continue
+        prefix = f"audit-runs/{owner}/{run_id}/organisation-checks/"
+        return self._load_from_s3(prefix, "check_name", "organisation_checks")
 
-        team = (
-            teams[index]
-            if index < len(teams) and isinstance(teams[index], dict)
-            else {}
-        )
-        team_key = team.get("slug") or team.get("name") or f"team-{index}"
+    def load_repository_checks(self, owner: str, run_id: str) -> dict[str, dict]:
+        """Load per-repository results from S3."""
+        if self.environment == "local":
+            return {}
 
-        check_name = team_result.get("check_name")
-        if not isinstance(check_name, str) or not check_name:
-            continue
+        prefix = f"audit-runs/{owner}/{run_id}/repositories/"
+        return self._load_from_s3(prefix, "repository_name", "repositories")
 
-        checks_by_team.setdefault(team_key, {})[check_name] = {
-            k: v for k, v in team_result.items() if k != "check_name"
-        }
+    def load_team_checks(self, owner: str, run_id: str) -> dict[str, dict]:
+        """Load per-team results from S3."""
+        if self.environment == "local":
+            return {}
 
-    for team_key, team_checks in list(checks_by_team.items()):
-        checks_by_team[team_key] = _normalise_repository_entry({"checks": team_checks})
-
-    return checks_by_team
+        prefix = f"audit-runs/{owner}/{run_id}/teams/"
+        return self._load_from_s3(prefix, "team_slug", "teams")
 
 
-def handler(event, context):
-    """Store output from either canonical maps or raw Step Function map/parallel arrays."""
-    log_info(logger, "lambda_invoked", event_keys=sorted(event.keys()))
-
-    owner = event["owner"]
-
-    environment = _normalise_environment(os.environ.get("ENVIRONMENT", "local"))
-    s3_client = boto3.client("s3") if environment == "prod" else None
-
-    bucket_name = event.get("output_bucket") or os.environ.get("S3_BUCKET_NAME")
-    run_id = event.get("run_id")
-    rate_limit_start = event.get("rate_limit_start")
-    rate_limit_end = event.get("rate_limit_end")
-
-    repositories = _normalise_repository_checks(
-        event.get("repositories"), event.get("repository_results")
-    )
-    if not repositories and isinstance(run_id, str) and run_id:
-        if environment == "prod":
-            if not bucket_name:
-                raise ValueError(
-                    "output_bucket (or S3_BUCKET_NAME) is required in prod when using run_id"
-                )
-            repositories = _load_repository_checks_from_s3(
-                s3_client=s3_client,
-                bucket_name=bucket_name,
-                owner=owner,
-                run_id=run_id,
-            )
-
-    # Load scorecard criteria
-
-    scorecard_ratings = load_scorecard_criteria(
-        environment=environment,
-        bucket_name=bucket_name,
-        s3_client=s3_client,
+def is_pass(check_result: Any) -> bool:
+    """Return True if check result is a pass."""
+    return (
+        isinstance(check_result, dict)
+        and str(check_result.get("result", "")).lower() == "pass"
     )
 
-    # Calculate repository ratings and tally scorecard status counts
 
-    scorecard_status_counts = {rating["name"]: 0 for rating in scorecard_ratings}
-    scorecard_status_counts["non-compliant"] = 0
+def _normalise_checks_with_compliance(
+    items: dict[str, dict],
+) -> dict[str, dict]:
+    """Normalise items with compliance calculation."""
+    normalised: dict[str, dict] = {}
 
-    for repository_name, repository_checks in repositories.items():
-        if not isinstance(repository_checks, dict):
+    for item_name, item_data in items.items():
+        if not isinstance(item_data, dict):
             continue
-        checks = repository_checks.get("checks")
+
+        checks = item_data.get("checks", {})
         if not isinstance(checks, dict):
             checks = {}
-        rating = calculate_repository_rating(checks, scorecard_ratings)
-        repositories[repository_name]["rating"] = rating
-        scorecard_status_counts[rating] = scorecard_status_counts.get(rating, 0) + 1
 
-    teams_input = event.get("teams")
+        normalised_checks = {}
+        for check_name, check_result in checks.items():
+            if isinstance(check_result, dict):
+                normalised_checks[check_name] = {
+                    "result": check_result.get("result", "unknown"),
+                    "message": check_result.get("message", ""),
+                }
 
-    # If teams not in event but teams_s3_ref provided, load from S3
-    if not teams_input and isinstance(run_id, str) and run_id:
-        teams_s3_ref = event.get("teams_s3_ref")
-        if isinstance(teams_s3_ref, dict):
-            teams_s3_key = teams_s3_ref.get("s3_key")
-            if isinstance(teams_s3_key, str) and teams_s3_key:
-                if environment == "prod":
-                    if not bucket_name:
-                        raise ValueError(
-                            "output_bucket (or S3_BUCKET_NAME) is required in prod when using teams_s3_ref"
-                        )
-                    teams_input = _load_teams_list_from_s3(
-                        s3_client=s3_client,
-                        bucket_name=bucket_name,
-                        teams_s3_key=teams_s3_key,
-                    )
+        # Calculate compliance from checks
+        is_compliant = all(
+            normalised_checks[name].get("result") == "pass"
+            for name in normalised_checks
+        )
 
-    teams = _normalise_team_checks(teams_input, event.get("team_results"))
+        normalised[item_name] = {
+            "checks": normalised_checks,
+            "is_compliant": is_compliant,
+        }
 
-    # If organisation_checks not in event but run_id provided, load from S3
-    organisation_checks_input = event.get("organisation_checks")
-    if not organisation_checks_input and isinstance(run_id, str) and run_id:
-        if environment == "prod":
-            if not bucket_name:
-                raise ValueError(
-                    "output_bucket (or S3_BUCKET_NAME) is required in prod when using run_id"
-                )
-            organisation_checks_input = _load_organisation_checks_from_s3(
-                s3_client=s3_client,
-                bucket_name=bucket_name,
-                owner=owner,
-                run_id=run_id,
-            )
+    return normalised
 
-    organisation_checks = _normalise_organisation_checks(
-        organisation_checks_input, event.get("organisation_results")
+
+def normalise_organisation_checks(checks: dict[str, dict]) -> dict[str, dict]:
+    """Normalise organisation checks to consistent format."""
+    normalised: dict[str, dict] = {}
+    for check_name, check_data in checks.items():
+        if isinstance(check_data, dict):
+            normalised[check_name] = {
+                "result": check_data.get("result", "unknown"),
+                "message": check_data.get("message", ""),
+                "details": check_data.get("details", {}),
+            }
+    return normalised
+
+
+def normalise_repository_checks(repos: dict[str, dict]) -> dict[str, dict]:
+    """Normalise repository checks to consistent format."""
+    return _normalise_checks_with_compliance(repos)
+
+
+def normalise_team_checks(teams: dict[str, dict]) -> dict[str, dict]:
+    """Normalise team checks to consistent format."""
+    return _normalise_checks_with_compliance(teams)
+
+
+def _build_check_summary(items: dict[str, dict]) -> dict[str, dict]:
+    """Build check summary for items (repos or teams)."""
+    summary: dict[str, dict] = {}
+    for item in items.values():
+        if not isinstance(item, dict):
+            continue
+        for check_name, check_result in item.get("checks", {}).items():
+            if check_name not in summary:
+                summary[check_name] = {"total": 0, "compliant": 0}
+            summary[check_name]["total"] += 1
+            if is_pass(check_result):
+                summary[check_name]["compliant"] += 1
+    return summary
+
+
+def build_summary(
+    repositories: dict[str, dict],
+    organisation_checks: dict[str, dict],
+    teams: dict[str, dict],
+    scorecard_ratings: list[dict],
+) -> dict[str, Any]:
+    """Build summary of audit results."""
+    # Calculate repository compliance
+    compliant_repos = sum(
+        1
+        for repo in repositories.values()
+        if isinstance(repo, dict) and repo.get("is_compliant") is True
     )
 
-    now = datetime.now(timezone.utc)
+    # Calculate team compliance
+    compliant_teams = sum(
+        1
+        for team in teams.values()
+        if isinstance(team, dict) and team.get("is_compliant") is True
+    )
 
-    summary = {
+    # Build repository ratings from scorecard
+    scorecard_status_counts = {rating["name"]: 0 for rating in scorecard_ratings}
+    for repo_checks in repositories.values():
+        if isinstance(repo_checks, dict):
+            checks = repo_checks.get("checks", {})
+            if isinstance(checks, dict):
+                rating = calculate_repository_rating(checks, scorecard_ratings)
+                scorecard_status_counts[rating] = (
+                    scorecard_status_counts.get(rating, 0) + 1
+                )
+
+    # Build check summaries using shared helper
+    repository_check_summary = _build_check_summary(repositories)
+    organisation_check_summary = {}
+    for check_name, check_result in organisation_checks.items():
+        organisation_check_summary[check_name] = {"compliant": is_pass(check_result)}
+    team_check_summary = _build_check_summary(teams)
+
+    return {
         "total_repositories": len(repositories),
-        "compliant_repositories": sum(
-            1
-            for repo_checks in repositories.values()
-            if isinstance(repo_checks, dict) and repo_checks.get("is_compliant") is True
-        ),
+        "compliant_repositories": compliant_repos,
         "total_teams": len(teams),
-        "compliant_teams": sum(
-            1
-            for team_checks in teams.values()
-            if isinstance(team_checks, dict) and team_checks.get("is_compliant") is True
-        ),
-        "repository_checks": {},
-        "organisation_checks": {},
-        "team_checks": {},
+        "compliant_teams": compliant_teams,
+        "repository_checks": repository_check_summary,
+        "organisation_checks": organisation_check_summary,
+        "team_checks": team_check_summary,
         "repository_ratings": scorecard_status_counts,
     }
 
-    for _, repository_entry in repositories.items():
-        if not isinstance(repository_entry, dict):
-            continue
-        checks = repository_entry.get("checks", {})
-        if not isinstance(checks, dict):
-            continue
-        for check_name, check_output in checks.items():
-            if check_name not in summary["repository_checks"]:
-                summary["repository_checks"][check_name] = {"total": 0, "compliant": 0}
-            summary["repository_checks"][check_name]["total"] += 1
-            if _is_pass(check_output):
-                summary["repository_checks"][check_name]["compliant"] += 1
 
-    for check_name, check_output in organisation_checks.items():
-        summary["organisation_checks"][check_name] = {
-            "compliant": _is_pass(check_output)
-        }
+def handler(event, context):
+    """Aggregate audit results and store final output."""
+    log_info(logger, "lambda_invoked", event_keys=sorted(event.keys()))
 
-    for _, team_entry in teams.items():
-        for check_name, check_output in team_entry.get("checks", {}).items():
-            if check_name not in summary["team_checks"]:
-                summary["team_checks"][check_name] = {"total": 0, "compliant": 0}
-            summary["team_checks"][check_name]["total"] += 1
-            if _is_pass(check_output):
-                summary["team_checks"][check_name]["compliant"] += 1
+    # Extract required inputs
+    owner = event["owner"]
+    run_id = event["run_id"]
+    output_bucket = event.get("output_bucket")
+    rate_limit_start = event.get("rate_limit_start")
+    rate_limit_end = event.get("rate_limit_end")
 
+    # Environment setup
+    environment = (os.environ.get("ENVIRONMENT") or "local").lower()
+    if environment not in {"local", "prod"}:
+        raise ValueError("ENVIRONMENT must be either 'local' or 'prod'")
+
+    if environment == "prod" and not output_bucket:
+        raise ValueError("output_bucket is required in production")
+
+    s3_client = boto3.client("s3") if environment == "prod" else None
+
+    # Load data
+    loader = DataLoader(environment, output_bucket, s3_client)
+
+    log_info(logger, "loading_data", environment=environment)
+    org_checks_raw = loader.load_organisation_checks(owner, run_id)
+    repo_checks_raw = loader.load_repository_checks(owner, run_id)
+    team_checks_raw = loader.load_team_checks(owner, run_id)
+
+    # Normalise data
+    org_checks = normalise_organisation_checks(org_checks_raw)
+    repo_checks = normalise_repository_checks(repo_checks_raw)
+    team_checks = normalise_team_checks(team_checks_raw)
+
+    # Add ratings to repositories
+    scorecard_ratings = load_scorecard_criteria(
+        environment=environment,
+        bucket_name=output_bucket,
+        s3_client=s3_client,
+    )
+
+    for repo_name, repo_data in repo_checks.items():
+        if isinstance(repo_data, dict):
+            checks = repo_data.get("checks", {})
+            rating = calculate_repository_rating(checks, scorecard_ratings)
+            repo_checks[repo_name]["rating"] = rating
+
+    # Generate summary
+    summary = build_summary(repo_checks, org_checks, team_checks, scorecard_ratings)
+
+    # Build output
+    now = datetime.now(timezone.utc)
     output = {
         "owner": owner,
-        "repositories": repositories,
+        "run_id": run_id,
+        "repositories": repo_checks,
         "scorecard_criteria": serialise_scorecard_criteria(scorecard_ratings),
-        "organisation_checks": organisation_checks,
-        "teams": teams,
+        "organisation_checks": org_checks,
+        "teams": team_checks,
         "summary": summary,
-        "rate-limit-start": rate_limit_start,
-        "rate-limit-end": rate_limit_end,
+        "rate_limit_start": rate_limit_start,
+        "rate_limit_end": rate_limit_end,
         "timestamp": now.isoformat(),
     }
 
-    result_file_suffix = (
-        run_id
-        if isinstance(run_id, str) and run_id
-        else now.strftime("%Y-%m-%d/%H-%M-%S")
-    )
-    key = f"audit-results/{owner}/{result_file_suffix}.json"
-    local_output_path = None
-
+    # Store output
     if environment == "prod":
-        if not bucket_name:
-            raise ValueError(
-                "output_bucket (or S3_BUCKET_NAME) environment variable not set"
-            )
+        result_key = f"audit-results/{owner}/{run_id}.json"
+        log_info(logger, "storing_results", bucket=output_bucket, key=result_key)
 
-        log_info(logger, "storing_results", storage="s3", bucket=bucket_name, key=key)
         s3_client.put_object(
-            Bucket=bucket_name,
-            Key=key,
+            Bucket=output_bucket,
+            Key=result_key,
             Body=json.dumps(output, indent=2),
             ContentType="application/json",
         )
     else:
-        bucket_name = None
         output_dir = os.path.join("outputs", owner)
         os.makedirs(output_dir, exist_ok=True)
-        local_output_path = os.path.join(
-            output_dir, f"{now.strftime('%Y-%m-%d_%H-%M-%S')}.json"
-        )
+        result_file = os.path.join(output_dir, f"{run_id}.json")
 
-        with open(local_output_path, "w", encoding="utf-8") as file:
-            json.dump(output, file, indent=2)
+        with open(result_file, "w", encoding="utf-8") as f:
+            json.dump(output, f, indent=2)
 
-        log_info(
-            logger,
-            "stored_results",
-            environment="local",
-            local_output_path=local_output_path,
-        )
+        log_info(logger, "stored_results_locally", path=result_file)
 
     log_info(
         logger,
         "lambda_completed",
         owner=owner,
-        repositories_count=len(repositories),
-        organisation_checks_count=len(organisation_checks),
-        teams_count=len(teams),
+        repositories_count=len(repo_checks),
+        organisation_checks_count=len(org_checks),
+        teams_count=len(team_checks),
     )
 
     return {
         "status": "success",
         "environment": environment,
-        "bucket": bucket_name,
-        "key": key,
-        "local_output_path": local_output_path,
-        "owner": owner,
-        "run_id": run_id,
-        "rate-limit-start": rate_limit_start,
-        "rate-limit-end": rate_limit_end,
+        "bucket": output_bucket,
+        "key": f"audit-results/{owner}/{run_id}.json"
+        if environment == "prod"
+        else None,
     }
