@@ -2,20 +2,6 @@
   "owner": "ONS-Innovation",
   "run_id": "manual-test-run-2026-08-27",
   "output_bucket": "sdp-dev-github-policy-audit",
-  "repositories_s3_ref": {
-    "s3_bucket": "sdp-dev-github-policy-audit",
-    "s3_key": "audit-runs/ONS-Innovation/manual-test-run-2026-08-27/repositories-list.json",
-    "repository_count": 103,
-    "environment": "prod",
-    "local_output_path": null
-  },
-  "teams_s3_ref": {
-    "s3_bucket": "sdp-dev-github-policy-audit",
-    "s3_key": "audit-runs/ONS-Innovation/manual-test-run-2026-08-27/teams-list.json",
-    "team_count": 16,
-    "environment": "prod",
-    "local_output_path": null
-  },
   "rate_limit_start": {
     "checkpoint": "rate-limit-start",
     "limit": 5000,

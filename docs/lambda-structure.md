@@ -35,6 +35,7 @@ When organising a new function, consider:
 3. **Is it a general function?** Does it perform a task that is not a check or an aggregator? Add it to the `functions/` root.
 
 This structure ensures:
+
 - Clear separation of concerns
 - Easy discovery of related functions
 - Grouped test organization following the same structure
@@ -43,7 +44,7 @@ This structure ensures:
 
 Tests mirror the function structure exactly for easy discovery. Each handler has a dedicated test file named `test_<handler_name>.py`:
 
-```
+```bash
 tests/functions/
 ├── test_list_repositories.py         # General functions
 ├── test_list_teams.py
@@ -201,16 +202,19 @@ Stores organisation-level check results (defined in `terraform/locals.tf` as `or
 All check types (repository, team, and organisation) support multiple checks running in parallel per entity, configured via lists in `terraform/locals.tf`:
 
 ### Repository Checks
+
 - Configured via `repository_check_names` in `terraform/locals.tf`
 - Step Function flow: RepositoryChecksMap (Distributed Map) → RepositoryChecksParallel (runs all checks per repo) → store_repository_output
 - S3 output: `audit-runs/<owner>/<run_id>/repositories/<repository-name>.json` with structure `{checks: {check_name: {...}, ...}}`
 
 ### Team Checks
+
 - Configured via `team_check_names` in `terraform/locals.tf`
 - Step Function flow: TeamChecksMap → TeamChecksParallel (runs all checks) → store_team_checks
 - S3 output: `audit-runs/<owner>/<run_id>/teams/<team-slug>.json` with structure `{checks: {check_name: {...}, ...}}`
 
 ### Organisation Checks
+
 - Configured via `organisation_check_names` in `terraform/locals.tf`
 - Step Function flow: OrganisationChecks (Parallel branches, one per check) → store_organisation_checks (per check)
 - Each check stored separately: `audit-runs/<owner>/<run_id>/organisation-checks/<check-name>.json`

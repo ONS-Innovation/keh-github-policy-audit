@@ -95,6 +95,12 @@ Output storage:
 - `local` (default): writes output JSON to `outputs/<owner>/` and does not call AWS S3.
 - `prod`: writes output JSON to S3 and requires `S3_BUCKET_NAME`.
 
+> **Note:** Local testing for `store_output` must be done with `ENVIRONMENT=prod`. This will make real changes to S3 and require valid AWS credentials.
+> This happens because the `store_output` handler is designed to load data from S3 which is currently not accessible in `local` mode.
+> Mock Data for this, and a better way of testing the storage functions is a future improvement.
+
+TODO: Improve local testing for storage functions to avoid connect to S3.
+
 Scorecard criteria:
 
 - `local`: criteria loaded from `config/scorecard_criteria.json`.
@@ -200,16 +206,16 @@ Rate-limit telemetry is collected only by this checkpoint handler at workflow bo
 | Secret scanning SLO                                     | `functions.organisation_checks.secret_scanning_slo.handler`                                                                                                                                                                                                                                                                                                                                                        | `{"owner":"<org>"}`                                                                                                                                                                                 |
 | Dependabot SLO                                          | `functions.organisation_checks.dependabot_slo.handler`                                                                                                                                                                                                                                                                                                                                                             | `{"owner":"<org>","levels":["critical","high"]}` (`levels` optional)                                                                                                                                |
 | Naming convention                                       | `functions.repository_checks.naming_convention.handler`                                                                                                                                                                                                                                                                                                                                                            | `{"owner":"<org>","repository_name":"<repo>"}`                                                                                                                                                      |
-| Team checks (extensible)                                | `functions.organisation_checks.team_maintainer.handler` (add more via `team_check_names` in terraform/locals.tf)                                                                                                                                                                                                  | `{"owner":"<org>","team_slug":"<team>"}`                                                                                                                                                            |
+| Team checks (extensible)                                | `functions.organisation_checks.team_maintainer.handler` (add more via `team_check_names` in terraform/locals.tf)                                                                                                                                                                                                                                                                                                   | `{"owner":"<org>","team_slug":"<team>"}`                                                                                                                                                            |
 
 #### Output Handlers
 
-| Handler modules                                   | Required event payload                                                                                                                                                                   |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `functions.store_repository_output.handler`       | `{"owner":"<org>","run_id":"<execution-id>","repository_name":"<repo>","checks":[{"check_name":"readme","result":"pass","message":"..."}]}`                                              |
+| Handler modules                                   | Required event payload                                                                                                                                                    |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `functions.store_repository_output.handler`       | `{"owner":"<org>","run_id":"<execution-id>","repository_name":"<repo>","checks":[{"check_name":"readme","result":"pass","message":"..."}]}`                               |
 | `functions.store_team_checks.handler`             | `{"owner":"<org>","run_id":"<execution-id>","team_slug":"<team>","output_bucket":"<bucket>","checks":[{"check_name":"team_maintainer","result":"pass","message":"..."}]}` |
-| `functions.store_organisation_checks.handler`     | `{"owner":"<org>","run_id":"<execution-id>","output_bucket":"<bucket>","check_name":"<check>","result":"pass","message":"...","details":...}`                       |
-| `functions.store_output.handler` (S3 aggregation) | `{"owner":"<org>","run_id":"<execution-id>","output_bucket":"<bucket>","rate_limit_start":{...},"rate_limit_end":{...}}`                                                    |
+| `functions.store_organisation_checks.handler`     | `{"owner":"<org>","run_id":"<execution-id>","output_bucket":"<bucket>","check_name":"<check>","result":"pass","message":"...","details":...}`                             |
+| `functions.store_output.handler` (S3 aggregation) | `{"owner":"<org>","run_id":"<execution-id>","output_bucket":"<bucket>","rate_limit_start":{...},"rate_limit_end":{...}}`                                                  |
 
 The scalable production flow stores one repository JSON file at a time under `audit-runs/<owner>/<run_id>/repositories/`, then `store_output` aggregates that prefix and writes the final summary to `audit-results/<owner>/<run_id>.json`.
 
@@ -385,7 +391,7 @@ Terraform in `terraform/` provisions:
 | `lambda_log_retention_days`             | No       | `90`         | CloudWatch log group retention period in days for Lambda functions.                                                                                                                                                       |
 | `step_function_log_retention_days`      | No       | `90`         | CloudWatch log group retention period in days for the Step Functions state machine.                                                                                                                                       |
 | `repository_map_max_concurrency`        | No       | `5`          | Max parallel repositories processed in the repository checks map state.                                                                                                                                                   |
-| `team_map_max_concurrency`              | No       | `5`          | Max parallel teams processed in the team checks map state.                                                                                                                                                            |
+| `team_map_max_concurrency`              | No       | `5`          | Max parallel teams processed in the team checks map state.                                                                                                                                                                |
 | `audit_run_retention_days`              | No       | `30`         | Days to retain per-repository run artifacts under `audit-runs/`.                                                                                                                                                          |
 | `audit_summary_retention_days`          | No       | `365`        | Days to retain aggregated summary outputs under `audit-results/`.                                                                                                                                                         |
 

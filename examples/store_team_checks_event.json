@@ -3,7 +3,11 @@
   "run_id": "manual-test-run-2026-08-27",
   "output_bucket": "sdp-dev-github-policy-audit",
   "team_slug": "keh-dev",
-  "check_name": "team_maintainer",
-  "result": "pass",
-  "message": "Team 'keh-dev' has 2 maintainer(s)."
+  "checks": [
+    {
+      "check_name": "team_maintainer",
+      "result": "pass",
+      "message": "Team 'keh-dev' has 2 maintainer(s)."
+    }
+  ]
 }
