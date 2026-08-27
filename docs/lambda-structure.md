@@ -99,6 +99,82 @@ It currently does three things:
 
 This keeps the handler focused on its specific check, while still providing consistent logging and telemetry across all GitHub-backed handlers.
 
+## Aggregation Handlers
+
+Some handlers aggregate results from multiple checks across entities (repositories, teams, etc.). These handlers receive arrays of check results and write them to S3.
+
+### store_repository_output
+
+Aggregates repository check results from all checks (12 checks per repository) into a single S3 file. Input format:
+
+```python
+{
+    "owner": "org-name",
+    "run_id": "sfn-execution-id",
+    "repository_name": "repo-name",
+    "output_bucket": "bucket-name",
+    "checks": [
+        {"check_name": "codeowners", "result": "pass", "message": "..."},
+        {"check_name": "dependabot", "result": "fail", "message": "..."},
+        # ...
+    ]
+}
+```
+
+### store_team_checks
+
+Aggregates team check results (extensible, defined in `terraform/locals.tf` as `team_check_names`) into a single S3 file per team. Automatically normalizes check results from list to dictionary format keyed by check name. Input format:
+
+```python
+{
+    "owner": "org-name",
+    "run_id": "sfn-execution-id",
+    "team_slug": "team-slug",
+    "output_bucket": "bucket-name",
+    "checks": [
+        {"check_name": "team_maintainer", "result": "pass", "message": "..."},
+        # Add more team checks here as team_check_names grows
+    ]
+}
+```
+
+### store_organisation_checks
+
+Stores organisation-level check results (defined in `terraform/locals.tf` as `organisation_check_names`, e.g., `dependabot_slo`, `secret_scanning_slo`) to individual S3 files. Input format:
+
+```python
+{
+    "owner": "org-name",
+    "run_id": "sfn-execution-id",
+    "output_bucket": "bucket-name",
+    "check_name": "dependabot_slo",
+    "result": "pass",
+    "message": "...",
+    "details": {...}  # Optional detailed information
+}
+```
+
+## Extensible Multi-Check Pattern
+
+All check types (repository, team, and organisation) support multiple checks running in parallel per entity, configured via lists in `terraform/locals.tf`:
+
+### Repository Checks
+- Configured via `repository_check_names` in `terraform/locals.tf`
+- Step Function flow: RepositoryChecksMap (Distributed Map) → RepositoryChecksParallel (runs all checks per repo) → store_repository_output
+- S3 output: `audit-runs/<owner>/<run_id>/repositories/<repository-name>.json` with structure `{checks: {check_name: {...}, ...}}`
+
+### Team Checks
+- Configured via `team_check_names` in `terraform/locals.tf`
+- Step Function flow: TeamChecksMap → TeamChecksParallel (runs all checks) → store_team_checks
+- S3 output: `audit-runs/<owner>/<run_id>/teams/<team-slug>.json` with structure `{checks: {check_name: {...}, ...}}`
+
+### Organisation Checks
+- Configured via `organisation_check_names` in `terraform/locals.tf`
+- Step Function flow: OrganisationChecks (Parallel branches, one per check) → store_organisation_checks (per check)
+- Each check stored separately: `audit-runs/<owner>/<run_id>/organisation-checks/<check-name>.json`
+
+**Adding a new check in any category:** Add the check name to the appropriate list in `terraform/locals.tf` and create a handler following the established pattern. The step function automatically includes it via dynamic branching/mapping.
+
 ## Writing a New Handler
 
 When adding a new Lambda, use this decision rule:

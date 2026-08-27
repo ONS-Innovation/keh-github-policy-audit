@@ -113,4 +113,13 @@ locals {
     "security_scanning",
     "branch_protection"
   ]
+
+  team_check_names = [
+    "team_maintainer"
+  ]
+
+  organisation_check_names = [
+    "dependabot_slo",
+    "secret_scanning_slo",
+  ]
 }

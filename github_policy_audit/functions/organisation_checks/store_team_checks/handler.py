@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
+from typing import Any
 
 import boto3
 
@@ -22,6 +23,25 @@ def _normalise_environment(raw_environment: str | None) -> str:
     raise ValueError("ENVIRONMENT must be either 'local' or 'prod'")
 
 
+def _normalise_checks(checks: Any) -> dict[str, dict]:
+    """Return checks as a dictionary keyed by check_name."""
+    if isinstance(checks, dict):
+        return checks
+
+    if not isinstance(checks, list):
+        raise ValueError("'checks' must be a dictionary or list")
+
+    checks_by_name: dict[str, dict] = {}
+    for check_result in checks:
+        if not isinstance(check_result, dict):
+            continue
+        check_name = check_result.get("check_name")
+        if isinstance(check_name, str) and check_name:
+            checks_by_name[check_name] = check_result
+
+    return checks_by_name
+
+
 def handler(event, context):
     """Store a team-level result object and return an S3 pointer.
 
@@ -30,10 +50,15 @@ def handler(event, context):
         "run_id": "...",
         "output_bucket": "...",
         "team_slug": "...",
-        "check_name": "...",
-        "result": "pass|fail",
-        "message": "...",
-        "details": {...}  (optional)
+        "checks": [
+            {
+                "check_name": "...",
+                "result": "pass|fail",
+                "message": "...",
+                "details": {...}  (optional)
+            },
+            ...
+        ]
     }
     """
     log_info(logger, "lambda_invoked", event_keys=sorted(event.keys()))
@@ -47,13 +72,13 @@ def handler(event, context):
     bucket_name = event.get("output_bucket") or os.environ.get("S3_BUCKET_NAME")
     key = f"audit-runs/{owner}/{run_id}/teams/{team_slug}.json"
 
+    checks = _normalise_checks(event.get("checks", []))
+
     output = {
         "owner": owner,
         "run_id": run_id,
         "team_slug": team_slug,
-        "check_name": event.get("check_name"),
-        "result": event.get("result"),
-        "message": event.get("message"),
+        "checks": checks,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -82,7 +107,7 @@ def handler(event, context):
         owner=owner,
         run_id=run_id,
         team_slug=team_slug,
-        check_name=event.get("check_name"),
+        checks_count=len(checks),
     )
 
     return {
@@ -91,6 +116,6 @@ def handler(event, context):
         "bucket": bucket_name,
         "key": key,
         "team_slug": team_slug,
-        "check_name": event.get("check_name"),
+        "checks_count": len(checks),
         "local_output_path": local_output_path,
     }

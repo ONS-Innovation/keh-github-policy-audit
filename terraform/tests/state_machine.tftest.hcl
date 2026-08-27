@@ -64,6 +64,33 @@ override_data {
   }
 }
 
+run "team_checks_parallel_structure" {
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.TeamChecksMap.ItemProcessor.States.TeamChecksParallel.Type == "Parallel"
+    error_message = "TeamChecksParallel must be a Parallel state."
+  }
+
+  assert {
+    condition     = length(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.TeamChecksMap.ItemProcessor.States.TeamChecksParallel.Branches) > 0
+    error_message = "TeamChecksParallel must have at least one check branch."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.TeamChecksMap.ItemProcessor.States.TeamChecksParallel.Next == "FormatTeamChecks"
+    error_message = "TeamChecksParallel should transition to FormatTeamChecks."
+  }
+
+  assert {
+    condition     = contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.TeamChecksMap.ItemProcessor.States), "FormatTeamChecks")
+    error_message = "FormatTeamChecks Pass state must exist."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.TeamChecksMap.ItemProcessor.States.FormatTeamChecks.Next == "store_team_checks"
+    error_message = "FormatTeamChecks should transition to store_team_checks."
+  }
+}
+
 run "state_machine_states" {
   assert {
     condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).StartAt == "PrepareInitialInput"
@@ -76,6 +103,7 @@ run "state_machine_states" {
       contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States), "Initialise"),
       contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States), "PrepareInput"),
       contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States), "OrganisationChecks"),
+      contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States), "TeamChecksMap"),
       contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States), "RepositoryChecksMap"),
       contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States), "RateLimitEnd"),
       contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States), "store_output"),
@@ -83,6 +111,34 @@ run "state_machine_states" {
     error_message = "State machine is missing one or more required states."
   }
 }
+
+run "organisation_checks_structure" {
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.OrganisationChecks.Type == "Parallel"
+    error_message = "OrganisationChecks must be a Parallel state."
+  }
+
+  assert {
+    condition     = length(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.OrganisationChecks.Branches) == 2
+    error_message = "OrganisationChecks should have 2 branches (one per organisation check in locals)."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.OrganisationChecks.Next == "TeamChecksMap"
+    error_message = "OrganisationChecks should transition to TeamChecksMap."
+  }
+
+  assert {
+    condition     = contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.OrganisationChecks.Branches[0].States), "store_dependabot_slo")
+    error_message = "First org check branch should have store state."
+  }
+
+  assert {
+    condition     = contains(keys(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.OrganisationChecks.Branches[1].States), "store_secret_scanning_slo")
+    error_message = "Second org check branch should have store state."
+  }
+}
+
 
 run "state_machine_concurrency" {
   assert {
@@ -96,8 +152,13 @@ run "state_machine_concurrency" {
   }
 
   assert {
-    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.OrganisationChecks.Branches[2].States.TeamMaintainerMap.MaxConcurrency == 5
-    error_message = "TeamMaintainerMap MaxConcurrency should default to 5."
+    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.TeamChecksMap.MaxConcurrency == 5
+    error_message = "TeamChecksMap MaxConcurrency should default to 5."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.TeamChecksMap.ItemProcessor.ProcessorConfig.Mode == "INLINE"
+    error_message = "TeamChecksMap should run in INLINE mode (smaller scale than repositories)."
   }
 
   assert {
@@ -121,6 +182,23 @@ run "state_machine_concurrency" {
   }
 }
 
+run "team_checks_retry_strategy" {
+  assert {
+    condition     = length(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.TeamChecksMap.ItemProcessor.States.TeamChecksParallel.Branches[0].States.team_maintainer.Retry) == 2
+    error_message = "Team check tasks should define two retry tiers (fast infra, slow rate-limit)."
+  }
+
+  assert {
+    condition     = contains(jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.TeamChecksMap.ItemProcessor.States.TeamChecksParallel.Branches[0].States.team_maintainer.Retry[1].ErrorEquals, "States.TaskFailed")
+    error_message = "Team check slow retry tier should include States.TaskFailed."
+  }
+
+  assert {
+    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.TeamChecksMap.ItemProcessor.States.TeamChecksParallel.Branches[0].States.team_maintainer.Retry[1].JitterStrategy == "FULL"
+    error_message = "Team check slow retry tier should use FULL jitter strategy."
+  }
+}
+
 run "state_machine_logging" {
   assert {
     condition     = aws_sfn_state_machine.github_policy_audit.logging_configuration[0].include_execution_data == true
@@ -140,8 +218,8 @@ run "state_machine_concurrency_overridden" {
   }
 
   assert {
-    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.OrganisationChecks.Branches[2].States.TeamMaintainerMap.MaxConcurrency == 3
-    error_message = "TeamMaintainerMap MaxConcurrency should reflect the overridden value."
+    condition     = jsondecode(aws_sfn_state_machine.github_policy_audit.definition).States.TeamChecksMap.MaxConcurrency == 3
+    error_message = "TeamChecksMap MaxConcurrency should reflect the overridden value."
   }
 }
 

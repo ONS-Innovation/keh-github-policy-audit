@@ -21,7 +21,7 @@ class TestStoreTeamChecksValidation:
                 {
                     "run_id": "run-1",
                     "team_slug": "team-a",
-                    "check_name": "team_maintainer",
+                    "checks": [],
                 },
                 None,
             )
@@ -32,7 +32,7 @@ class TestStoreTeamChecksValidation:
                 {
                     "owner": "test-org",
                     "team_slug": "team-a",
-                    "check_name": "team_maintainer",
+                    "checks": [],
                 },
                 None,
             )
@@ -43,7 +43,7 @@ class TestStoreTeamChecksValidation:
                 {
                     "owner": "test-org",
                     "run_id": "run-1",
-                    "check_name": "team_maintainer",
+                    "checks": [],
                 },
                 None,
             )
@@ -56,9 +56,13 @@ class TestStoreTeamChecksValidation:
                         "owner": "test-org",
                         "run_id": "run-1",
                         "team_slug": "team-a",
-                        "check_name": "team_maintainer",
-                        "result": "pass",
-                        "message": "Team has maintainers",
+                        "checks": [
+                            {
+                                "check_name": "team_maintainer",
+                                "result": "pass",
+                                "message": "Team has maintainers",
+                            }
+                        ],
                     },
                     None,
                 )
@@ -71,9 +75,13 @@ class TestStoreTeamChecksValidation:
                         "owner": "test-org",
                         "run_id": "run-1",
                         "team_slug": "team-a",
-                        "check_name": "team_maintainer",
-                        "result": "pass",
-                        "message": "Team has maintainers",
+                        "checks": [
+                            {
+                                "check_name": "team_maintainer",
+                                "result": "pass",
+                                "message": "Team has maintainers",
+                            }
+                        ],
                     },
                     None,
                 )
@@ -102,9 +110,13 @@ class TestStoreTeamChecksLocal:
                     "owner": "test-org",
                     "run_id": "run-1",
                     "team_slug": "team-a",
-                    "check_name": "team_maintainer",
-                    "result": "pass",
-                    "message": "Team has maintainers",
+                    "checks": [
+                        {
+                            "check_name": "team_maintainer",
+                            "result": "pass",
+                            "message": "Team has maintainers",
+                        }
+                    ],
                 },
                 None,
             )
@@ -112,7 +124,7 @@ class TestStoreTeamChecksLocal:
         assert result["status"] == "success"
         assert result["environment"] == "local"
         assert result["team_slug"] == "team-a"
-        assert result["check_name"] == "team_maintainer"
+        assert result["checks_count"] == 1
 
         # Verify file was written
         output_path = Path(result["local_output_path"])
@@ -122,8 +134,41 @@ class TestStoreTeamChecksLocal:
             data = json.load(f)
         assert data["owner"] == "test-org"
         assert data["team_slug"] == "team-a"
-        assert data["check_name"] == "team_maintainer"
-        assert data["result"] == "pass"
+        assert "team_maintainer" in data["checks"]
+        assert data["checks"]["team_maintainer"]["result"] == "pass"
+
+    def test_handles_multiple_checks(self) -> None:
+        """Multiple checks should be stored as a dictionary keyed by check_name."""
+        with patch.dict(os.environ, {}, clear=True):
+            result = self.module.handler(
+                {
+                    "owner": "test-org",
+                    "run_id": "run-1",
+                    "team_slug": "team-a",
+                    "checks": [
+                        {
+                            "check_name": "team_maintainer",
+                            "result": "pass",
+                            "message": "Team has maintainers",
+                        },
+                        {
+                            "check_name": "team_secret_scanning",
+                            "result": "fail",
+                            "message": "Secret scanning not enabled",
+                        },
+                    ],
+                },
+                None,
+            )
+
+        assert result["checks_count"] == 2
+
+        output_path = Path(result["local_output_path"])
+        with open(output_path) as f:
+            data = json.load(f)
+        assert len(data["checks"]) == 2
+        assert data["checks"]["team_maintainer"]["result"] == "pass"
+        assert data["checks"]["team_secret_scanning"]["result"] == "fail"
 
     def test_returns_s3_reference_in_prod(self) -> None:
         """In prod environment, should write to S3 and return S3 reference."""
@@ -138,9 +183,13 @@ class TestStoreTeamChecksLocal:
                     "run_id": "run-1",
                     "team_slug": "team-a",
                     "output_bucket": "test-bucket",
-                    "check_name": "team_maintainer",
-                    "result": "pass",
-                    "message": "Team has maintainers",
+                    "checks": [
+                        {
+                            "check_name": "team_maintainer",
+                            "result": "pass",
+                            "message": "Team has maintainers",
+                        }
+                    ],
                 },
                 None,
             )
@@ -149,6 +198,7 @@ class TestStoreTeamChecksLocal:
         assert result["environment"] == "prod"
         assert result["bucket"] == "test-bucket"
         assert result["key"] == "audit-runs/test-org/run-1/teams/team-a.json"
+        assert result["checks_count"] == 1
 
         # Verify S3 write was called
         mock_s3_client.put_object.assert_called_once()

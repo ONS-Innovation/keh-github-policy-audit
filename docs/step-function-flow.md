@@ -46,19 +46,32 @@ flowchart TD
 
     subgraph INIT_PARALLEL[" Parallel - Initialise "]
         LR[list_repositories\nwrites repositories-list.json to S3\nreturns S3 reference]
-        LT[list_teams]
+        LT[list_teams\nwrites teams-list.json to S3\nreturns S3 reference]
     end
 
     INIT_PARALLEL --> PREP[PrepareInput\nextract S3 refs and preserve rate_limit_start]
     PREP --> ORG_PARALLEL
 
-    subgraph ORG_PARALLEL[" Parallel - Organisation Checks "]
-        DS["dependabot_slo → store_dependabot_slo"]
-        SS["secret_scanning_slo → store_secret_scanning_slo"]
-        TM_MAP["Map over teams from S3: team_maintainer → store_team_check"]
+    subgraph ORG_PARALLEL[" Parallel - Organisation Checks (extensible) "]
+        DS["dependabot_slo → store_organisation_checks"]
+        SS["secret_scanning_slo → store_organisation_checks"]
     end
 
-    ORG_PARALLEL --> REPO_MAP
+    ORG_PARALLEL --> TM_MAP
+
+    subgraph TM_MAP[" TeamChecksMap - Map over teams from S3 (ItemReader) "]
+        subgraph TM_INTERNAL["  Inside each team  "]
+            TM_PARALLEL["TeamChecksParallel\n(runs all team checks in parallel)"]
+            TM_CHECK["team_maintainer\n(add more via team_check_names)"]
+            TM_FORMAT["FormatTeamChecks"]
+            TM_STORE["store_team_checks"]
+        end
+        TM_PARALLEL --> TM_CHECK
+        TM_CHECK --> TM_FORMAT
+        TM_FORMAT --> TM_STORE
+    end
+
+    TM_MAP --> REPO_MAP
 
     subgraph REPO_MAP[" Distributed Map over repositories\nItemReader reads repositories-list.json from S3\nMaxConcurrency = 5 "]
         subgraph REPO_PARALLEL[" Parallel - Per-repository Checks "]
@@ -92,9 +105,10 @@ flowchart TD
 | Rate-limit start | `Task` | `rate_limit` (`checkpoint=rate-limit-start`) |
 | Initialise | `Parallel` | `list_repositories` (writes to S3, returns reference), `list_teams` (writes to S3, returns reference) |
 | Prepare input | `Pass` | None (reshapes root state; promotes S3 refs and `rate_limit_start`) |
-| Organisation checks | `Parallel` with inner `Map` (ItemReader reads teams from S3) | `dependabot_slo` → `store_organisation_checks`, `secret_scanning_slo` → `store_organisation_checks`, `team_maintainer` (per team) → `store_team_checks` |
-| Team checks write | `Task` (per team) | `store_team_checks` (writes per team to S3) |
-| Organisation checks write | `Task` (per check) | `store_organisation_checks` (writes per check to S3) |
+| Organisation checks | `Parallel` (extensible via `organisation_check_names`) | `dependabot_slo`, `secret_scanning_slo` → `store_organisation_checks` (one file per check) |
+| Team checks | `Map` → `Parallel` (runs all team checks in parallel per team, extensible via `team_check_names`) | `team_maintainer` (and other team checks as added) |
+| Team checks format | `Pass` | None (reformats check results array to dict) |
+| Team checks write | `Task` | `store_team_checks` (aggregates checks and writes per team to S3) |
 | Repository checks | `Map` (Mode=`DISTRIBUTED`, MaxConcurrency=5) + `Parallel` | `codeowners`, `dependabot`, `external_pull_request`, `gitignore`, `inactivity`, `license`, `naming_convention`, `pirr`, `readme`, `repository_access`, `security_scanning`, `branch_protection` |
 | Repo output write | `Task` | `store_repository_output` |
 | Rate-limit end | `Task` | `rate_limit` (`checkpoint=rate-limit-end`) |
