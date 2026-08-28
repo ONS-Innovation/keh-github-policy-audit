@@ -89,7 +89,7 @@ export APP_LOG_FORMAT=TEXT
 
 Output storage:
 
-- `local` (default): writes output JSON to `outputs/<owner>/` and does not call AWS S3.
+- `local` (default): writes output JSON to `outputs/audit-runs/<owner>/` and does not call AWS S3.
 - `prod`: writes output JSON to S3 and requires `S3_BUCKET_NAME`. (**This should never be used in local development**)
 
 Scorecard criteria:
@@ -179,9 +179,9 @@ A dedicated script is available for invoking the store output handler: `scripts/
 This script:
 
 1. Runs the storage handlers (`store_organisation_checks`, `store_repository_output`, `store_team_checks`) with example events
-2. Writes their results to the local `outputs/` directory
+2. Writes their results to the local `outputs/audit-runs/` directory (mirroring S3 structure)
 3. Invokes `store_output` to aggregate all the results
-4. Produces a final output file at `outputs/<owner>/<run_id>.json`
+4. Produces a final output file at `outputs/audit-results/<owner>/<run_id>.json`
 
 Run the script:
 

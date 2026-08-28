@@ -41,7 +41,7 @@ class DataLoader:
     ) -> dict[str, dict]:
         """Load audit data from local files in outputs directory."""
         result: dict[str, dict] = {}
-        local_dir = Path("outputs") / owner / run_id / folder
+        local_dir = Path("outputs") / "audit-runs" / owner / run_id / folder
 
         if not local_dir.exists():
             log_info(
@@ -366,7 +366,7 @@ def handler(event, context):
             ContentType="application/json",
         )
     else:
-        output_dir = os.path.join("outputs", owner)
+        output_dir = os.path.join("outputs", "audit-results", owner)
         os.makedirs(output_dir, exist_ok=True)
         result_file = os.path.join(output_dir, f"{run_id}.json")
 

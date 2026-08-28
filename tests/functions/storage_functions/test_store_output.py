@@ -30,7 +30,12 @@ class TestDataLoader:
 
         # Create test directory structure
         org_dir = (
-            tmp_path / "outputs" / "test-owner" / "test-run" / "organisation-checks"
+            tmp_path
+            / "outputs"
+            / "audit-runs"
+            / "test-owner"
+            / "test-run"
+            / "organisation-checks"
         )
         org_dir.mkdir(parents=True)
 
@@ -61,7 +66,9 @@ class TestDataLoader:
         """Local loader should extract name from field_name in payload."""
         monkeypatch.chdir(tmp_path)
 
-        repo_dir = tmp_path / "outputs" / "owner" / "run-id" / "repositories"
+        repo_dir = (
+            tmp_path / "outputs" / "audit-runs" / "owner" / "run-id" / "repositories"
+        )
         repo_dir.mkdir(parents=True)
 
         # Create file with field_name in payload
@@ -79,7 +86,7 @@ class TestDataLoader:
         """Local loader should fallback to filename when field_name not in payload."""
         monkeypatch.chdir(tmp_path)
 
-        team_dir = tmp_path / "outputs" / "owner" / "run-id" / "teams"
+        team_dir = tmp_path / "outputs" / "audit-runs" / "owner" / "run-id" / "teams"
         team_dir.mkdir(parents=True)
 
         # Create file without team_slug field
@@ -98,7 +105,14 @@ class TestDataLoader:
         """Local loader should skip non-dict payloads."""
         monkeypatch.chdir(tmp_path)
 
-        org_dir = tmp_path / "outputs" / "owner" / "run-id" / "organisation-checks"
+        org_dir = (
+            tmp_path
+            / "outputs"
+            / "audit-runs"
+            / "owner"
+            / "run-id"
+            / "organisation-checks"
+        )
         org_dir.mkdir(parents=True)
 
         # Create invalid JSON file
@@ -114,7 +128,14 @@ class TestDataLoader:
         """Local loader should skip files with malformed JSON."""
         monkeypatch.chdir(tmp_path)
 
-        org_dir = tmp_path / "outputs" / "owner" / "run-id" / "organisation-checks"
+        org_dir = (
+            tmp_path
+            / "outputs"
+            / "audit-runs"
+            / "owner"
+            / "run-id"
+            / "organisation-checks"
+        )
         org_dir.mkdir(parents=True)
 
         # Create malformed JSON file
@@ -132,7 +153,14 @@ class TestDataLoader:
         """Local loader should handle errors when reading directory."""
         monkeypatch.chdir(tmp_path)
 
-        org_dir = tmp_path / "outputs" / "owner" / "run-id" / "organisation-checks"
+        org_dir = (
+            tmp_path
+            / "outputs"
+            / "audit-runs"
+            / "owner"
+            / "run-id"
+            / "organisation-checks"
+        )
         org_dir.mkdir(parents=True)
 
         # Create a file that will trigger an error
@@ -851,7 +879,7 @@ class TestHandlerFunction:
             None,
         )
 
-        output_dir = tmp_path / "outputs" / "test-org"
+        output_dir = tmp_path / "outputs" / "audit-results" / "test-org"
         output_file = output_dir / "run-1.json"
         assert output_file.exists()
 
@@ -909,7 +937,7 @@ class TestHandlerFunction:
                 None,
             )
 
-            output_dir = tmp_path / "outputs" / "test-org"
+            output_dir = tmp_path / "outputs" / "audit-results" / "test-org"
             output_file = output_dir / "run-1.json"
 
             with open(output_file, "r") as f:

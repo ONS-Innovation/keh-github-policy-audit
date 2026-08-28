@@ -201,7 +201,7 @@ Stores organisation-level check results (defined in `terraform/locals.tf` as `or
 
 Final aggregation handler that collects results from all storage handlers and produces a comprehensive audit output. Supports loading data from:
 
-- **Local mode** (`ENVIRONMENT=local`): Reads from `outputs/<owner>/<run_id>/` directory
+- **Local mode** (`ENVIRONMENT=local`): Reads from `outputs/audit-runs/<owner>/<run_id>/` directory
 - **Production mode** (`ENVIRONMENT=prod`): Reads from S3 bucket `audit-runs/<owner>/<run_id>/` paths
 
 Input format:
@@ -216,7 +216,7 @@ Input format:
 }
 ```
 
-Output format (stored at `outputs/<owner>/<run_id>.json` or `s3://<bucket>/audit-results/<owner>/<run_id>.json`):
+Output format (stored at `outputs/audit-results/<owner>/<run_id>.json` or `s3://<bucket>/audit-results/<owner>/<run_id>.json`):
 
 ```python
 {
