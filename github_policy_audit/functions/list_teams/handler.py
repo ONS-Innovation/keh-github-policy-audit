@@ -79,7 +79,7 @@ def handler(event, context, client):
             ContentType="application/json",
         )
     else:
-        output_dir = os.path.join("outputs", owner, run_id)
+        output_dir = os.path.join("outputs", "audit-runs", owner, run_id)
         os.makedirs(output_dir, exist_ok=True)
         local_output_path = os.path.join(output_dir, "teams-list.json")
 

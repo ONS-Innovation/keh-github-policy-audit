@@ -6,7 +6,9 @@ This handler:
 3. Calculates compliance scores and ratings
 4. Stores the final output to S3
 
-For local testing, load data from event instead.
+For local testing (ENVIRONMENT=local), loads data from local files under
+outputs/audit-runs/{owner}/{run_id}/ instead of S3, and writes output to
+outputs/audit-results/{owner}/ instead of S3.
 """
 
 import json

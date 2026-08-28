@@ -162,7 +162,11 @@ class TestListRepositoriesHandler:
         assert result["environment"] == "local"
         assert result["s3_bucket"] is None
         assert result["local_output_path"] == os.path.join(
-            "outputs", "ONS-Innovation", "test-run-123", "repositories-list.json"
+            "outputs",
+            "audit-runs",
+            "ONS-Innovation",
+            "test-run-123",
+            "repositories-list.json",
         )
 
         with open(result["local_output_path"], encoding="utf-8") as output_file:

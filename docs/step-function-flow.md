@@ -336,23 +336,20 @@ At this point, the execution state contains:
 
 ### 7. store_output (Final Aggregation)
 
-After all repository child executions complete, `store_output` is invoked with only S3 references and rate-limit data:
+After all repository child executions complete, `store_output` is invoked with owner, run_id, output bucket, and rate-limit data:
 
 ```json
 {
     "owner": "ONS-Innovation",
     "run_id": "<sfn-execution-name>",
     "output_bucket": "<s3-bucket-name>",
-    "repositories_s3_ref": { "s3_bucket": "<s3-bucket-name>", "s3_key": "audit-runs/ONS-Innovation/<run_id>/repositories-list.json", "repository_count": 42 },
-    "teams_s3_ref": { "s3_bucket": "<s3-bucket-name>", "s3_key": "audit-runs/ONS-Innovation/<run_id>/teams-list.json", "team_count": 8 },
     "rate_limit_start": { "checkpoint": "rate-limit-start", "remaining": 4988, "limit": 5000, "reset": 1721668800, "used": 12, "retrieved_at": "..." },
     "rate_limit_end": { "checkpoint": "rate-limit-end", "remaining": 4321, "limit": 5000, "reset": 1721668800, "used": 679, "retrieved_at": "..." }
 }
 ```
 
-The Lambda loads all data from S3:
+The Lambda constructs paths using `owner` and `run_id` and loads all data from S3 (or from local files in local mode):
 
-- Teams list from `teams_s3_ref`
 - Team check results from `audit-runs/<owner>/<run_id>/teams/`
 - Organisation check results from `audit-runs/<owner>/<run_id>/organisation-checks/`
 - Repository list and results from `audit-runs/<owner>/<run_id>/repositories/`

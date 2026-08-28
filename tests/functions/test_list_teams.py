@@ -83,7 +83,7 @@ class TestListTeamsHandler:
                     None,
                 )
 
-    def test_raises_for_missing_run_id_uses_default(self) -> None:
+    def test_uses_default_run_id_when_missing(self) -> None:
         """A missing run_id should use 'default-run' as fallback."""
         client = object()
         mock_paginated = create_autospec(
@@ -263,6 +263,7 @@ class TestListTeamsHandler:
                 output_path = os.path.join(
                     tmpdir,
                     "outputs",
+                    "audit-runs",
                     "ONS-Innovation",
                     "test-run-123",
                     "teams-list.json",
