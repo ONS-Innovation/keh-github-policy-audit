@@ -80,4 +80,4 @@ python "$SCRIPT_DIR/github_policy_audit/run_handler.py" \
 	--event-file
 
 OWNER=$(jq -r '.owner' "$TEMP_DIR/org_event.json")
-echo "✅ All handlers executed successfully! Output stored in outputs/$OWNER/"
+echo "✅ All handlers executed successfully! Output stored in outputs/audit-results/$OWNER/$RUN_ID.json"

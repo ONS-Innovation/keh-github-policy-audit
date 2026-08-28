@@ -188,11 +188,8 @@ def _normalise_checks_with_compliance(
                     "message": check_result.get("message", ""),
                 }
 
-        # Calculate compliance from checks
-        is_compliant = all(
-            normalised_checks[name].get("result") == "pass"
-            for name in normalised_checks
-        )
+        # Calculate compliance from checks (case insensitive)
+        is_compliant = all(is_pass(check) for check in normalised_checks.values())
 
         normalised[item_name] = {
             "checks": normalised_checks,
@@ -263,6 +260,11 @@ def build_summary(
 
     # Build repository ratings from scorecard
     scorecard_status_counts = {rating["name"]: 0 for rating in scorecard_ratings}
+
+    # Add non-compliant rating
+    # This ensures that there is always a count for non-compliant repositories, even if none are found.
+    scorecard_status_counts["non-compliant"] = 0
+
     for repo_checks in repositories.values():
         if isinstance(repo_checks, dict):
             checks = repo_checks.get("checks", {})
