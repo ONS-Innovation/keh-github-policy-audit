@@ -300,7 +300,7 @@ def handler(event, context):
     # Extract required inputs
     owner = event["owner"]
     run_id = event["run_id"]
-    output_bucket = event.get("output_bucket")
+    output_bucket = event.get("output_bucket") or os.environ.get("S3_BUCKET_NAME")
     rate_limit_start = event.get("rate_limit_start")
     rate_limit_end = event.get("rate_limit_end")
 
@@ -310,7 +310,7 @@ def handler(event, context):
         raise ValueError("ENVIRONMENT must be either 'local' or 'prod'")
 
     if environment == "prod" and not output_bucket:
-        raise ValueError("output_bucket is required in production")
+        raise ValueError("output_bucket (or S3_BUCKET_NAME) is required in production")
 
     s3_client = boto3.client("s3") if environment == "prod" else None
 

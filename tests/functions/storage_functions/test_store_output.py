@@ -746,7 +746,9 @@ class TestHandlerFunction:
         """Handler should raise ValueError in prod without output_bucket."""
         monkeypatch.setenv("ENVIRONMENT", "prod")
 
-        with pytest.raises(ValueError, match="output_bucket is required"):
+        with pytest.raises(
+            ValueError, match=r"output_bucket \(or S3_BUCKET_NAME\) is required"
+        ):
             handler({"owner": "test-org", "run_id": "run-1"}, None)
 
     @patch("functions.storage_functions.store_output.handler.boto3")
