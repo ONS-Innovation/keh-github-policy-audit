@@ -14,12 +14,9 @@ This repository just collects the data for these reports using an AWS Step Funct
     - [1. Setup environment](#1-setup-environment)
     - [2. Set environment variables](#2-set-environment-variables)
     - [3. Run command](#3-run-command)
+      - [Run via Helper Script](#run-via-helper-script)
+      - [Store Output Handler](#store-output-handler)
     - [4. Payload summary](#4-payload-summary)
-      - [Repository Listing](#repository-listing)
-      - [Organisation Team Listing](#organisation-team-listing)
-      - [Rate Limit Checkpoint](#rate-limit-checkpoint)
-      - [Check Handlers](#check-handlers)
-      - [Output Handlers](#output-handlers)
   - [Deployment](#deployment)
     - [Deployments with Concourse](#deployments-with-concourse)
       - [Allowlisting your IP](#allowlisting-your-ip)
@@ -93,13 +90,7 @@ export APP_LOG_FORMAT=TEXT
 Output storage:
 
 - `local` (default): writes output JSON to `outputs/<owner>/` and does not call AWS S3.
-- `prod`: writes output JSON to S3 and requires `S3_BUCKET_NAME`.
-
-> **Note:** Local testing for `store_output` must be done with `ENVIRONMENT=prod`. This will make real changes to S3 and require valid AWS credentials.
-> This happens because the `store_output` handler is designed to load data from S3 which is currently not accessible in `local` mode.
-> Mock Data for this, and a better way of testing the storage functions is a future improvement.
-
-TODO: Improve local testing for storage functions to avoid connect to S3.
+- `prod`: writes output JSON to S3 and requires `S3_BUCKET_NAME`. (**This should never be used in local development**)
 
 Scorecard criteria:
 
@@ -132,6 +123,10 @@ export S3_BUCKET_NAME=<your-output-bucket>
 ```
 
 ### 3. Run command
+
+All lambda functions in this repository can be run using the helper script `github_policy_audit/run_handler.py`, unless they have specific instructions otherwise.
+
+#### Run via Helper Script
 
 Use the helper script in `github_policy_audit/run_handler.py`:
 
@@ -174,52 +169,34 @@ Some repository-scoped handlers can also accept optional repository metadata und
 
 `functions.list_repositories.handler` returns only non-archived repositories.
 
+#### Store Output Handler
+
+The store output handler is responsible for collating the results of various checks and storing them in a finalised dataset to be consumed.
+Because of this, the store output handler cannot use the helper script directly since it collects its input from local files or S3 rather than directly from an event payload.
+
+A dedicated script is available for invoking the store output handler: `scripts/run_store_output_handler.sh`
+
+This script:
+
+1. Runs the storage handlers (`store_organisation_checks`, `store_repository_output`, `store_team_checks`) with example events
+2. Writes their results to the local `outputs/` directory
+3. Invokes `store_output` to aggregate all the results
+4. Produces a final output file at `outputs/<owner>/<run_id>.json`
+
+Run the script:
+
+```bash
+./scripts/run_store_output_handler.sh
+
+# Or with a custom run ID
+./scripts/run_store_output_handler.sh --run-id my-test-run
+```
+
+The script automatically sets `ENVIRONMENT=local` to enable file-based storage instead of S3.
+
 ### 4. Payload summary
 
-#### Repository Listing
-
-| Handler modules                       | Required event payload                                                                                                                                                                                                                                                                                 |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `functions.list_repositories.handler` | `{"owner":"<org>","run_id":"<id>","output_bucket":"<bucket>"}` - writes a bare JSON array of repository summaries to `s3://<bucket>/audit-runs/<owner>/<run_id>/repositories-list.json` and returns an S3 reference. In the step function the `run_id` and `output_bucket` are injected automatically. |
-
-#### Organisation Team Listing
-
-| Handler modules                | Required event payload |
-| ------------------------------ | ---------------------- |
-| `functions.list_teams.handler` | `{"owner":"<org>"}`    |
-
-#### Rate Limit Checkpoint
-
-| Handler modules                | Required event payload                                                |
-| ------------------------------ | --------------------------------------------------------------------- |
-| `functions.rate_limit.handler` | `{"owner":"<org>","checkpoint":"rate-limit-start OR rate-limit-end"}` |
-
-Rate-limit telemetry is collected only by this checkpoint handler at workflow boundaries.
-
-#### Check Handlers
-
-| Checks                                                  | Handler modules                                                                                                                                                                                                                                                                                                                                                                                                    | Required event payload                                                                                                                                                                              |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Repository-scoped checks                                | `functions.repository_checks.codeowners.handler`, `functions.repository_checks.dependabot.handler`, `functions.repository_checks.external_pull_request.handler`, `functions.repository_checks.gitignore.handler`, `functions.repository_checks.license.handler`, `functions.repository_checks.pirr.handler`, `functions.repository_checks.readme.handler`, `functions.repository_checks.repository_access.handler` | `{"owner":"<org>","repository_name":"<repo>"}`                                                                                                                                                      |
-| Repository-scoped checks with required passthrough data | `functions.repository_checks.branch_protection.handler`                                                                                                                                                                                                                                                                                                                                                            | `{"owner":"<org>","repository_name":"<repo>","data":{"default_branch":"<branch>"}}` — `default_branch` is populated automatically by `list_repositories` and avoids a separate `/branches` API call |
-| Repository-scoped checks with optional passthrough data | `functions.repository_checks.inactivity.handler`, `functions.repository_checks.security_scanning.handler`                                                                                                                                                                                                                                                                                                          | `{"owner":"<org>","repository_name":"<repo>"}` or `{"owner":"<org>","repository_name":"<repo>","data":{...}}`                                                                                       |
-| Secret scanning SLO                                     | `functions.organisation_checks.secret_scanning_slo.handler`                                                                                                                                                                                                                                                                                                                                                        | `{"owner":"<org>"}`                                                                                                                                                                                 |
-| Dependabot SLO                                          | `functions.organisation_checks.dependabot_slo.handler`                                                                                                                                                                                                                                                                                                                                                             | `{"owner":"<org>","levels":["critical","high"]}` (`levels` optional)                                                                                                                                |
-| Naming convention                                       | `functions.repository_checks.naming_convention.handler`                                                                                                                                                                                                                                                                                                                                                            | `{"owner":"<org>","repository_name":"<repo>"}`                                                                                                                                                      |
-| Team checks (extensible)                                | `functions.organisation_checks.team_maintainer.handler` (add more via `team_check_names` in terraform/locals.tf)                                                                                                                                                                                                                                                                                                   | `{"owner":"<org>","team_slug":"<team>"}`                                                                                                                                                            |
-
-#### Output Handlers
-
-| Handler modules                                   | Required event payload                                                                                                                                                    |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `functions.store_repository_output.handler`       | `{"owner":"<org>","run_id":"<execution-id>","repository_name":"<repo>","checks":[{"check_name":"readme","result":"pass","message":"..."}]}`                               |
-| `functions.store_team_checks.handler`             | `{"owner":"<org>","run_id":"<execution-id>","team_slug":"<team>","output_bucket":"<bucket>","checks":[{"check_name":"team_maintainer","result":"pass","message":"..."}]}` |
-| `functions.store_organisation_checks.handler`     | `{"owner":"<org>","run_id":"<execution-id>","output_bucket":"<bucket>","check_name":"<check>","result":"pass","message":"...","details":...}`                             |
-| `functions.store_output.handler` (S3 aggregation) | `{"owner":"<org>","run_id":"<execution-id>","output_bucket":"<bucket>","rate_limit_start":{...},"rate_limit_end":{...}}`                                                  |
-
-The scalable production flow stores one repository JSON file at a time under `audit-runs/<owner>/<run_id>/repositories/`, then `store_output` aggregates that prefix and writes the final summary to `audit-results/<owner>/<run_id>.json`.
-
-The final summary and terminal Step Functions output also include `rate-limit-start` and `rate-limit-end` checkpoint objects.
+TBC
 
 ## Deployment
 

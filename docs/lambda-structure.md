@@ -148,7 +148,7 @@ Some handlers aggregate results from multiple checks across entities (repositori
 
 ### store_repository_output
 
-Aggregates repository check results from all checks (12 checks per repository) into a single S3 file. Input format:
+Aggregates repository check results from all checks (defined in `terraform/locals.tf` as `repository_check_names`) into a single file in `audit-runs/<owner>/<run_id>/repositories/` (local mode) or S3. Input format:
 
 ```python
 {
@@ -166,7 +166,7 @@ Aggregates repository check results from all checks (12 checks per repository) i
 
 ### store_team_checks
 
-Aggregates team check results (extensible, defined in `terraform/locals.tf` as `team_check_names`) into a single S3 file per team. Automatically normalizes check results from list to dictionary format keyed by check name. Input format:
+Aggregates team check results (defined in `terraform/locals.tf` as `team_check_names`) into a single file in `audit-runs/<owner>/<run_id>/teams/` (local mode) or S3 per team. Automatically normalises check results from list to dictionary format keyed by check name. Input format:
 
 ```python
 {
@@ -183,7 +183,7 @@ Aggregates team check results (extensible, defined in `terraform/locals.tf` as `
 
 ### store_organisation_checks
 
-Stores organisation-level check results (defined in `terraform/locals.tf` as `organisation_check_names`, e.g., `dependabot_slo`, `secret_scanning_slo`) to individual S3 files. Input format:
+Stores organisation-level check results (defined in `terraform/locals.tf` as `organisation_check_names`, e.g., `dependabot_slo`, `secret_scanning_slo`) to individual files in `audit-runs/<owner>/<run_id>/organisation-checks/` (local mode) or S3. Input format:
 
 ```python
 {
@@ -196,6 +196,44 @@ Stores organisation-level check results (defined in `terraform/locals.tf` as `or
     "details": {...}  # Optional detailed information
 }
 ```
+
+### store_output
+
+Final aggregation handler that collects results from all storage handlers and produces a comprehensive audit output. Supports loading data from:
+
+- **Local mode** (`ENVIRONMENT=local`): Reads from `outputs/<owner>/<run_id>/` directory
+- **Production mode** (`ENVIRONMENT=prod`): Reads from S3 bucket `audit-runs/<owner>/<run_id>/` paths
+
+Input format:
+
+```python
+{
+    "owner": "org-name",
+    "run_id": "sfn-execution-id",
+    "output_bucket": "bucket-name",  # Required in prod, optional in local
+    "rate_limit_start": {"limit": 5000, "remaining": 4988, ...},
+    "rate_limit_end": {"limit": 5000, "remaining": 4321, ...}
+}
+```
+
+Output format (stored at `outputs/<owner>/<run_id>.json` or `s3://<bucket>/audit-results/<owner>/<run_id>.json`):
+
+```python
+{
+    "owner": "org-name",
+    "run_id": "sfn-execution-id",
+    "repositories": {<aggregated repository results>},
+    "organisations_checks": {<aggregated organisation results>},
+    "teams": {<aggregated team results>},
+    "scorecard_criteria": {<compliance ratings>},
+    "summary": {<compliance statistics>},
+    "rate_limit_start": {...},
+    "rate_limit_end": {...},
+    "timestamp": "2026-08-28T13:49:35.820000+00:00"
+}
+```
+
+**Local Testing:** Use `./scripts/run_store_output_handler.sh` to execute all storage handlers and populate the output directory before testing `store_output` in isolation.
 
 ## Extensible Multi-Check Pattern
 

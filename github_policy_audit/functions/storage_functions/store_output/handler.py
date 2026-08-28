@@ -13,6 +13,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import boto3
@@ -28,12 +29,56 @@ logger.setLevel(logging.INFO)
 
 
 class DataLoader:
-    """Load audit data from S3 or event depending on environment."""
+    """Load audit data from S3 or local files depending on environment."""
 
     def __init__(self, environment: str, bucket_name: str | None, s3_client=None):
         self.environment = environment
         self.bucket_name = bucket_name
         self.s3_client = s3_client
+
+    def _load_from_local(
+        self, folder: str, field_name: str, log_context: str, owner: str, run_id: str
+    ) -> dict[str, dict]:
+        """Load audit data from local files in outputs directory."""
+        result: dict[str, dict] = {}
+        local_dir = Path("outputs") / owner / run_id / folder
+
+        if not local_dir.exists():
+            log_info(
+                logger,
+                f"local_directory_not_found_{log_context}",
+                path=str(local_dir),
+            )
+            return result
+
+        try:
+            for json_file in local_dir.glob("*.json"):
+                try:
+                    with open(json_file, encoding="utf-8") as f:
+                        payload = json.load(f)
+
+                    if not isinstance(payload, dict):
+                        continue
+
+                    # Extract name from payload, fallback to filename
+                    name = payload.get(field_name)
+                    if not isinstance(name, str) or not name:
+                        name = json_file.stem
+
+                    if name:
+                        result[name] = payload
+                except Exception as e:
+                    log_info(
+                        logger,
+                        f"failed_to_load_{log_context}",
+                        file=json_file.name,
+                        error=str(e),
+                    )
+                    continue
+        except Exception as e:
+            log_info(logger, f"failed_to_read_{log_context}", error=str(e))
+
+        return result
 
     def _load_from_s3(
         self, prefix: str, field_name: str, log_context: str
@@ -79,25 +124,33 @@ class DataLoader:
         return result
 
     def load_organisation_checks(self, owner: str, run_id: str) -> dict[str, dict]:
-        """Load organisation check results from S3."""
+        """Load organisation check results from local files or S3."""
         if self.environment == "local":
-            return {}
+            return self._load_from_local(
+                "organisation-checks",
+                "check_name",
+                "organisation_checks",
+                owner,
+                run_id,
+            )
 
         prefix = f"audit-runs/{owner}/{run_id}/organisation-checks/"
         return self._load_from_s3(prefix, "check_name", "organisation_checks")
 
     def load_repository_checks(self, owner: str, run_id: str) -> dict[str, dict]:
-        """Load per-repository results from S3."""
+        """Load per-repository results from local files or S3."""
         if self.environment == "local":
-            return {}
+            return self._load_from_local(
+                "repositories", "repository_name", "repositories", owner, run_id
+            )
 
         prefix = f"audit-runs/{owner}/{run_id}/repositories/"
         return self._load_from_s3(prefix, "repository_name", "repositories")
 
     def load_team_checks(self, owner: str, run_id: str) -> dict[str, dict]:
-        """Load per-team results from S3."""
+        """Load per-team results from local files or S3."""
         if self.environment == "local":
-            return {}
+            return self._load_from_local("teams", "team_slug", "teams", owner, run_id)
 
         prefix = f"audit-runs/{owner}/{run_id}/teams/"
         return self._load_from_s3(prefix, "team_slug", "teams")

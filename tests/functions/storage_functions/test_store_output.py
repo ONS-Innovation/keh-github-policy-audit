@@ -1,6 +1,7 @@
 """Unit tests for store_output handler with parametrized tests."""
 
 import json
+from pathlib import Path
 from typing import Any
 from unittest.mock import Mock, patch, MagicMock
 
@@ -20,13 +21,130 @@ from functions.storage_functions.store_output.handler import (
 class TestDataLoader:
     """Test DataLoader functionality."""
 
-    def test_local_environment_returns_empty_dicts(self) -> None:
-        """Local environment should return empty dicts from S3 loaders."""
-        loader = DataLoader(environment="local", bucket_name=None, s3_client=None)
+    def test_local_environment_loads_from_local_files(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Local environment should load from local files instead of S3."""
+        # Change working directory to tmp_path
+        monkeypatch.chdir(tmp_path)
 
-        assert loader.load_organisation_checks("owner", "run-id") == {}
-        assert loader.load_repository_checks("owner", "run-id") == {}
-        assert loader.load_team_checks("owner", "run-id") == {}
+        # Create test directory structure
+        org_dir = (
+            tmp_path / "outputs" / "test-owner" / "test-run" / "organisation-checks"
+        )
+        org_dir.mkdir(parents=True)
+
+        # Create test file
+        test_file = org_dir / "test-check.json"
+        test_file.write_text(json.dumps({"check_name": "test-check", "result": "pass"}))
+
+        loader = DataLoader(environment="local", bucket_name=None, s3_client=None)
+        result = loader.load_organisation_checks("test-owner", "test-run")
+
+        assert "test-check" in result
+        assert result["test-check"]["result"] == "pass"
+
+    def test_local_environment_returns_empty_when_no_files(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Local environment should return empty dict when directory doesn't exist."""
+        monkeypatch.chdir(tmp_path)
+
+        loader = DataLoader(environment="local", bucket_name=None, s3_client=None)
+        result = loader.load_organisation_checks("nonexistent", "nonexistent")
+
+        assert result == {}
+
+    def test_load_from_local_with_field_name_extraction(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Local loader should extract name from field_name in payload."""
+        monkeypatch.chdir(tmp_path)
+
+        repo_dir = tmp_path / "outputs" / "owner" / "run-id" / "repositories"
+        repo_dir.mkdir(parents=True)
+
+        # Create file with field_name in payload
+        repo_file = repo_dir / "repo.json"
+        repo_file.write_text(json.dumps({"repository_name": "my-repo", "checks": {}}))
+
+        loader = DataLoader(environment="local", bucket_name=None, s3_client=None)
+        result = loader.load_repository_checks("owner", "run-id")
+
+        assert "my-repo" in result
+
+    def test_load_from_local_falls_back_to_filename(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Local loader should fallback to filename when field_name not in payload."""
+        monkeypatch.chdir(tmp_path)
+
+        team_dir = tmp_path / "outputs" / "owner" / "run-id" / "teams"
+        team_dir.mkdir(parents=True)
+
+        # Create file without team_slug field
+        team_file = team_dir / "my-team.json"
+        team_file.write_text(json.dumps({"checks": []}))
+
+        loader = DataLoader(environment="local", bucket_name=None, s3_client=None)
+        result = loader.load_team_checks("owner", "run-id")
+
+        # Should use filename as key
+        assert "my-team" in result
+
+    def test_load_from_local_skips_non_dict_payload(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Local loader should skip non-dict payloads."""
+        monkeypatch.chdir(tmp_path)
+
+        org_dir = tmp_path / "outputs" / "owner" / "run-id" / "organisation-checks"
+        org_dir.mkdir(parents=True)
+
+        # Create invalid JSON file
+        invalid_file = org_dir / "invalid.json"
+        invalid_file.write_text(json.dumps(["array"]))
+
+        loader = DataLoader(environment="local", bucket_name=None, s3_client=None)
+        result = loader.load_organisation_checks("owner", "run-id")
+
+        assert result == {}
+
+    def test_load_from_local_skips_malformed_json(self, tmp_path, monkeypatch) -> None:
+        """Local loader should skip files with malformed JSON."""
+        monkeypatch.chdir(tmp_path)
+
+        org_dir = tmp_path / "outputs" / "owner" / "run-id" / "organisation-checks"
+        org_dir.mkdir(parents=True)
+
+        # Create malformed JSON file
+        bad_file = org_dir / "bad.json"
+        bad_file.write_text("not valid json {")
+
+        loader = DataLoader(environment="local", bucket_name=None, s3_client=None)
+        result = loader.load_organisation_checks("owner", "run-id")
+
+        assert result == {}
+
+    def test_load_from_local_handles_directory_read_errors(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Local loader should handle errors when reading directory."""
+        monkeypatch.chdir(tmp_path)
+
+        org_dir = tmp_path / "outputs" / "owner" / "run-id" / "organisation-checks"
+        org_dir.mkdir(parents=True)
+
+        # Create a file that will trigger an error
+        test_file = org_dir / "test.json"
+        test_file.write_text("{}")
+
+        # Patch glob to raise an error
+        with patch.object(Path, "glob", side_effect=OSError("Permission denied")):
+            loader = DataLoader(environment="local", bucket_name=None, s3_client=None)
+            result = loader.load_organisation_checks("owner", "run-id")
+
+            assert result == {}
 
     def test_prod_environment_requires_bucket_and_s3_client(self) -> None:
         """Prod environment should require bucket_name and s3_client."""
