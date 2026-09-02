@@ -1,7 +1,7 @@
 #!/bin/bash
-# This script runs the storage handlers that are normally invoked by Step Functions,
-# allowing store_output to have data to read and aggregate. It uses example event files
-# to simulate the typical workflow.
+# This script runs the list and storage handlers that are normally invoked by Step
+# Functions, allowing store_output to have data to read and aggregate. It uses example
+# event files to simulate the typical workflow.
 #
 # Usage:
 #   ./scripts/run_store_output_handler.sh
@@ -50,6 +50,21 @@ update_run_id "$EXAMPLES_DIR/store_organisation_checks_event.json" "$TEMP_DIR/or
 update_run_id "$EXAMPLES_DIR/store_repository_output_event.json" "$TEMP_DIR/repo_event.json"
 update_run_id "$EXAMPLES_DIR/store_team_checks_event.json" "$TEMP_DIR/team_event.json"
 update_run_id "$EXAMPLES_DIR/store_output_event.json" "$TEMP_DIR/output_event.json"
+cp "$TEMP_DIR/output_event.json" "$TEMP_DIR/list_event.json"
+
+# Execute list_repositories and list_teams first so store_output can load their
+# metadata files, including repository visibility.
+echo "Executing list_repositories..."
+python "$SCRIPT_DIR/github_policy_audit/run_handler.py" \
+	"functions.list_repositories.handler" \
+	"$TEMP_DIR/list_event.json" \
+	--event-file
+
+echo "Executing list_teams..."
+python "$SCRIPT_DIR/github_policy_audit/run_handler.py" \
+	"functions.list_teams.handler" \
+	"$TEMP_DIR/list_event.json" \
+	--event-file
 
 # Execute store_organisation_checks
 echo "Executing store_organisation_checks..."

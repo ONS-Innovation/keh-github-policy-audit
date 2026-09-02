@@ -178,10 +178,11 @@ A dedicated script is available for invoking the store output handler: `scripts/
 
 This script:
 
-1. Runs the storage handlers (`store_organisation_checks`, `store_repository_output`, `store_team_checks`) with example events
-2. Writes their results to the local `outputs/audit-runs/` directory (mirroring S3 structure)
-3. Invokes `store_output` to aggregate all the results
-4. Produces a final output file at `outputs/audit-results/<owner>/<run_id>.json`
+1. Runs `list_repositories` and `list_teams` to create the repository and team metadata files
+2. Runs the storage handlers (`store_organisation_checks`, `store_repository_output`, `store_team_checks`) with example events
+3. Writes their results to the local `outputs/audit-runs/` directory (mirroring S3 structure)
+4. Invokes `store_output` to aggregate all the results, including repository visibility
+5. Produces a final output file at `outputs/audit-results/<owner>/<run_id>.json`
 
 Run the script:
 
@@ -193,6 +194,8 @@ Run the script:
 ```
 
 The script automatically sets `ENVIRONMENT=local` to enable file-based storage instead of S3.
+
+The list handlers still call the GitHub API, so local execution requires the GitHub App configuration described [above](#2-set-environment-variables) and suitable AWS credentials for the Secrets Manager lookup.
 
 ### 4. Payload summary
 
