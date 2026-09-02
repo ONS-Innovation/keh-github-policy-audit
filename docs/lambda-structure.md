@@ -10,20 +10,63 @@ This keeps individual handlers easy to scan and reduces duplication across the a
 
 ## Layout
 
-All Lambda functions live in the `/functions` folder, with a subfolder for each function. Functions are organised by their type, for example any general functions (i.e. not specific to a single check) live in the `functions/` folder itself, while check-specific functions live in `functions/repository_checks/` or `functions/organisation_checks/`. This help segregate the different types of lambdas based on their purpose and usage.
+All Lambda functions live in the `/functions` folder, organised by type and purpose:
 
-To give some examples:
+- **General functions** (`functions/`): Not specific to a single check type
+  - `list_repositories/` - Lists all repositories for an organisation
+  - `list_teams/` - Lists all teams for an organisation
+  - `rate_limit/` - GitHub API rate limit checkpoint
 
-- `functions/list_repositories/handler.py` is a general function that lists all repositories for an organisation.
-- `functions/repository_checks/codeowners/handler.py` is a repository check function that checks for the presence of a CODEOWNERS file in a repository.
-- `functions/organisation_checks/team_maintainer/handler.py` is an organisation check function that checks if a team has a maintainer.
+- **Check functions** (organised by entity type):
+  - `organisation_checks/` - Organisation-level checks
+  - `team_checks/` - Team-level checks
+  - `repository_checks/` - Repository-level checks
 
-When organising a new function consider the following questions:
+- **Storage functions** (`storage_functions/`): Aggregation and persistence handlers
+  - `store_output/` - Final aggregation across all results
+  - `store_repository_output/` - Aggregates per-repository check results
+  - `store_team_checks/` - Aggregates per-team check results
+  - `store_organisation_checks/` - Stores organisation-level check results
 
-1. Does the function operate on a single repository or organisation? If so, it should live in the appropriate `repository_checks` or `organisation_checks` folder.
-2. Does the function operate on multiple repositories or organisations? (i.e. it aggregates data across them) If so, it should live in the `functions/` folder itself.
+When organising a new function, consider:
 
-Additional directories can be added to the `functions/` folder if needed, but should be kept to a minimum to avoid unnecessary complexity.
+1. **Is it a check?** Does it run a specific policy check? Add it to the appropriate `*_checks/` folder (organisation, team, or repository).
+2. **Is it an aggregator?** Does it aggregate multiple results? Add it to `storage_functions/`.
+3. **Is it a general function?** Does it perform a task that is not a check or an aggregator? Add it to the `functions/` root.
+
+This structure ensures:
+
+- Clear separation of concerns
+- Easy discovery of related functions
+- Grouped test organization following the same structure
+
+## Test Organisation
+
+Tests mirror the function structure exactly for easy discovery. Each handler has a dedicated test file named `test_<handler_name>.py`:
+
+```bash
+tests/functions/
+├── test_list_repositories.py         # General functions
+├── test_list_teams.py
+├── test_rate_limit.py
+├── organisation_checks/
+│   ├── test_dependabot_slo.py        # Organisation-level checks
+│   └── test_secret_scanning_slo.py
+├── repository_checks/
+│   ├── test_branch_protection.py     # Repository-level checks
+│   ├── test_codeowners.py
+│   ├── test_dependabot.py
+│   ├── ... (10 more repository checks)
+├── storage_functions/
+│   ├── test_store_output.py          # Storage aggregators
+│   ├── test_store_repository_output.py
+│   ├── test_store_team_checks.py
+│   └── test_store_organisation_checks.py
+└── team_checks/
+    └── test_team_maintainer.py       # Team-level checks
+```
+
+When adding a new handler, also add a corresponding test file following this naming convention. This makes it immediately clear where tests for a specific handler can be found.
 
 ## Two Handler Shapes
 
@@ -98,6 +141,123 @@ It currently does three things:
 - logs GitHub rate-limit state at the start and end of the handler
 
 This keeps the handler focused on its specific check, while still providing consistent logging and telemetry across all GitHub-backed handlers.
+
+## Aggregation Handlers
+
+Some handlers aggregate results from multiple checks across entities (repositories, teams, etc.). These handlers receive arrays of check results and write them to S3.
+
+### store_repository_output
+
+Aggregates repository check results from all checks (defined in `terraform/locals.tf` as `repository_check_names`) into a single file in `audit-runs/<owner>/<run_id>/repositories/` (local mode) or S3. Input format:
+
+```python
+{
+    "owner": "org-name",
+    "run_id": "sfn-execution-id",
+    "repository_name": "repo-name",
+    "output_bucket": "bucket-name",
+    "checks": [
+        {"check_name": "codeowners", "result": "pass", "message": "..."},
+        {"check_name": "dependabot", "result": "fail", "message": "..."},
+        # ...
+    ]
+}
+```
+
+### store_team_checks
+
+Aggregates team check results (defined in `terraform/locals.tf` as `team_check_names`) into a single file in `audit-runs/<owner>/<run_id>/teams/` (local mode) or S3 per team. Automatically normalises check results from list to dictionary format keyed by check name. Input format:
+
+```python
+{
+    "owner": "org-name",
+    "run_id": "sfn-execution-id",
+    "team_slug": "team-slug",
+    "output_bucket": "bucket-name",
+    "checks": [
+        {"check_name": "team_maintainer", "result": "pass", "message": "..."},
+        # Add more team checks here as team_check_names grows
+    ]
+}
+```
+
+### store_organisation_checks
+
+Stores organisation-level check results (defined in `terraform/locals.tf` as `organisation_check_names`, e.g., `dependabot_slo`, `secret_scanning_slo`) to individual files in `audit-runs/<owner>/<run_id>/organisation-checks/` (local mode) or S3. Input format:
+
+```python
+{
+    "owner": "org-name",
+    "run_id": "sfn-execution-id",
+    "output_bucket": "bucket-name",
+    "check_name": "dependabot_slo",
+    "result": "pass",
+    "message": "...",
+    "details": {...}  # Optional detailed information
+}
+```
+
+### store_output
+
+Final aggregation handler that collects results from all storage handlers and produces a comprehensive audit output. Supports loading data from:
+
+- **Local mode** (`ENVIRONMENT=local`): Reads from `outputs/audit-runs/<owner>/<run_id>/` directory
+- **Production mode** (`ENVIRONMENT=prod`): Reads from S3 bucket `audit-runs/<owner>/<run_id>/` paths
+
+Input format:
+
+```python
+{
+    "owner": "org-name",
+    "run_id": "sfn-execution-id",
+    "output_bucket": "bucket-name",  # Required in prod, optional in local
+    "rate_limit_start": {"limit": 5000, "remaining": 4988, ...},
+    "rate_limit_end": {"limit": 5000, "remaining": 4321, ...}
+}
+```
+
+Output format (stored at `outputs/audit-results/<owner>/<run_id>.json` or `s3://<bucket>/audit-results/<owner>/<run_id>.json`):
+
+```python
+{
+    "owner": "org-name",
+    "run_id": "sfn-execution-id",
+    "repositories": {<aggregated repository results>},
+    "organisations_checks": {<aggregated organisation results>},
+    "teams": {<aggregated team results>},
+    "scorecard_criteria": {<compliance ratings>},
+    "summary": {<compliance statistics>},
+    "rate_limit_start": {...},
+    "rate_limit_end": {...},
+    "timestamp": "2026-08-28T13:49:35.820000+00:00"
+}
+```
+
+**Local Testing:** Use `./scripts/run_store_output_handler.sh` to execute all storage handlers and populate the output directory before testing `store_output` in isolation.
+
+## Extensible Multi-Check Pattern
+
+All check types (repository, team, and organisation) support multiple checks running in parallel per entity, configured via lists in `terraform/locals.tf`:
+
+### Repository Checks
+
+- Configured via `repository_check_names` in `terraform/locals.tf`
+- Step Function flow: RepositoryChecksMap (Distributed Map) → RepositoryChecksParallel (runs all checks per repo) → store_repository_output
+- S3 output: `audit-runs/<owner>/<run_id>/repositories/<repository-name>.json` with structure `{checks: {check_name: {...}, ...}}`
+
+### Team Checks
+
+- Configured via `team_check_names` in `terraform/locals.tf`
+- Step Function flow: TeamChecksMap → TeamChecksParallel (runs all checks) → store_team_checks
+- S3 output: `audit-runs/<owner>/<run_id>/teams/<team-slug>.json` with structure `{checks: {check_name: {...}, ...}}`
+
+### Organisation Checks
+
+- Configured via `organisation_check_names` in `terraform/locals.tf`
+- Step Function flow: OrganisationChecks (Parallel branches, one per check) → store_organisation_checks (per check)
+- Each check stored separately: `audit-runs/<owner>/<run_id>/organisation-checks/<check-name>.json`
+
+**Adding a new check in any category:** Add the check name to the appropriate list in `terraform/locals.tf` and create a handler following the established pattern. The step function automatically includes it via dynamic branching/mapping.
 
 ## Writing a New Handler
 

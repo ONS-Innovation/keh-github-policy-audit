@@ -97,31 +97,45 @@ Example output excerpt:
     }
   },
   "scorecard_criteria": {
+    "platinum": {
+      "min_compliance": 100,
+      "required_checks": []
+    },
     "gold": {
-      "min_compliance": 90.0,
+      "min_compliance": 90,
       "required_checks": [
         "codeowners",
         "dependabot",
+        "security_scanning",
         "readme",
+        "pirr",
+        "license",
         "repository_access"
       ]
     },
     "silver": {
-      "min_compliance": 70.0,
+      "min_compliance": 70,
       "required_checks": [
-        "license",
-        "readme"
+        "codeowners",
+        "dependabot",
+        "security_scanning",
+        "readme",
+        "pirr",
+        "license"
       ]
     },
     "bronze": {
-      "min_compliance": 50.0,
+      "min_compliance": 50,
       "required_checks": [
-        "readme"
+        "codeowners",
+        "dependabot",
+        "security_scanning"
       ]
     }
   },
   "summary": {
     "repository_ratings": {
+      "platinum": 0,
       "gold": 1,
       "silver": 0,
       "bronze": 0,

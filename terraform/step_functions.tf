@@ -38,6 +38,14 @@ resource "aws_iam_role_policy" "step_function_invoke_lambda" {
         Resource = "${aws_s3_bucket.audit_output.arn}/audit-runs/*/repositories-list.json"
       },
       {
+        Sid    = "AllowReadTeamsList"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+        ]
+        Resource = "${aws_s3_bucket.audit_output.arn}/audit-runs/*/teams-list.json"
+      },
+      {
         Sid    = "AllowDistributedMapChildExecutions"
         Effect = "Allow"
         Action = [
@@ -197,7 +205,9 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                   }
                 ]
                 Parameters = {
-                  "owner.$" = "$.initial_input.owner"
+                  "owner.$"         = "$.initial_input.owner"
+                  "run_id.$"        = "$.initial_input.run_id"
+                  "output_bucket.$" = "$.initial_input.output_bucket"
                 }
                 End = true
               }
@@ -215,7 +225,7 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
           "run_id.$"              = "$.initial_input.run_id"
           "output_bucket"         = aws_s3_bucket.audit_output.bucket
           "repositories_s3_ref.$" = "$.initial_data[0]"
-          "teams.$"               = "$.initial_data[1]"
+          "teams_s3_ref.$"        = "$.initial_data[1]"
           "rate_limit_start.$"    = "$.rate_limit_start"
         }
         ResultPath = "$"
@@ -224,12 +234,12 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
       OrganisationChecks = {
         Type = "Parallel"
         Branches = [
-          {
-            StartAt = "dependabot_slo"
+          for check_name in local.organisation_check_names : {
+            StartAt = check_name
             States = {
-              dependabot_slo = {
+              (check_name) = {
                 Type     = "Task"
-                Resource = aws_lambda_function.audit["dependabot_slo"].arn
+                Resource = aws_lambda_function.audit[check_name].arn
                 Retry = [
                   {
                     ErrorEquals = [
@@ -256,65 +266,80 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                   "owner.$"  = "$.owner"
                   "levels.$" = "$.levels"
                 }
-                End = true
+                ResultPath = "$.check_result"
+                Next       = "store_${check_name}"
               }
-            }
-          },
-          {
-            StartAt = "secret_scanning_slo"
-            States = {
-              secret_scanning_slo = {
+              "store_${check_name}" = {
                 Type     = "Task"
-                Resource = aws_lambda_function.audit["secret_scanning_slo"].arn
+                Resource = aws_lambda_function.audit["store_organisation_checks"].arn
                 Retry = [
                   {
                     ErrorEquals = [
                       "Lambda.ServiceException",
+                      "Lambda.AWSLambdaException",
                       "Lambda.SdkClientException",
                       "Lambda.TooManyRequestsException",
+                      "States.TaskFailed",
                     ]
                     IntervalSeconds = 2
                     BackoffRate     = 2.0
                     MaxAttempts     = 3
-                  },
-                  {
-                    ErrorEquals = [
-                      "Lambda.AWSLambdaException",
-                      "States.TaskFailed",
-                    ]
-                    IntervalSeconds = 60
-                    BackoffRate     = 2.0
-                    MaxAttempts     = 3
-                    JitterStrategy  = "FULL"
                   }
                 ]
                 Parameters = {
-                  "owner.$" = "$.owner"
+                  "owner.$"         = "$.owner"
+                  "run_id.$"        = "$.run_id"
+                  "output_bucket.$" = "$.output_bucket"
+                  "check_name.$"    = "$.check_result.check_name"
+                  "result.$"        = "$.check_result.result"
+                  "message.$"       = "$.check_result.message"
+                  "details.$"       = "$.check_result.details"
                 }
-                End = true
+                ResultPath = null
+                OutputPath = null
+                End        = true
               }
             }
-          },
-          {
-            StartAt = "TeamMaintainerMap"
-            States = {
-              TeamMaintainerMap = {
-                Type           = "Map"
-                ItemsPath      = "$.teams"
-                MaxConcurrency = var.team_map_max_concurrency
-                ItemSelector = {
-                  "owner.$" = "$.owner"
-                  "team.$"  = "$$.Map.Item.Value"
-                }
-                ItemProcessor = {
-                  ProcessorConfig = {
-                    Mode = "INLINE"
-                  }
-                  StartAt = "team_maintainer"
+          }
+        ]
+        ResultPath = null
+        Next       = "TeamChecksMap"
+      }
+      TeamChecksMap = {
+        Type           = "Map"
+        MaxConcurrency = var.team_map_max_concurrency
+        ItemReader = {
+          Resource = "arn:${data.aws_partition.current.partition}:states:::s3:getObject"
+          ReaderConfig = {
+            InputType = "JSON"
+          }
+          Parameters = {
+            "Bucket.$" = "$.teams_s3_ref.s3_bucket"
+            "Key.$"    = "$.teams_s3_ref.s3_key"
+          }
+        }
+        ItemSelector = {
+          "owner.$"         = "$.owner"
+          "run_id.$"        = "$.run_id"
+          "output_bucket.$" = "$.output_bucket"
+          "team.$"          = "$$.Map.Item.Value"
+        }
+        ItemProcessor = {
+          ProcessorConfig = {
+            Mode          = "DISTRIBUTED"
+            ExecutionType = "STANDARD"
+          }
+          StartAt = "TeamChecksParallel"
+          States = {
+            TeamChecksParallel = {
+              Type = "Parallel"
+              Branches = [
+                for check_name in local.team_check_names : {
+                  StartAt = check_name
                   States = {
-                    team_maintainer = {
+                    (check_name) = {
                       Type     = "Task"
-                      Resource = aws_lambda_function.audit["team_maintainer"].arn
+                      Resource = aws_lambda_function.audit[check_name].arn
                       Retry = [
                         {
                           ErrorEquals = [
@@ -341,16 +366,60 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                         "owner.$"     = "$.owner"
                         "team_slug.$" = "$.team.slug"
                       }
+                      ResultSelector = {
+                        "check_name.$" = "$.check_name"
+                        "result.$"     = "$.result"
+                        "message.$"    = "$.message"
+                      }
                       End = true
                     }
                   }
                 }
-                End = true
-              }
+              ]
+              ResultPath = "$.check_results"
+              Next       = "FormatTeamChecks"
             }
-          },
-        ]
-        ResultPath = "$.organisation_results"
+            FormatTeamChecks = {
+              Type = "Pass"
+              Parameters = {
+                "owner.$"         = "$.owner"
+                "run_id.$"        = "$.run_id"
+                "output_bucket.$" = "$.output_bucket"
+                "team_slug.$"     = "$.team.slug"
+                "checks.$"        = "$.check_results"
+              }
+              Next = "store_team_checks"
+            }
+            store_team_checks = {
+              Type     = "Task"
+              Resource = aws_lambda_function.audit["store_team_checks"].arn
+              Retry = [
+                {
+                  ErrorEquals = [
+                    "Lambda.ServiceException",
+                    "Lambda.AWSLambdaException",
+                    "Lambda.SdkClientException",
+                    "Lambda.TooManyRequestsException",
+                    "States.TaskFailed",
+                  ]
+                  IntervalSeconds = 2
+                  BackoffRate     = 2.0
+                  MaxAttempts     = 3
+                }
+              ]
+              Parameters = {
+                "owner.$"         = "$.owner"
+                "run_id.$"        = "$.run_id"
+                "output_bucket.$" = "$.output_bucket"
+                "team_slug.$"     = "$.team_slug"
+                "checks.$"        = "$.checks"
+              }
+              ResultPath = null
+              End        = true
+            }
+          }
+        }
+        ResultPath = null
         Next       = "RepositoryChecksMap"
       }
       RepositoryChecksMap = {
@@ -525,14 +594,11 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
           }
         ]
         Parameters = {
-          "run_id.$"               = "$.run_id"
-          "output_bucket.$"        = "$.output_bucket"
-          "owner.$"                = "$.owner"
-          "teams.$"                = "$.teams"
-          "organisation_results.$" = "$.organisation_results"
-          "team_results.$"         = "$.organisation_results[2]"
-          "rate_limit_start.$"     = "$.rate_limit_start"
-          "rate_limit_end.$"       = "$.rate_limit_end"
+          "owner.$"            = "$.owner"
+          "run_id.$"           = "$.run_id"
+          "output_bucket.$"    = "$.output_bucket"
+          "rate_limit_start.$" = "$.rate_limit_start"
+          "rate_limit_end.$"   = "$.rate_limit_end"
         }
         End = true
       }

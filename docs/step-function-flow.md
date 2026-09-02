@@ -46,19 +46,32 @@ flowchart TD
 
     subgraph INIT_PARALLEL[" Parallel - Initialise "]
         LR[list_repositories\nwrites repositories-list.json to S3\nreturns S3 reference]
-        LT[list_teams]
+        LT[list_teams\nwrites teams-list.json to S3\nreturns S3 reference]
     end
 
-    INIT_PARALLEL --> PREP[PrepareInput\nextract S3 ref + teams and preserve rate_limit_start]
+    INIT_PARALLEL --> PREP[PrepareInput\nextract S3 refs and preserve rate_limit_start]
     PREP --> ORG_PARALLEL
 
-    subgraph ORG_PARALLEL[" Parallel - Organisation Checks "]
-        DS[dependabot_slo]
-        SS[secret_scanning_slo]
-        TM_MAP["Map over teams → team_maintainer"]
+    subgraph ORG_PARALLEL[" Parallel - Organisation Checks (extensible) "]
+        DS["dependabot_slo → store_organisation_checks"]
+        SS["secret_scanning_slo → store_organisation_checks"]
     end
 
-    ORG_PARALLEL --> REPO_MAP
+    ORG_PARALLEL --> TM_MAP
+
+    subgraph TM_MAP[" TeamChecksMap - Map over teams from S3 (ItemReader) "]
+        subgraph TM_INTERNAL["  Inside each team  "]
+            TM_PARALLEL["TeamChecksParallel\n(runs all team checks in parallel)"]
+            TM_CHECK["team_maintainer\n(add more via team_check_names)"]
+            TM_FORMAT["FormatTeamChecks"]
+            TM_STORE["store_team_checks"]
+        end
+        TM_PARALLEL --> TM_CHECK
+        TM_CHECK --> TM_FORMAT
+        TM_FORMAT --> TM_STORE
+    end
+
+    TM_MAP --> REPO_MAP
 
     subgraph REPO_MAP[" Distributed Map over repositories\nItemReader reads repositories-list.json from S3\nMaxConcurrency = 5 "]
         subgraph REPO_PARALLEL[" Parallel - Per-repository Checks "]
@@ -90,9 +103,12 @@ flowchart TD
 | --- | --- | --- |
 | Prepare initial input | `Pass` | None (injects `run_id` and `output_bucket` into `$.initial_input`) |
 | Rate-limit start | `Task` | `rate_limit` (`checkpoint=rate-limit-start`) |
-| Initialise | `Parallel` | `list_repositories` (writes to S3, returns reference), `list_teams` |
-| Prepare input | `Pass` | None (reshapes root state; promotes S3 ref, teams, and `rate_limit_start`) |
-| Organisation checks | `Parallel` + inner `Map` for teams | `dependabot_slo`, `secret_scanning_slo`, `team_maintainer` |
+| Initialise | `Parallel` | `list_repositories` (writes to S3, returns reference), `list_teams` (writes to S3, returns reference) |
+| Prepare input | `Pass` | None (reshapes root state; promotes S3 refs and `rate_limit_start`) |
+| Organisation checks | `Parallel` (extensible via `organisation_check_names`) | `dependabot_slo`, `secret_scanning_slo` → `store_organisation_checks` (one file per check) |
+| Team checks | `Map` → `Parallel` (runs all team checks in parallel per team, extensible via `team_check_names`) | `team_maintainer` (and other team checks as added) |
+| Team checks format | `Pass` | None (reformats check results array to dict) |
+| Team checks write | `Task` | `store_team_checks` (aggregates checks and writes per team to S3) |
 | Repository checks | `Map` (Mode=`DISTRIBUTED`, MaxConcurrency=5) + `Parallel` | `codeowners`, `dependabot`, `external_pull_request`, `gitignore`, `inactivity`, `license`, `naming_convention`, `pirr`, `readme`, `repository_access`, `security_scanning`, `branch_protection` |
 | Repo output write | `Task` | `store_repository_output` |
 | Rate-limit end | `Task` | `rate_limit` (`checkpoint=rate-limit-end`) |
@@ -100,13 +116,26 @@ flowchart TD
 
 ## Storage and Lifecycle
 
-Repository-level artifacts are written to:
+Audit artifacts are organised by entity type and stored with run-scoped prefixes:
 
-- `audit-runs/<owner>/<run_id>/repositories/<repository>.json`
+**Repository-level artifacts:**
 
-Final run summary is written to:
+- `audit-runs/<owner>/<run_id>/repositories-list.json` - List of repositories
+- `audit-runs/<owner>/<run_id>/repositories/<repository>.json` - Per-repository check results
 
-- `audit-results/<owner>/<run_id>.json`
+**Team-level artifacts:**
+
+- `audit-runs/<owner>/<run_id>/teams-list.json` - List of teams
+- `audit-runs/<owner>/<run_id>/teams/<team-slug>.json` - Per-team check results
+
+**Organisation-level artifacts:**
+
+- `audit-runs/<owner>/<run_id>/organisation-checks/dependabot_slo.json` - Dependabot SLO check results
+- `audit-runs/<owner>/<run_id>/organisation-checks/secret_scanning_slo.json` - Secret scanning SLO check results
+
+**Final run summary:**
+
+- `audit-results/<owner>/<run_id>.json` - Aggregated results across all repositories, teams, and organisation checks
 
 S3 lifecycle rules manage growth:
 
@@ -185,16 +214,16 @@ The parallel branches return their results as an array under `$.initial_data`:
     "levels": ["critical", "high", "medium", "low"],
     "initial_data": [
         { "s3_bucket": "<s3-bucket-name>", "s3_key": "audit-runs/ONS-Innovation/<run_id>/repositories-list.json", "repository_count": 42 },
-        [{ "name": "team-a", "slug": "team-a" }]
+        { "s3_bucket": "<s3-bucket-name>", "s3_key": "audit-runs/ONS-Innovation/<run_id>/teams-list.json", "team_count": 8 }
     ]
 }
 ```
 
-> The repository list is written to S3 rather than held in Step Function state because large organisations (3 000+ repos) would otherwise exceed the 256 KB state-size limit.
+> Both the repository list and team list are written to S3 rather than held in Step Function state because large organisations (3 000+ repos or teams) would otherwise exceed the 256 KB state-size limit. The S3 references are passed through state, while actual iteration happens via ItemReader, keeping state minimal.
 
 ### 3. PrepareInput → OrganisationChecks
 
-`PrepareInput` is a Pass state that reshapes the execution state, extracting `owner`, `levels`, `run_id`, and `output_bucket` from `$.initial_input`, the S3 reference from `initial_data[0]`, `teams` from `initial_data[1]`, and carrying forward `rate_limit_start`:
+`PrepareInput` is a Pass state that reshapes the execution state, extracting `owner`, `levels`, `run_id`, and `output_bucket` from `$.initial_input`, the S3 references from `initial_data[0]` and `initial_data[1]`, and carrying forward `rate_limit_start`:
 
 ```json
 {
@@ -203,40 +232,36 @@ The parallel branches return their results as an array under `$.initial_data`:
     "run_id": "<sfn-execution-name>",
     "output_bucket": "<s3-bucket-name>",
     "repositories_s3_ref": { "s3_bucket": "<s3-bucket-name>", "s3_key": "audit-runs/ONS-Innovation/<run_id>/repositories-list.json", "repository_count": 42 },
-    "teams": [{ "name": "team-a", "slug": "team-a" }],
+    "teams_s3_ref": { "s3_bucket": "<s3-bucket-name>", "s3_key": "audit-runs/ONS-Innovation/<run_id>/teams-list.json", "team_count": 8 },
     "rate_limit_start": { "checkpoint": "rate-limit-start", "remaining": 4988, "limit": 5000, "reset": 1721668800, "used": 12, "retrieved_at": "..." }
 }
 ```
 
 > Because this state writes to the root object (`ResultPath = "$"`), any field not listed in `PrepareInput.Parameters` is dropped. This is really important to consider when adding new fields to the state, as they will be lost unless explicitly preserved.
 
-The `repositories_s3_ref` is carried through `OrganisationChecks` unchanged and consumed later by the `RepositoryChecksMap` `ItemReader`.
+Both `repositories_s3_ref` and `teams_s3_ref` are lightweight references to data in S3. The actual team and repository lists are fetched from S3 via `ItemReader` during iteration in the respective maps, keeping state minimal and uniform.
 
 ### 4. OrganisationChecks
 
-Three branches run in parallel. Each branch receives a subset of the state:
+Three branches run in parallel. Each branch receives a subset of the state and writes results to S3:
 
-| Branch | Receives |
-| --- | --- |
-| `dependabot_slo` | `owner`, `levels` |
-| `secret_scanning_slo` | `owner` |
-| `TeamMaintainerMap` (Map over `teams`) | `owner`, `team.slug` per iteration |
+| Branch | Receives | Writes to S3 |
+| --- | --- | --- |
+| `dependabot_slo` → `store_organisation_checks` | `owner`, `levels` | `organisation-checks/dependabot_slo.json` |
+| `secret_scanning_slo` → `store_organisation_checks` | `owner` | `organisation-checks/secret_scanning_slo.json` |
+| `TeamMaintainerMap` (Map over `teams` from S3 ItemReader) → `store_team_check` | `owner`, `run_id`, `output_bucket`, `team.slug` per iteration | `teams/{team_slug}.json` |
 
-Their combined outputs are collected into `$.organisation_results` as a three-element array - one element per branch, in declaration order:
+The organisation-level check Lambdas return their results:
 
 ```json
-{
-    "organisation_results": [
-        { "check_name": "dependabot_slo",    "result": "pass", "message": "..." },
-        { "check_name": "secret_scanning_slo", "result": "pass", "message": "..." },
-        [
-            { "check_name": "team_maintainer", "result": "pass", "message": "..." }
-        ]
-    ]
-}
+{ "check_name": "dependabot_slo", "result": "pass", "message": "..." }
 ```
 
-All other top-level keys (`owner`, `levels`, `run_id`, `output_bucket`, `repositories_s3_ref`, `teams`) are preserved unchanged.
+The `store_organisation_checks` Lambda writes this to S3 and returns nothing to state (`ResultPath: null`), keeping check results out of the execution state.
+
+Similarly, `store_team_checks` writes individual team check results to S3 and returns nothing to state (`ResultPath: null`).
+
+All other top-level keys (`owner`, `run_id`, `output_bucket`, `repositories_s3_ref`, `teams_s3_ref`) are preserved unchanged. **No check results are held in state** — all are written to and later read from S3.
 
 ### 5. RepositoryChecksMap (Distributed Map)
 
@@ -287,10 +312,12 @@ s3://<bucket>/audit-runs/<owner>/<run_id>/repositories/<repository_name>.json
 The parent map's `ResultPath` is also `null`, so no repository data accumulates in the parent execution state.
 
 > This write is **crucial** for scaling since the step function state size is too small to handle all repository check results in memory. Each child execution writes its results to S3 and discards them from state, allowing the parent execution to continue without exceeding the 256KB state limit.
+>
+> Similarly, team check results are written to S3 within the team map iteration, keeping team results out of the parent execution state.
 
 ### 6. RateLimitEnd checkpoint
 
-After repository map completion and before final aggregation, `rate_limit` is invoked again:
+After organisation checks and repository map completion, and before final aggregation, `rate_limit` is invoked again:
 
 ```json
 {
@@ -301,24 +328,33 @@ After repository map completion and before final aggregation, `rate_limit` is in
 
 The response is stored at `$.rate_limit_end`.
 
+At this point, the execution state contains:
+
+- S3 references for repositories and teams (used by ItemReaders)
+- Rate-limit checkpoints (rate_limit_start, rate_limit_end)
+- **Zero check results in state** — all written to S3 (repositories, teams, organisation checks)
+
 ### 7. store_output (Final Aggregation)
 
-After all repository child executions complete, `store_output` is invoked with only the organisation-level data still held in state:
+After all repository child executions complete, `store_output` is invoked with owner, run_id, output bucket, and rate-limit data:
 
 ```json
 {
     "owner": "ONS-Innovation",
     "run_id": "<sfn-execution-name>",
     "output_bucket": "<s3-bucket-name>",
-    "teams": [{ "name": "team-a", "slug": "team-a" }],
-    "organisation_results": [ ... ],
-    "team_results": [ ... ],
     "rate_limit_start": { "checkpoint": "rate-limit-start", "remaining": 4988, "limit": 5000, "reset": 1721668800, "used": 12, "retrieved_at": "..." },
     "rate_limit_end": { "checkpoint": "rate-limit-end", "remaining": 4321, "limit": 5000, "reset": 1721668800, "used": 679, "retrieved_at": "..." }
 }
 ```
 
-The Lambda lists all objects under `audit-runs/<owner>/<run_id>/repositories/`, reads each file, and builds the aggregated output.
+The Lambda constructs paths using `owner` and `run_id` and loads all data from S3 (or from local files in local mode):
+
+- Team check results from `audit-runs/<owner>/<run_id>/teams/`
+- Organisation check results from `audit-runs/<owner>/<run_id>/organisation-checks/`
+- Repository list and results from `audit-runs/<owner>/<run_id>/repositories/`
+
+Then aggregates and writes to final summary.
 
 #### S3 write - final summary
 
