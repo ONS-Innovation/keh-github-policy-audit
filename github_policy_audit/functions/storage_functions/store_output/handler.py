@@ -38,10 +38,50 @@ class DataLoader:
         self.bucket_name = bucket_name
         self.s3_client = s3_client
 
-    def _load_from_local(
+    def _load_from_local(self, path: Path, log_context: str) -> object | None:
+        """Load one JSON document from a single local JSON file.
+
+        Example input: ``repositories-list.json``
+        """
+        try:
+            with open(path, encoding="utf-8") as file:
+                return json.load(file)
+        except FileNotFoundError:
+            return None
+        except Exception as e:
+            log_info(
+                logger,
+                f"failed_to_load_{log_context}",
+                file=str(path),
+                error=str(e),
+            )
+            return None
+
+    def _load_from_s3(self, key: str, log_context: str) -> object | None:
+        """Load one JSON document from a single S3 object.
+
+        Example key: ``audit-runs/org/run-1/repositories-list.json``
+        """
+        try:
+            body = self.s3_client.get_object(Bucket=self.bucket_name, Key=key)[
+                "Body"
+            ].read()
+            return json.loads(body)
+        except Exception as e:
+            log_info(logger, f"failed_to_load_{log_context}", key=key, error=str(e))
+            return None
+
+    def _load_collection_from_local(
         self, folder: str, field_name: str, log_context: str, owner: str, run_id: str
     ) -> dict[str, dict]:
-        """Load audit data from local files in outputs directory."""
+        """Load and index dictionary JSON files from a local directory.
+
+        Example directory:
+        ``outputs/audit-runs/org/run-1/repositories/``
+            ``repo-1.json``
+            ``repo-2.json``
+            ``etc.json``
+        """
         result: dict[str, dict] = {}
         local_dir = Path("outputs") / "audit-runs" / owner / run_id / folder
 
@@ -56,8 +96,7 @@ class DataLoader:
         try:
             for json_file in local_dir.glob("*.json"):
                 try:
-                    with open(json_file, encoding="utf-8") as f:
-                        payload = json.load(f)
+                    payload = self._load_from_local(json_file, log_context)
 
                     if not isinstance(payload, dict):
                         continue
@@ -82,10 +121,17 @@ class DataLoader:
 
         return result
 
-    def _load_from_s3(
+    def _load_collection_from_s3(
         self, prefix: str, field_name: str, log_context: str
     ) -> dict[str, dict]:
-        """Generic loader for S3 objects with field-based naming."""
+        """Load and index dictionary JSON objects under an S3 prefix.
+
+        Example prefix:
+        ``audit-runs/org/run-1/repositories/``
+            ``repo-1.json``
+            ``repo-2.json``
+            ``etc.json``
+        """
         result: dict[str, dict] = {}
 
         try:
@@ -97,10 +143,7 @@ class DataLoader:
                         continue
 
                     try:
-                        body = self.s3_client.get_object(
-                            Bucket=self.bucket_name, Key=key
-                        )["Body"].read()
-                        payload = json.loads(body)
+                        payload = self._load_from_s3(key, log_context)
 
                         if not isinstance(payload, dict):
                             continue
@@ -128,7 +171,7 @@ class DataLoader:
     def load_organisation_checks(self, owner: str, run_id: str) -> dict[str, dict]:
         """Load organisation check results from local files or S3."""
         if self.environment == "local":
-            return self._load_from_local(
+            return self._load_collection_from_local(
                 "organisation-checks",
                 "check_name",
                 "organisation_checks",
@@ -137,25 +180,51 @@ class DataLoader:
             )
 
         prefix = f"audit-runs/{owner}/{run_id}/organisation-checks/"
-        return self._load_from_s3(prefix, "check_name", "organisation_checks")
+        return self._load_collection_from_s3(
+            prefix, "check_name", "organisation_checks"
+        )
 
     def load_repository_checks(self, owner: str, run_id: str) -> dict[str, dict]:
         """Load per-repository results from local files or S3."""
         if self.environment == "local":
-            return self._load_from_local(
+            return self._load_collection_from_local(
                 "repositories", "repository_name", "repositories", owner, run_id
             )
 
         prefix = f"audit-runs/{owner}/{run_id}/repositories/"
-        return self._load_from_s3(prefix, "repository_name", "repositories")
+        return self._load_collection_from_s3(prefix, "repository_name", "repositories")
+
+    def load_repository_list(self, owner: str, run_id: str) -> list[dict]:
+        """Load the bare JSON array from the single repositories-list.json file.
+
+        Example: ``[{"name": "repo-1", "data": {"visibility": "private"}}]``.
+        """
+        if self.environment == "local":
+            path = (
+                Path("outputs")
+                / "audit-runs"
+                / owner
+                / run_id
+                / "repositories-list.json"
+            )
+            payload = self._load_from_local(path, "repository_list")
+        else:
+            key = f"audit-runs/{owner}/{run_id}/repositories-list.json"
+            payload = self._load_from_s3(key, "repository_list")
+
+        if not isinstance(payload, list):
+            return []
+        return [item for item in payload if isinstance(item, dict)]
 
     def load_team_checks(self, owner: str, run_id: str) -> dict[str, dict]:
         """Load per-team results from local files or S3."""
         if self.environment == "local":
-            return self._load_from_local("teams", "team_slug", "teams", owner, run_id)
+            return self._load_collection_from_local(
+                "teams", "team_slug", "teams", owner, run_id
+            )
 
         prefix = f"audit-runs/{owner}/{run_id}/teams/"
-        return self._load_from_s3(prefix, "team_slug", "teams")
+        return self._load_collection_from_s3(prefix, "team_slug", "teams")
 
 
 def is_pass(check_result: Any) -> bool:
@@ -320,12 +389,25 @@ def handler(event, context):
     log_info(logger, "loading_data", environment=environment)
     org_checks_raw = loader.load_organisation_checks(owner, run_id)
     repo_checks_raw = loader.load_repository_checks(owner, run_id)
+    repository_list = loader.load_repository_list(owner, run_id)
     team_checks_raw = loader.load_team_checks(owner, run_id)
 
     # Normalise data
     org_checks = normalise_organisation_checks(org_checks_raw)
     repo_checks = normalise_repository_checks(repo_checks_raw)
     team_checks = normalise_team_checks(team_checks_raw)
+
+    # Add repository visibility metadata to repository checks
+    repository_metadata = {
+        repository.get("name"): repository.get("data", {}).get("visibility")
+        for repository in repository_list
+        if isinstance(repository.get("name"), str)
+        and isinstance(repository.get("data"), dict)
+    }
+
+    for repository_name, visibility in repository_metadata.items():
+        if repository_name in repo_checks and isinstance(visibility, str):
+            repo_checks[repository_name]["visibility"] = visibility
 
     # Add ratings to repositories
     scorecard_ratings = load_scorecard_criteria(

@@ -60,6 +60,23 @@ class TestDataLoader:
 
         assert result == {}
 
+    def test_local_environment_loads_repository_list(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Local environment should load repository metadata from its list file."""
+        monkeypatch.chdir(tmp_path)
+        run_dir = tmp_path / "outputs" / "audit-runs" / "owner" / "run-id"
+        run_dir.mkdir(parents=True)
+        (run_dir / "repositories-list.json").write_text(
+            json.dumps([{"name": "my-repo", "data": {"visibility": "private"}}])
+        )
+
+        loader = DataLoader(environment="local", bucket_name=None, s3_client=None)
+
+        assert loader.load_repository_list("owner", "run-id") == [
+            {"name": "my-repo", "data": {"visibility": "private"}}
+        ]
+
     def test_load_from_local_with_field_name_extraction(
         self, tmp_path, monkeypatch
     ) -> None:
@@ -173,6 +190,62 @@ class TestDataLoader:
             result = loader.load_organisation_checks("owner", "run-id")
 
             assert result == {}
+
+    def test_load_collection_from_local_skips_unexpected_file_errors(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Local collection loading should continue after an unexpected file error."""
+        monkeypatch.chdir(tmp_path)
+        repo_dir = (
+            tmp_path / "outputs" / "audit-runs" / "owner" / "run-id" / "repositories"
+        )
+        repo_dir.mkdir(parents=True)
+        (repo_dir / "repo.json").write_text("{}")
+
+        loader = DataLoader(environment="local", bucket_name=None, s3_client=None)
+        with patch.object(
+            loader, "_load_from_local", side_effect=RuntimeError("read error")
+        ):
+            assert loader.load_repository_checks("owner", "run-id") == {}
+
+    def test_load_repository_list_returns_empty_for_non_list_payload(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Repository list loading should reject a JSON object instead of an array."""
+        monkeypatch.chdir(tmp_path)
+        run_dir = tmp_path / "outputs" / "audit-runs" / "owner" / "run-id"
+        run_dir.mkdir(parents=True)
+        (run_dir / "repositories-list.json").write_text(
+            json.dumps({"repositories": []})
+        )
+
+        loader = DataLoader(environment="local", bucket_name=None, s3_client=None)
+
+        assert loader.load_repository_list("owner", "run-id") == []
+
+    def test_load_repository_list_from_s3(self) -> None:
+        """Repository list loading should read the single S3 object in production."""
+        mock_s3 = Mock()
+        mock_s3.get_object.return_value = {
+            "Body": Mock(
+                read=Mock(
+                    return_value=json.dumps(
+                        [{"name": "my-repo", "data": {"visibility": "public"}}]
+                    ).encode()
+                )
+            )
+        }
+        loader = DataLoader(
+            environment="prod", bucket_name="my-bucket", s3_client=mock_s3
+        )
+
+        result = loader.load_repository_list("owner", "run-id")
+
+        assert result == [{"name": "my-repo", "data": {"visibility": "public"}}]
+        mock_s3.get_object.assert_called_once_with(
+            Bucket="my-bucket",
+            Key="audit-runs/owner/run-id/repositories-list.json",
+        )
 
     def test_prod_environment_requires_bucket_and_s3_client(self) -> None:
         """Prod environment should require bucket_name and s3_client."""
@@ -414,6 +487,22 @@ class TestDataLoaderParametrized:
         result = method("test-org", "run-1")
 
         assert result == {}
+
+    def test_load_collection_from_s3_skips_unexpected_object_errors(
+        self, method_name, prefix, field_name, log_context, key_example
+    ) -> None:
+        """S3 collection loading should continue after an unexpected object error."""
+        mock_s3 = Mock()
+        mock_s3.get_paginator.return_value.paginate.return_value = [
+            {"Contents": [{"Key": key_example}]}
+        ]
+        loader = DataLoader(
+            environment="prod", bucket_name="my-bucket", s3_client=mock_s3
+        )
+        with patch.object(
+            loader, "_load_from_s3", side_effect=RuntimeError("read error")
+        ):
+            assert getattr(loader, method_name)("test-org", "run-1") == {}
 
 
 class TestNormalizers:
@@ -898,6 +987,37 @@ class TestHandlerFunction:
         assert "timestamp" in output
         assert output["rate_limit_start"] == "2024-01-01T00:00:00Z"
         assert output["rate_limit_end"] == "2024-01-01T01:00:00Z"
+
+    @patch("functions.storage_functions.store_output.handler.load_scorecard_criteria")
+    def test_handler_includes_repository_visibility(
+        self, mock_load_criteria, monkeypatch, tmp_path
+    ) -> None:
+        """Handler should add visibility from repositories-list.json to each repository."""
+        monkeypatch.setenv("ENVIRONMENT", "local")
+        monkeypatch.chdir(tmp_path)
+        run_dir = tmp_path / "outputs" / "audit-runs" / "test-org" / "run-1"
+        repositories_dir = run_dir / "repositories"
+        repositories_dir.mkdir(parents=True)
+        (repositories_dir / "repo-1.json").write_text(
+            json.dumps(
+                {
+                    "repository_name": "repo-1",
+                    "checks": {"readme": {"result": "pass"}},
+                }
+            )
+        )
+        (run_dir / "repositories-list.json").write_text(
+            json.dumps([{"name": "repo-1", "data": {"visibility": "internal"}}])
+        )
+        mock_load_criteria.return_value = [
+            {"name": "gold", "min_compliance": 90.0, "required_checks": []}
+        ]
+
+        handler({"owner": "test-org", "run_id": "run-1"}, None)
+
+        output_file = tmp_path / "outputs" / "audit-results" / "test-org" / "run-1.json"
+        output = json.loads(output_file.read_text())
+        assert output["repositories"]["repo-1"]["visibility"] == "internal"
 
     @patch("functions.storage_functions.store_output.handler.boto3")
     @patch("functions.storage_functions.store_output.handler.load_scorecard_criteria")
