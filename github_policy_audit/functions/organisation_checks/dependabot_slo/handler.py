@@ -46,11 +46,16 @@ def _load_repository_names(event: dict[str, Any]) -> list[str]:
 
 @github_handler
 def handler(event, context, client):
-    """Step Function invokes with {"owner": "...", "levels": ["critical", "high"]}.
+    """Run the Dependabot SLO check for the active repositories.
 
-    The levels field is optional and defaults to the policy library defaults.
+    The Step Function invokes this handler with ``owner``, optional ``levels``,
+    and ``repositories_s3_ref``. In local mode, ``run_id`` identifies the local
+    repository list used to exclude archived repositories.
     """
-    if event.get("repositories_s3_ref") or event.get("run_id"):
+    if event.get("repositories_s3_ref") or (
+        os.environ.get("ENVIRONMENT", "local").lower() == "local"
+        and event.get("run_id")
+    ):
         repository_names = _load_repository_names(event)
         result = get_dependabot_slo(
             client, event.get("levels"), repository_names=repository_names

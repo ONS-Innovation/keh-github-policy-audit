@@ -129,3 +129,26 @@ class TestDependabotSloHandler:
 
         assert captured == {"client": client, "levels": None}
         assert result == {"status": "PASS", "check_name": "dependabot_slo"}
+
+        def test_non_local_run_id_without_repository_reference_skips_loading(
+            self, monkeypatch
+        ) -> None:
+            """A non-local run ID alone should not trigger repository loading."""
+            monkeypatch.setenv("ENVIRONMENT", "prod")
+            client = object()
+            mock_check = create_autospec(
+                module.get_dependabot_slo, return_value={"status": "PASS"}
+            )
+
+            with (
+                patch("utils.github.get_github_client", return_value=client),
+                patch.object(module, "get_dependabot_slo", mock_check),
+                patch.object(module, "_load_repository_names") as load_names,
+            ):
+                result = module.handler(
+                    {"owner": "ONS-Innovation", "run_id": "run-1"}, None
+                )
+
+            load_names.assert_not_called()
+            mock_check.assert_called_once_with(client, None)
+            assert result == {"status": "PASS", "check_name": "dependabot_slo"}

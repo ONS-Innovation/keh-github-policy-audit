@@ -46,7 +46,12 @@ def _load_repository_names(event: dict[str, Any]) -> list[str]:
 
 @github_handler
 def handler(event, context, client):
-    """Step Function invokes with {"owner": "..."}."""
+    """Run the Secret Scanning SLO check for the active repositories.
+
+    The Step Function invokes this handler with ``owner`` and
+    ``repositories_s3_ref``. In local mode, ``run_id`` identifies the local
+    repository list used to exclude archived repositories.
+    """
     if event.get("repositories_s3_ref") or (
         os.environ.get("ENVIRONMENT", "local").lower() == "local"
         and event.get("run_id")
