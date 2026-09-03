@@ -15,6 +15,7 @@ This repository just collects the data for these reports using an AWS Step Funct
     - [2. Set environment variables](#2-set-environment-variables)
     - [3. Run command](#3-run-command)
       - [Run via Helper Script](#run-via-helper-script)
+      - [Organisation SLO Checks](#organisation-slo-checks)
       - [Store Output Handler](#store-output-handler)
     - [4. Payload summary](#4-payload-summary)
   - [Deployment](#deployment)
@@ -150,7 +151,6 @@ Ready-to-use payload files are provided in `examples/`:
 
 - `examples/repository_event.json`
 - `examples/organisation_event.json`
-- `examples/dependabot_slo_event.json`
 - `examples/naming_convention_event.json`
 - `examples/team_maintainer_event.json`
 - `examples/rate_limit_event.json`
@@ -168,6 +168,73 @@ python github_policy_audit/run_handler.py functions.repository_checks.codeowners
 Some repository-scoped handlers can also accept optional repository metadata under `data` when they are invoked downstream of `functions.list_repositories.handler`. This allows the policy methods library to reuse fields already returned by the repository listing and avoid extra GitHub API calls.
 
 `functions.list_repositories.handler` returns only non-archived repositories.
+
+#### Organisation SLO Checks
+
+These instructions apply when running the `dependabot_slo` and `secret_scanning_slo` organisation-level checks.
+
+The organisation SLO handlers use the repository list produced by `functions.list_repositories.handler` to exclude archived repositories.
+A dedicated script runs the repository listing followed by one or both SLO checks:
+
+`scripts/run_organisation_slo_checks.sh`
+
+This script:
+
+1. Sets `ENVIRONMENT=local`
+2. Runs `list_repositories` and writes the repository list to
+   `outputs/audit-runs/<owner>/<run_id>/repositories-list.json`
+3. Runs the selected organisation SLO check or checks using that repository list
+
+Run both checks:
+
+```bash
+./scripts/run_organisation_slo_checks.sh --owner ONS-Innovation
+```
+
+Run only Dependabot SLO checks:
+
+```bash
+./scripts/run_organisation_slo_checks.sh \
+  --owner ONS-Innovation \
+  --check dependabot
+```
+
+Run only Secret Scanning SLO checks:
+
+```bash
+./scripts/run_organisation_slo_checks.sh \
+  --owner ONS-Innovation \
+  --check secret-scanning
+```
+
+Use `--run-id <run_id>` to choose the local audit run directory. Dependabot
+severity levels can be supplied with `--levels '<json-array>'`:
+
+```bash
+./scripts/run_organisation_slo_checks.sh \
+  --owner ONS-Innovation \
+  --check dependabot \
+  --levels '["critical", "high"]'
+```
+
+To test with an edited repository list without running `list_repositories`,
+use `--use-existing-list` with the run ID containing the list:
+
+```bash
+./scripts/run_organisation_slo_checks.sh \
+  --owner ONS-Innovation \
+  --run-id test-123 \
+  --check dependabot \
+  --use-existing-list
+```
+
+The `--run-id` option is required when using `--use-existing-list`. The script
+uses `outputs/audit-runs/<owner>/<run_id>/repositories-list.json` directly and
+does not run `list_repositories`. This lets you remove a repository from the
+list and rerun the check to test repository exclusion without fetching the
+repository list again.
+
+The list handler and SLO handlers still call the GitHub API, so local execution requires the GitHub App configuration described [above](#2-set-environment-variables) and suitable AWS credentials for the Secrets Manager lookup.
 
 #### Store Output Handler
 

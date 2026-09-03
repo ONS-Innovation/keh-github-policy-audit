@@ -8,6 +8,38 @@ module = importlib.import_module("functions.organisation_checks.dependabot_slo.h
 
 
 class TestDependabotSloHandler:
+    def test_passes_repository_names_from_local_file(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        """The handler should load repository names from the local audit run."""
+        monkeypatch.setenv("ENVIRONMENT", "local")
+        monkeypatch.chdir(tmp_path)
+        repository_list = (
+            tmp_path
+            / "outputs"
+            / "audit-runs"
+            / "ONS-Innovation"
+            / "run-1"
+            / "repositories-list.json"
+        )
+        repository_list.parent.mkdir(parents=True)
+        repository_list.write_text(json.dumps([{"name": "active-repo"}]))
+        captured: dict[str, object] = {}
+
+        def fake_check(check_client, levels, repository_names):
+            captured.update(
+                client=check_client, levels=levels, repository_names=repository_names
+            )
+            return {"status": "PASS"}
+
+        with (
+            patch("utils.github.get_github_client", return_value=object()),
+            patch.object(module, "get_dependabot_slo", side_effect=fake_check),
+        ):
+            module.handler({"owner": "ONS-Innovation", "run_id": "run-1"}, None)
+
+        assert captured["repository_names"] == ["active-repo"]
+
     def test_passes_repository_names_from_s3_reference(self) -> None:
         """The handler should pass active repository names to the Methods library."""
         client = object()
