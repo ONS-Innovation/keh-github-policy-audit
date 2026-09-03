@@ -1,12 +1,55 @@
 """Unit tests for dependabot_slo organisation check handler."""
 
 import importlib
-from unittest.mock import create_autospec, patch
+import json
+from unittest.mock import Mock, create_autospec, patch
 
 module = importlib.import_module("functions.organisation_checks.dependabot_slo.handler")
 
 
 class TestDependabotSloHandler:
+    def test_passes_repository_names_from_s3_reference(self) -> None:
+        """The handler should pass active repository names to the Methods library."""
+        client = object()
+        captured: dict[str, object] = {}
+
+        def fake_check(check_client, levels, repository_names):
+            captured.update(
+                client=check_client, levels=levels, repository_names=repository_names
+            )
+            return {"status": "PASS"}
+
+        mock_s3 = Mock()
+        mock_s3.get_object.return_value = {
+            "Body": Mock(
+                read=Mock(return_value=json.dumps([{"name": "active-repo"}]).encode())
+            )
+        }
+        with (
+            patch("utils.github.get_github_client", return_value=client),
+            patch.object(module, "boto3") as mock_boto3,
+            patch.object(module, "get_dependabot_slo", side_effect=fake_check),
+        ):
+            mock_boto3.client.return_value = mock_s3
+            result = module.handler(
+                {
+                    "owner": "ONS-Innovation",
+                    "levels": ["critical"],
+                    "repositories_s3_ref": {
+                        "s3_bucket": "bucket",
+                        "s3_key": "repositories.json",
+                    },
+                },
+                None,
+            )
+
+        assert captured == {
+            "client": client,
+            "levels": ["critical"],
+            "repository_names": ["active-repo"],
+        }
+        assert result == {"status": "PASS", "check_name": "dependabot_slo"}
+
     def test_passes_levels(self) -> None:
         """The handler should forward the levels list to the check function."""
         client = object()
