@@ -1,0 +1,1525 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A tool used to audit GitHub Organisations for compliance with ONS' GitHub Usage Policy.">
+      
+      
+      
+      
+        <link rel="prev" href="../logging-patterns/">
+      
+      
+        <link rel="next" href="../step-function-flow/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Lambda Structure - GitHub Policy Audit</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="deep-purple">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#lambda-structure" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="GitHub Policy Audit" class="md-header__button md-logo" aria-label="GitHub Policy Audit" data-md-component="logo">
+      
+  <img src="../assets/logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Policy Audit
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Lambda Structure
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="white" data-md-color-accent="deep-purple"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="white" data-md-color-accent="deep-purple"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/ONS-Innovation/keh-github-policy-audit" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub Policy Audit
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="GitHub Policy Audit" class="md-nav__button md-logo" aria-label="GitHub Policy Audit" data-md-component="logo">
+      
+  <img src="../assets/logo.png" alt="logo">
+
+    </a>
+    GitHub Policy Audit
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/ONS-Innovation/keh-github-policy-audit" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub Policy Audit
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../documentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../repository-scorecards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repository Scorecards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../logging-patterns/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lambda Structure
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lambda Structure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-organisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Organisation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#two-handler-shapes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two Handler Shapes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Two Handler Shapes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#github-backed-handlers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GitHub-backed handlers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#non-github-backed-handlers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-GitHub-backed handlers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-github_handler-decorator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The github_handler Decorator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#aggregation-handlers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aggregation Handlers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Aggregation Handlers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#store_repository_output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        store_repository_output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#store_team_checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        store_team_checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#store_organisation_checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        store_organisation_checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#store_output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        store_output
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extensible-multi-check-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extensible Multi-Check Pattern
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Extensible Multi-Check Pattern">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#repository-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository Checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#team-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Team Checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#organisation-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Organisation Checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#writing-a-new-handler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Writing a New Handler
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Writing a New Handler">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#use-github_handler-when" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use @github_handler when
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#do-not-use-github_handler-when" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Do not use @github_handler when
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#response-shape-guidance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response Shape Guidance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dependency-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependency Layer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Dependency Layer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#s3-backed-publication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        S3-backed publication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-behaviour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update behaviour
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#practical-benefits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Practical Benefits
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../step-function-flow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Step Function Flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lambda-versioning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lambda Versioning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rate-limit-considerations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rate Limit Considerations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-organisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Organisation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#two-handler-shapes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Two Handler Shapes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Two Handler Shapes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#github-backed-handlers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GitHub-backed handlers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#non-github-backed-handlers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-GitHub-backed handlers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-github_handler-decorator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The github_handler Decorator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#aggregation-handlers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aggregation Handlers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Aggregation Handlers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#store_repository_output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        store_repository_output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#store_team_checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        store_team_checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#store_organisation_checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        store_organisation_checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#store_output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        store_output
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extensible-multi-check-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extensible Multi-Check Pattern
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Extensible Multi-Check Pattern">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#repository-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Repository Checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#team-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Team Checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#organisation-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Organisation Checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#writing-a-new-handler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Writing a New Handler
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Writing a New Handler">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#use-github_handler-when" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use @github_handler when
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#do-not-use-github_handler-when" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Do not use @github_handler when
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#response-shape-guidance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response Shape Guidance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dependency-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependency Layer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Dependency Layer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#s3-backed-publication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        S3-backed publication
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#update-behaviour" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update behaviour
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#practical-benefits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Practical Benefits
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+                
+
+
+
+  
+
+
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="lambda-structure">Lambda Structure</h1>
+<p>This project uses a consistent Lambda layout so that each function stays small and focused:</p>
+<ul>
+<li>the handler module is responsible for the Lambda entry point, any processing and its response</li>
+<li>shared setup lives in utilities</li>
+<li>business logic lives in <code>policy_methods_library</code></li>
+</ul>
+<p>This keeps individual handlers easy to scan and reduces duplication across the audit workflow.</p>
+<h2 id="layout">Layout</h2>
+<p>All Lambda functions live in the <code>/functions</code> folder, organised by type and purpose:</p>
+<ul>
+<li><strong>General functions</strong> (<code>functions/</code>): Not specific to a single check type</li>
+<li><code>list_repositories/</code> - Lists all repositories for an organisation</li>
+<li><code>list_teams/</code> - Lists all teams for an organisation</li>
+<li>
+<p><code>rate_limit/</code> - GitHub API rate limit checkpoint</p>
+</li>
+<li>
+<p><strong>Check functions</strong> (organised by entity type):</p>
+</li>
+<li><code>organisation_checks/</code> - Organisation-level checks</li>
+<li><code>team_checks/</code> - Team-level checks</li>
+<li>
+<p><code>repository_checks/</code> - Repository-level checks</p>
+</li>
+<li>
+<p><strong>Storage functions</strong> (<code>storage_functions/</code>): Aggregation and persistence handlers</p>
+</li>
+<li><code>store_output/</code> - Final aggregation across all results</li>
+<li><code>store_repository_output/</code> - Aggregates per-repository check results</li>
+<li><code>store_team_checks/</code> - Aggregates per-team check results</li>
+<li><code>store_organisation_checks/</code> - Stores organisation-level check results</li>
+</ul>
+<p>When organising a new function, consider:</p>
+<ol>
+<li><strong>Is it a check?</strong> Does it run a specific policy check? Add it to the appropriate <code>*_checks/</code> folder (organisation, team, or repository).</li>
+<li><strong>Is it an aggregator?</strong> Does it aggregate multiple results? Add it to <code>storage_functions/</code>.</li>
+<li><strong>Is it a general function?</strong> Does it perform a task that is not a check or an aggregator? Add it to the <code>functions/</code> root.</li>
+</ol>
+<p>This structure ensures:</p>
+<ul>
+<li>Clear separation of concerns</li>
+<li>Easy discovery of related functions</li>
+<li>Grouped test organization following the same structure</li>
+</ul>
+<h2 id="test-organisation">Test Organisation</h2>
+<p>Tests mirror the function structure exactly for easy discovery. Each handler has a dedicated test file named <code>test_&lt;handler_name&gt;.py</code>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>tests/functions/
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├──<span class="w"> </span>test_list_repositories.py<span class="w">         </span><span class="c1"># General functions</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├──<span class="w"> </span>test_list_teams.py
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>├──<span class="w"> </span>test_rate_limit.py
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>├──<span class="w"> </span>organisation_checks/
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>│<span class="w">   </span>├──<span class="w"> </span>test_dependabot_slo.py<span class="w">        </span><span class="c1"># Organisation-level checks</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>│<span class="w">   </span>└──<span class="w"> </span>test_secret_scanning_slo.py
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>├──<span class="w"> </span>repository_checks/
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>│<span class="w">   </span>├──<span class="w"> </span>test_branch_protection.py<span class="w">     </span><span class="c1"># Repository-level checks</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>│<span class="w">   </span>├──<span class="w"> </span>test_codeowners.py
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>│<span class="w">   </span>├──<span class="w"> </span>test_dependabot.py
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>│<span class="w">   </span>├──<span class="w"> </span>...<span class="w"> </span><span class="o">(</span><span class="m">10</span><span class="w"> </span>more<span class="w"> </span>repository<span class="w"> </span>checks<span class="o">)</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>├──<span class="w"> </span>storage_functions/
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>│<span class="w">   </span>├──<span class="w"> </span>test_store_output.py<span class="w">          </span><span class="c1"># Storage aggregators</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>│<span class="w">   </span>├──<span class="w"> </span>test_store_repository_output.py
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>│<span class="w">   </span>├──<span class="w"> </span>test_store_team_checks.py
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>│<span class="w">   </span>└──<span class="w"> </span>test_store_organisation_checks.py
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>└──<span class="w"> </span>team_checks/
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="w">    </span>└──<span class="w"> </span>test_team_maintainer.py<span class="w">       </span><span class="c1"># Team-level checks</span>
+</span></code></pre></div>
+<p>When adding a new handler, also add a corresponding test file following this naming convention. This makes it immediately clear where tests for a specific handler can be found.</p>
+<h2 id="two-handler-shapes">Two Handler Shapes</h2>
+<p>Focusing on the lambdas themselves, there are two main shapes:</p>
+<h3 id="github-backed-handlers">GitHub-backed handlers</h3>
+<p>These handlers need a GitHub client and normally follow the same lifecycle:</p>
+<ol>
+<li>Log the incoming event shape.</li>
+<li>Build a GitHub client from the configured GitHub App secrets.</li>
+<li>Log rate-limit state at the start and end of the step.</li>
+<li>Call the policy or list function.</li>
+<li>Return a compact, Step Functions-friendly payload.</li>
+</ol>
+<p>That repeated process is now shared by <code>github_handler</code> in <code>utils/lambda_handler.py</code>.</p>
+<p>Example:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">policy_methods_library.checks.codeowners</span><span class="w"> </span><span class="kn">import</span> <span class="n">check_codeowners</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">utils.lambda_handler</span><span class="w"> </span><span class="kn">import</span> <span class="n">github_handler</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">utils.structured_logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">log_info</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">logger</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="n">logging</span><span class="o">.</span><span class="n">INFO</span><span class="p">)</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="nd">@github_handler</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="k">def</span><span class="w"> </span><span class="nf">handler</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">context</span><span class="p">,</span> <span class="n">client</span><span class="p">):</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">check_codeowners</span><span class="p">(</span><span class="n">client</span><span class="p">,</span> <span class="n">event</span><span class="p">[</span><span class="s2">"repository_name"</span><span class="p">])</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="n">result</span><span class="p">[</span><span class="s2">"check_name"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"codeowners"</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    <span class="n">log_info</span><span class="p">(</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>        <span class="n">logger</span><span class="p">,</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>        <span class="s2">"lambda_completed"</span><span class="p">,</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>        <span class="n">check</span><span class="o">=</span><span class="n">result</span><span class="p">[</span><span class="s2">"check_name"</span><span class="p">],</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>        <span class="n">result</span><span class="o">=</span><span class="n">result</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"result"</span><span class="p">),</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    <span class="p">)</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>    <span class="k">return</span> <span class="n">result</span>
+</span></code></pre></div>
+<p>The decorated handler keeps the public Lambda shape as <code>handler(event, context)</code>, while the wrapped implementation receives the injected <code>client</code> as a third argument.</p>
+<h3 id="non-github-backed-handlers">Non-GitHub-backed handlers</h3>
+<p>Some handlers do not need a GitHub client. For example, naming convention checks only need repository metadata already present in the Step Functions input.</p>
+<p>Those handlers should remain simple and undecorated.</p>
+<p>Example:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">handler</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="n">context</span><span class="p">):</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">result</span> <span class="o">=</span> <span class="n">check_naming_convention</span><span class="p">(</span><span class="n">event</span><span class="p">[</span><span class="s2">"repository_name"</span><span class="p">])</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">result</span><span class="p">[</span><span class="s2">"check_name"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"naming_convention"</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="k">return</span> <span class="n">result</span>
+</span></code></pre></div>
+<p>This also applies to any general functions that do not need a GitHub client, such as <code>store_output</code>.</p>
+<h2 id="the-github_handler-decorator">The <code>github_handler</code> Decorator</h2>
+<p>The decorator in <code>utils/lambda_handler.py</code> exists to remove repeated setup from handlers that depend on GitHub.</p>
+<p>It currently does three things:</p>
+<ul>
+<li>logs the event keys at invocation time</li>
+<li>creates the GitHub client using <code>utils.github.get_github_client()</code></li>
+<li>logs GitHub rate-limit state at the start and end of the handler</li>
+</ul>
+<p>This keeps the handler focused on its specific check, while still providing consistent logging and telemetry across all GitHub-backed handlers.</p>
+<h2 id="aggregation-handlers">Aggregation Handlers</h2>
+<p>Some handlers aggregate results from multiple checks across entities (repositories, teams, etc.). These handlers receive arrays of check results and write them to S3.</p>
+<h3 id="store_repository_output">store_repository_output</h3>
+<p>Aggregates repository check results from all checks (defined in <code>terraform/locals.tf</code> as <code>repository_check_names</code>) into a single file in <code>audit-runs/&lt;owner&gt;/&lt;run_id&gt;/repositories/</code> (local mode) or S3. Input format:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="s2">"owner"</span><span class="p">:</span> <span class="s2">"org-name"</span><span class="p">,</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="s2">"run_id"</span><span class="p">:</span> <span class="s2">"sfn-execution-id"</span><span class="p">,</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="s2">"repository_name"</span><span class="p">:</span> <span class="s2">"repo-name"</span><span class="p">,</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="s2">"output_bucket"</span><span class="p">:</span> <span class="s2">"bucket-name"</span><span class="p">,</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>    <span class="s2">"checks"</span><span class="p">:</span> <span class="p">[</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>        <span class="p">{</span><span class="s2">"check_name"</span><span class="p">:</span> <span class="s2">"codeowners"</span><span class="p">,</span> <span class="s2">"result"</span><span class="p">:</span> <span class="s2">"pass"</span><span class="p">,</span> <span class="s2">"message"</span><span class="p">:</span> <span class="s2">"..."</span><span class="p">},</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>        <span class="p">{</span><span class="s2">"check_name"</span><span class="p">:</span> <span class="s2">"dependabot"</span><span class="p">,</span> <span class="s2">"result"</span><span class="p">:</span> <span class="s2">"fail"</span><span class="p">,</span> <span class="s2">"message"</span><span class="p">:</span> <span class="s2">"..."</span><span class="p">},</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>        <span class="c1"># ...</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="p">]</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="p">}</span>
+</span></code></pre></div>
+<h3 id="store_team_checks">store_team_checks</h3>
+<p>Aggregates team check results (defined in <code>terraform/locals.tf</code> as <code>team_check_names</code>) into a single file in <code>audit-runs/&lt;owner&gt;/&lt;run_id&gt;/teams/</code> (local mode) or S3 per team. Automatically normalises check results from list to dictionary format keyed by check name. Input format:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="s2">"owner"</span><span class="p">:</span> <span class="s2">"org-name"</span><span class="p">,</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>    <span class="s2">"run_id"</span><span class="p">:</span> <span class="s2">"sfn-execution-id"</span><span class="p">,</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="s2">"team_slug"</span><span class="p">:</span> <span class="s2">"team-slug"</span><span class="p">,</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="s2">"output_bucket"</span><span class="p">:</span> <span class="s2">"bucket-name"</span><span class="p">,</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="s2">"checks"</span><span class="p">:</span> <span class="p">[</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>        <span class="p">{</span><span class="s2">"check_name"</span><span class="p">:</span> <span class="s2">"team_maintainer"</span><span class="p">,</span> <span class="s2">"result"</span><span class="p">:</span> <span class="s2">"pass"</span><span class="p">,</span> <span class="s2">"message"</span><span class="p">:</span> <span class="s2">"..."</span><span class="p">},</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>        <span class="c1"># Add more team checks here as team_check_names grows</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="p">]</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="p">}</span>
+</span></code></pre></div>
+<h3 id="store_organisation_checks">store_organisation_checks</h3>
+<p>Stores organisation-level check results (defined in <code>terraform/locals.tf</code> as <code>organisation_check_names</code>, e.g., <code>dependabot_slo</code>, <code>secret_scanning_slo</code>) to individual files in <code>audit-runs/&lt;owner&gt;/&lt;run_id&gt;/organisation-checks/</code> (local mode) or S3. Input format:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="s2">"owner"</span><span class="p">:</span> <span class="s2">"org-name"</span><span class="p">,</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="s2">"run_id"</span><span class="p">:</span> <span class="s2">"sfn-execution-id"</span><span class="p">,</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="s2">"output_bucket"</span><span class="p">:</span> <span class="s2">"bucket-name"</span><span class="p">,</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="s2">"check_name"</span><span class="p">:</span> <span class="s2">"dependabot_slo"</span><span class="p">,</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="s2">"result"</span><span class="p">:</span> <span class="s2">"pass"</span><span class="p">,</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>    <span class="s2">"message"</span><span class="p">:</span> <span class="s2">"..."</span><span class="p">,</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="s2">"details"</span><span class="p">:</span> <span class="p">{</span><span class="o">...</span><span class="p">}</span>  <span class="c1"># Optional detailed information</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="p">}</span>
+</span></code></pre></div>
+<h3 id="store_output">store_output</h3>
+<p>Final aggregation handler that collects results from all storage handlers and produces a comprehensive audit output. Supports loading data from:</p>
+<ul>
+<li><strong>Local mode</strong> (<code>ENVIRONMENT=local</code>): Reads from <code>outputs/audit-runs/&lt;owner&gt;/&lt;run_id&gt;/</code> directory</li>
+<li><strong>Production mode</strong> (<code>ENVIRONMENT=prod</code>): Reads from S3 bucket <code>audit-runs/&lt;owner&gt;/&lt;run_id&gt;/</code> paths</li>
+</ul>
+<p>Input format:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="s2">"owner"</span><span class="p">:</span> <span class="s2">"org-name"</span><span class="p">,</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="s2">"run_id"</span><span class="p">:</span> <span class="s2">"sfn-execution-id"</span><span class="p">,</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="s2">"output_bucket"</span><span class="p">:</span> <span class="s2">"bucket-name"</span><span class="p">,</span>  <span class="c1"># Required in prod, optional in local</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="s2">"rate_limit_start"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"limit"</span><span class="p">:</span> <span class="mi">5000</span><span class="p">,</span> <span class="s2">"remaining"</span><span class="p">:</span> <span class="mi">4988</span><span class="p">,</span> <span class="o">...</span><span class="p">},</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    <span class="s2">"rate_limit_end"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"limit"</span><span class="p">:</span> <span class="mi">5000</span><span class="p">,</span> <span class="s2">"remaining"</span><span class="p">:</span> <span class="mi">4321</span><span class="p">,</span> <span class="o">...</span><span class="p">}</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="p">}</span>
+</span></code></pre></div>
+<p>Output format (stored at <code>outputs/audit-results/&lt;owner&gt;/&lt;run_id&gt;.json</code> or <code>s3://&lt;bucket&gt;/audit-results/&lt;owner&gt;/&lt;run_id&gt;.json</code>):</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    <span class="s2">"owner"</span><span class="p">:</span> <span class="s2">"org-name"</span><span class="p">,</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="s2">"run_id"</span><span class="p">:</span> <span class="s2">"sfn-execution-id"</span><span class="p">,</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="s2">"repositories"</span><span class="p">:</span> <span class="p">{</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>        <span class="s2">"repo-name"</span><span class="p">:</span> <span class="p">{</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>            <span class="s2">"checks"</span><span class="p">:</span> <span class="p">{</span><span class="o">&lt;</span><span class="n">aggregated</span> <span class="n">repository</span> <span class="n">checks</span><span class="o">&gt;</span><span class="p">},</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>            <span class="s2">"is_compliant"</span><span class="p">:</span> <span class="n">true</span><span class="p">,</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>            <span class="s2">"rating"</span><span class="p">:</span> <span class="s2">"gold"</span><span class="p">,</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>            <span class="s2">"visibility"</span><span class="p">:</span> <span class="s2">"private"</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>        <span class="p">}</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>    <span class="p">},</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>    <span class="s2">"organisation_checks"</span><span class="p">:</span> <span class="p">{</span><span class="o">&lt;</span><span class="n">aggregated</span> <span class="n">organisation</span> <span class="n">results</span><span class="o">&gt;</span><span class="p">},</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>    <span class="s2">"teams"</span><span class="p">:</span> <span class="p">{</span><span class="o">&lt;</span><span class="n">aggregated</span> <span class="n">team</span> <span class="n">results</span><span class="o">&gt;</span><span class="p">},</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>    <span class="s2">"scorecard_criteria"</span><span class="p">:</span> <span class="p">{</span><span class="o">&lt;</span><span class="n">compliance</span> <span class="n">ratings</span><span class="o">&gt;</span><span class="p">},</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>    <span class="s2">"summary"</span><span class="p">:</span> <span class="p">{</span><span class="o">&lt;</span><span class="n">compliance</span> <span class="n">statistics</span><span class="o">&gt;</span><span class="p">},</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>    <span class="s2">"rate_limit_start"</span><span class="p">:</span> <span class="p">{</span><span class="o">...</span><span class="p">},</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>    <span class="s2">"rate_limit_end"</span><span class="p">:</span> <span class="p">{</span><span class="o">...</span><span class="p">},</span>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a>    <span class="s2">"timestamp"</span><span class="p">:</span> <span class="s2">"2026-08-28T13:49:35.820000+00:00"</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="p">}</span>
+</span></code></pre></div>
+<p><strong>Local Testing:</strong> Use <code>./scripts/run_store_output_handler.sh</code> to execute all storage handlers and populate the output directory before testing <code>store_output</code> in isolation.</p>
+<h2 id="extensible-multi-check-pattern">Extensible Multi-Check Pattern</h2>
+<p>All check types (repository, team, and organisation) support multiple checks running in parallel per entity, configured via lists in <code>terraform/locals.tf</code>:</p>
+<h3 id="repository-checks">Repository Checks</h3>
+<ul>
+<li>Configured via <code>repository_check_names</code> in <code>terraform/locals.tf</code></li>
+<li>Step Function flow: RepositoryChecksMap (Distributed Map) → RepositoryChecksParallel (runs all checks per repo) → store_repository_output</li>
+<li>S3 output: <code>audit-runs/&lt;owner&gt;/&lt;run_id&gt;/repositories/&lt;repository-name&gt;.json</code> with structure <code>{checks: {check_name: {...}, ...}}</code></li>
+</ul>
+<h3 id="team-checks">Team Checks</h3>
+<ul>
+<li>Configured via <code>team_check_names</code> in <code>terraform/locals.tf</code></li>
+<li>Step Function flow: TeamChecksMap → TeamChecksParallel (runs all checks) → store_team_checks</li>
+<li>S3 output: <code>audit-runs/&lt;owner&gt;/&lt;run_id&gt;/teams/&lt;team-slug&gt;.json</code> with structure <code>{checks: {check_name: {...}, ...}}</code></li>
+</ul>
+<h3 id="organisation-checks">Organisation Checks</h3>
+<ul>
+<li>Configured via <code>organisation_check_names</code> in <code>terraform/locals.tf</code></li>
+<li>Step Function flow: OrganisationChecks (Parallel branches, one per check) → store_organisation_checks (per check)</li>
+<li>Each check stored separately: <code>audit-runs/&lt;owner&gt;/&lt;run_id&gt;/organisation-checks/&lt;check-name&gt;.json</code></li>
+</ul>
+<p><strong>Adding a new check in any category:</strong> Add the check name to the appropriate list in <code>terraform/locals.tf</code> and create a handler following the established pattern. The step function automatically includes it via dynamic branching/mapping.</p>
+<h2 id="writing-a-new-handler">Writing a New Handler</h2>
+<p>When adding a new Lambda, use this decision rule:</p>
+<h3 id="use-github_handler-when">Use <code>@github_handler</code> when</h3>
+<ul>
+<li>the handler needs a GitHub API client</li>
+<li>the handler uses <code>owner</code> from the incoming event</li>
+<li>the handler should participate in the standard start/end rate-limit logging</li>
+</ul>
+<h3 id="do-not-use-github_handler-when">Do not use <code>@github_handler</code> when</h3>
+<ul>
+<li>the handler works only on data already provided in the event</li>
+<li>the handler talks to a different external system</li>
+<li>the handler has materially different setup requirements that would make the shared wrapper misleading</li>
+</ul>
+<p>For GitHub-backed handlers, keep the body narrow:</p>
+<ul>
+<li>read the event fields needed by the specific check</li>
+<li>call one library function</li>
+<li>add any required output fields such as <code>check_name</code></li>
+<li>trim payload size where needed before returning</li>
+</ul>
+<h2 id="response-shape-guidance">Response Shape Guidance</h2>
+<p>Most policy check handlers return a compact object like:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">"check_name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"codeowners"</span><span class="p">,</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">"result"</span><span class="p">:</span><span class="w"> </span><span class="s2">"pass"</span><span class="p">,</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"CODEOWNERS file exists"</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="p">}</span>
+</span></code></pre></div>
+<p>This is important because many of these handlers run inside Step Functions parallel and map states. Responses should stay small and deterministic.</p>
+<p>If a library function returns large or verbose fields, trim them in the handler before returning. <code>team_maintainer</code> is one example where extra detail is removed to reduce payload size.</p>
+<h2 id="dependency-layer">Dependency Layer</h2>
+<p>All Lambda functions share a single dependency layer (<code>aws_lambda_layer_version.dependencies</code>) that packages third-party Python packages separately from handler code. This keeps individual function zips small and avoids duplicating dependencies.</p>
+<h3 id="s3-backed-publication">S3-backed publication</h3>
+<p>The layer zip (<code>build/dependency-layer.zip</code>, ~21 MB) is uploaded to the audit output S3 bucket before <code>PublishLayerVersion</code> is called. Terraform manages this as <code>aws_s3_object.dependency_layer</code> at the key <code>layers/dependency-layer.zip</code>.</p>
+<p>The <code>aws_lambda_layer_version</code> resource references the S3 object directly:</p>
+<div class="language-hcl highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="kr">resource</span><span class="w"> </span><span class="nc">"aws_lambda_layer_version"</span><span class="w"> </span><span class="nv">"dependencies"</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="na">s3_bucket</span><span class="w">         </span><span class="o">=</span><span class="w"> </span><span class="nv">aws_s3_bucket.audit_output.id</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span><span class="na">s3_key</span><span class="w">            </span><span class="o">=</span><span class="w"> </span><span class="nv">aws_s3_object.dependency_layer.key</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span><span class="na">s3_object_version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nv">aws_s3_object.dependency_layer.version_id</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span><span class="p">...</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="p">}</span>
+</span></code></pre></div>
+<p>This avoids streaming the zip from the local machine during <code>PublishLayerVersion</code>, which would otherwise hit the AWS SigV4 5-minute request signing window on slow or interrupted connections.</p>
+<h3 id="update-behaviour">Update behaviour</h3>
+<p>Because the audit output bucket has versioning enabled, each <code>terraform apply</code> that produces a new layer zip:</p>
+<ol>
+<li>Uploads the new zip to the same S3 key, creating a new S3 object version.</li>
+<li>The changed <code>s3_object_version</code> causes Terraform to publish a new (immutable) Lambda layer version.</li>
+<li>All <code>aws_lambda_function.audit</code> resources are updated to reference the new layer ARN.</li>
+</ol>
+<p>If the zip content has not changed (same <code>etag</code>), the S3 object and layer version are both no-ops.</p>
+<h2 id="practical-benefits">Practical Benefits</h2>
+<p>This structure gives the project a few concrete advantages:</p>
+<ul>
+<li>less duplicated setup code across GitHub-backed Lambdas</li>
+<li>consistent logging across handlers</li>
+<li>smaller handler modules that are easier to review and test</li>
+<li>a clear boundary between Lambda orchestration and GitHub integration</li>
+</ul>
+<p>As the project grows, new shared concerns should usually follow the same rule: put Lambda execution concerns in <code>utils/lambda_handler.py</code>, and keep service-specific code in service-specific utilities.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../logging-patterns/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Logging Patterns">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Logging Patterns
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../step-function-flow/" class="md-footer__link md-footer__link--next" aria-label="Next: Step Function Flow">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Step Function Flow
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tracking", "navigation.sections", "navigation.path", "navigation.top", "navigation.footer", "search.suggest", "header.autohide", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
