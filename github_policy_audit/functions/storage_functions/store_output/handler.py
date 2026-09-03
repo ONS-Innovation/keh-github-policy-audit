@@ -406,7 +406,7 @@ def handler(event, context):
     }
 
     for repository_name, visibility in repository_metadata.items():
-        if repository_name in repo_checks and isinstance(visibility, str):
+        if repository_name in repo_checks:
             repo_checks[repository_name]["visibility"] = visibility
 
     # Add ratings to repositories
