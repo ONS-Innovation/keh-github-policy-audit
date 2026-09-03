@@ -222,8 +222,15 @@ Output format (stored at `outputs/audit-results/<owner>/<run_id>.json` or `s3://
 {
     "owner": "org-name",
     "run_id": "sfn-execution-id",
-    "repositories": {<aggregated repository results>},
-    "organisations_checks": {<aggregated organisation results>},
+    "repositories": {
+        "repo-name": {
+            "checks": {<aggregated repository checks>},
+            "is_compliant": true,
+            "rating": "gold",
+            "visibility": "private"
+        }
+    },
+    "organisation_checks": {<aggregated organisation results>},
     "teams": {<aggregated team results>},
     "scorecard_criteria": {<compliance ratings>},
     "summary": {<compliance statistics>},
