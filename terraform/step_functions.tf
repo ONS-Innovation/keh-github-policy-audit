@@ -263,8 +263,9 @@ resource "aws_sfn_state_machine" "github_policy_audit" {
                   }
                 ]
                 Parameters = {
-                  "owner.$"  = "$.owner"
-                  "levels.$" = "$.levels"
+                  "owner.$"               = "$.owner"
+                  "levels.$"              = "$.levels"
+                  "repositories_s3_ref.$" = "$.repositories_s3_ref"
                 }
                 ResultPath = "$.check_result"
                 Next       = "store_${check_name}"
