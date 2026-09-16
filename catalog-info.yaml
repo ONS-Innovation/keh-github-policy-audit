@@ -1,0 +1,14 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: keh-github-policy-audit
+  description: AWS Step Functions workflow that audits GitHub organisations against the ONS GitHub Usage Policy and stores audit results in S3.
+  annotations:
+    github.com/project-slug: ONS-Innovation/keh-github-policy-audit
+  links:
+    - url: https://ons-innovation.github.io/keh-github-policy-audit
+      title: GitHub Policy Audit Documentation
+spec:
+  type: service
+  lifecycle: production
+  owner: keh-dev
