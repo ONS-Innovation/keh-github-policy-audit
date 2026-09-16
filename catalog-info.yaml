@@ -5,9 +5,16 @@ metadata:
   description: AWS Step Functions workflow that audits GitHub organisations against the ONS GitHub Usage Policy and stores audit results in S3.
   annotations:
     github.com/project-slug: ONS-Innovation/keh-github-policy-audit
+  tags:
+    - python
+    - aws-lambda
+    - aws-step-functions
+    - aws-eventbridge
   links:
     - url: https://ons-innovation.github.io/keh-github-policy-audit
       title: GitHub Policy Audit Documentation
+    - url: mailto:knowledge.exchange.hub@ons.gov.uk
+      title: Contact
 spec:
   type: service
   lifecycle: production
