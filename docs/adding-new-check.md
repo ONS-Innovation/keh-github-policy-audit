@@ -2,11 +2,11 @@
 
 This guide goes through the changes necessary to add a new policy check to the policy audit tool.
 
-# Adding Repository Checks
+## Adding Repository Checks
 
 This section goes through the process of adding repository-level checks.
 
-## Handler
+### Repository Handler
 
 To update respository checks you must first:
 
@@ -54,7 +54,7 @@ To add the test, you simply need to add an entry into `REPO_CHECK_CASES`. An exa
 
 This should suffice for most policy checks. However, there may be some checks which require making a separate test entirely. This would usually be if the policy check doesn't follow the standard policy check pattern as described in `TestRepositoryScopedHandlers`. For instance, `TestBranchProtectionHandler` is written as a separate test as the test makes an extra API request that is not found in the other tests.
 
-## Terraform
+### Repository Terraform
 
 To update the terraform with the new check and the lambda to the step function, go into `locals.tf` and add an entry for the check in `lambda_definitions`. An example for codeowners is given below:
 
@@ -85,9 +85,10 @@ assert {
   }
 
 ```
+
 The above test would remain the same, except we would bump the value `20` to `21` to account for the new lambda we just added into the step function.
 
-## Documentation
+### Documentation
 
 Once all the technical details have been implemented, the documentation must also be updated. The main documentation to be updated are:
 
@@ -96,13 +97,13 @@ Once all the technical details have been implemented, the documentation must als
 
 In `step-function-flow.md`, the `#flow` and `#stage-summary` sections must be updated. The `#flow` sections outlines a diagram of the step function and `#stage-summary` is gives a summary table of all the stages in the step function. For the repository checks, you will simply need to add the check name to the lambdas column.
 
-In `README.md`, the `#check-handlers` section must be updated. Usually this simply means to add in the handler module name into the repository-scoped-checks row. For example `functions.repository_checks.repository_access.handler`. 
+In `README.md`, the `#check-handlers` section must be updated. Usually this simply means to add in the handler module name into the repository-scoped-checks row. For example `functions.repository_checks.repository_access.handler`.
 
-# Adding Organisation Checks
+## Adding Organisation Checks
 
 This section goes through adding organisation-level checks.
 
-## Handler
+### Organisation Handler
 
 Similar to the repository checks, you will simply need to add a new directory inside `functions/organisation_checks/` with the name of the check you wish to add and then add in the handler code for that check. An example is given for `dependabot_slo`:
 
@@ -126,8 +127,9 @@ def handler(event, context, client):
 
 The above will require the appropriate method from the policy methods library.
 
+After the implementation of the handler is done. You will need to add a test for it in `tests/functions/test/organisation_checks/test_organisation_handlers.py`. This will require you to create a new class that includes the name of the policy check that you wish to test. For example, `DependaboSloHandler` will be named `TestDependabotSloHandler`. The exact contents of the test will largely vary depending on the check itself.
 
-## Terraform
+### Organisation Terraform
 
 Updating the terraform for organisation-level checks is similar to updating repository-level checks. All that needs to be done is to update the `locals.tf` file and also update the `step_function.tf` file. In the `step_functions.tf` file, what needs to be updated is the `OrganisationChecks` variable. An example is given with `dependabot_slo`:
 
@@ -145,5 +147,5 @@ States = {
     }
 }
 ```
-Thereafter the tests must be updated in the same way as for repository-level checks.
 
+Thereafter the tests must be updated in the same way as for repository-level checks by updating `lambda.tftest.hcl` and `state_machine.tftest.hcl`. You simply need to update the number of lambdas being looked at.
