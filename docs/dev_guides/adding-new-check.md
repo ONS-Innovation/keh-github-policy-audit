@@ -32,7 +32,7 @@ def handler(event, context, client):
 
 You must import the check that you are implementing from the policy methods library. If the check needs parameters like `owner` or `repository_name`, these can be grabbed from the `event` dictionary.
 
-In the event that the check needs an extra parameter that is not found in the `event` dictionary, you can instead make an API request to the endpoint that will give you that parameter. For instance, the `branch_protection` policy check requires a `branch_name`, which cannot be found in the `event` dictionary, so we use `client.make_request()` to grab the endpoint that holds that parameter.
+In the event that the check needs an extra parameter that is not found in the `event` dictionary, you can instead make an API request to the endpoint that will give you that parameter. For instance, the `branch_protection` policy check requires a `branch_name`, which cannot be found in the `event` dictionary, so we use `client.make_request()` to grab the endpoint that holds that parameter. This should only be done sparingly, and developers should use data from the `event` dictionary where possible.
 
 ```python
     branches = client.make_request(
@@ -40,7 +40,7 @@ In the event that the check needs an extra parameter that is not found in the `e
     ).json()
 ```
 
-After the implementation of the handler is done. You will need to add a test for it in `tests/functions/test/repository_checks/test_repository_handlers.py`.
+After the implementation of the handler is done. You will need to add a test for it in `tests/functions/repository_checks/test_repository_handlers.py`.
 
 To add the test, you simply need to add an entry into `REPO_CHECK_CASES`. An example for `codeowners` is given below:
 
@@ -92,8 +92,8 @@ The above test would remain the same, except we would bump the value `20` to `21
 
 Once all the technical details have been implemented, the documentation must also be updated. The main documentation to be updated are:
 
-- step-function-flow.md
-- README.md
+- `step-function-flow.md`
+- `README.md`
 
 In `step-function-flow.md`, the `#flow` and `#stage-summary` sections must be updated. The `#flow` sections outlines a diagram of the step function and `#stage-summary` is gives a summary table of all the stages in the step function. For the repository checks, you will simply need to add the check name to the lambdas column.
 
@@ -105,29 +105,9 @@ This section goes through adding organisation-level checks.
 
 ### Organisation Handler
 
-Similar to the repository checks, you will simply need to add a new directory inside `functions/organisation_checks/` with the name of the check you wish to add and then add in the handler code for that check. An example is given for `dependabot_slo`:
+Addding organisation-level checks is basically the same as adding [repository-level checks](#adding-repository-checks), and you will need to create a handler file in `functions/organisation_checks/`.
 
-```python
-@github_handler
-def handler(event, context, client):
-    """Step Function invokes with {"owner": "...", "levels": ["critical", "high"]}.
-
-    The levels field is optional and defaults to the policy library defaults.
-    """
-    result = get_dependabot_slo(client, event.get("levels"))
-    result["check_name"] = "dependabot_slo"
-    log_info(
-        logger,
-        "lambda_completed",
-        check=result["check_name"],
-        result=result.get("result"),
-    )
-    return result
-```
-
-The above will require the appropriate method from the policy methods library.
-
-After the implementation of the handler is done. You will need to add a test for it in `tests/functions/test/organisation_checks/test_organisation_handlers.py`. This will require you to create a new class that includes the name of the policy check that you wish to test. For example, `DependaboSloHandler` will be named `TestDependabotSloHandler`. The exact contents of the test will largely vary depending on the check itself.
+After the implementation of the handler is done. You will need to add a test for it in `tests/functions/organisation_checks/test_organisation_handlers.py`. This will require you to create a new class that includes the name of the policy check that you wish to test. For example, `DependaboSloHandler` will be named `TestDependabotSloHandler`. The exact contents of the test will largely vary depending on the check itself.
 
 ### Organisation Terraform
 
@@ -149,3 +129,25 @@ States = {
 ```
 
 Thereafter the tests must be updated in the same way as for repository-level checks by updating `lambda.tftest.hcl` and `state_machine.tftest.hcl`. You simply need to update the number of lambdas being looked at.
+
+## Checklist
+
+Here is a checklist to ensure that you have completed all the relevant tasks to add a new repository/organisation level check.
+
+### Repository checks
+
+- Create `github_policy_audit/functions/repository_checks/<check_name>/handler.py`.
+- Implement and register the handler, invoking the policy methods check with event data or necessary API requests.
+- Add a handler test to `REPO_CHECK_CASES`, or create a dedicated test where required.
+- Add the Lambda definition and check name to `locals.tf`.
+- Update Terraform test counts in `lambda.tftest.hcl` and `state_machine.tftest.hcl`.
+- Update `step-function-flow.md` and `README.md`.
+
+### Organisation checks
+
+- Create `github_policy_audit/functions/organisation_checks/<check_name>/handler.py`.
+- Implement and register the handler, invoking the corresponding policy methods check.
+- Add a handler test in `tests/functions/organisation_checks/test_organisation_handlers.py`.
+- Add the Lambda definition to `locals.tf` and the check to `OrganisationChecks` in `step_function.tf`.
+- Pass required event parameters to the state machine task.
+- Update Terraform test counts and relevant documentation.

@@ -12,7 +12,7 @@ nav:
   - Step Function Flow: step-function-flow.md
   - Lambda Versioning: lambda-versioning.md
   - Rate Limit Considerations: rate-limit-considerations.md
-  - Dev Guide: adding-new-check.md
+  - Dev Guides: dev_guides/dev-guides.md
 theme:
   name: material
   language: en
