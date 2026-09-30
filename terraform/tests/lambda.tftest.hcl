@@ -62,13 +62,13 @@ override_data {
 
 run "lambda_definitions_complete" {
   assert {
-    condition     = length(local.lambda_definitions) == 20
-    error_message = "Expected 20 Lambda function definitions."
+    condition     = length(local.lambda_definitions) == 22
+    error_message = "Expected 22 Lambda function definitions."
   }
 
   assert {
-    condition     = length(aws_lambda_function.audit) == 20
-    error_message = "Expected 20 Lambda functions to be provisioned."
+    condition     = length(aws_lambda_function.audit) == 22
+    error_message = "Expected 22 Lambda functions to be provisioned."
   }
 
   assert {
@@ -167,12 +167,12 @@ run "lambda_handlers" {
   }
 
   assert {
-    condition     = aws_lambda_function.audit["store_output"].handler == "functions.store_output.handler.handler"
+    condition     = aws_lambda_function.audit["store_output"].handler == "functions.storage_functions.store_output.handler.handler"
     error_message = "store_output handler path is incorrect."
   }
 
   assert {
-    condition     = aws_lambda_function.audit["store_repository_output"].handler == "functions.store_repository_output.handler.handler"
+    condition     = aws_lambda_function.audit["store_repository_output"].handler == "functions.storage_functions.store_repository_output.handler.handler"
     error_message = "store_repository_output handler path is incorrect."
   }
 }

@@ -1,0 +1,19 @@
+{
+  "owner": "ONS-Innovation",
+  "run_id": "manual-test-run-2026-08-27",
+  "output_bucket": "sdp-dev-github-policy-audit",
+  "check_name": "dependabot_slo",
+  "result": "fail",
+  "message": "Found 374 open Dependabot security alerts exceeding the policy-defined SLO.",
+  "details": {
+    "total_open_alerts": 593,
+    "failing_alerts": 374,
+    "number_exceeded_by_severity": {
+      "critical": 12,
+      "high": 201,
+      "medium": 145,
+      "low": 16
+    },
+    "total_repositories_affected": 23
+  }
+}
