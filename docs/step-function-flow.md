@@ -99,20 +99,20 @@ flowchart TD
 
 ## Stage Summary
 
-| Stage | State Type | Lambdas |
-| --- | --- | --- |
-| Prepare initial input | `Pass` | None (injects `run_id` and `output_bucket` into `$.initial_input`) |
-| Rate-limit start | `Task` | `rate_limit` (`checkpoint=rate-limit-start`) |
-| Initialise | `Parallel` | `list_repositories` (writes to S3, returns reference), `list_teams` (writes to S3, returns reference) |
-| Prepare input | `Pass` | None (reshapes root state; promotes S3 refs and `rate_limit_start`) |
-| Organisation checks | `Parallel` (extensible via `organisation_check_names`) | `dependabot_slo`, `secret_scanning_slo` → `store_organisation_checks` (one file per check) |
-| Team checks | `Map` → `Parallel` (runs all team checks in parallel per team, extensible via `team_check_names`) | `team_maintainer` (and other team checks as added) |
-| Team checks format | `Pass` | None (reformats check results array to dict) |
-| Team checks write | `Task` | `store_team_checks` (aggregates checks and writes per team to S3) |
-| Repository checks | `Map` (Mode=`DISTRIBUTED`, MaxConcurrency=5) + `Parallel` | `codeowners`, `dependabot`, `external_pull_request`, `gitignore`, `inactivity`, `license`, `naming_convention`, `pirr`, `readme`, `repository_access`, `security_scanning`, `branch_protection` |
-| Repo output write | `Task` | `store_repository_output` |
-| Rate-limit end | `Task` | `rate_limit` (`checkpoint=rate-limit-end`) |
-| Final aggregation | `Task` | `store_output` |
+| Stage                 | State Type                                                                                        | Lambdas                                                                                                                                                                                         |
+| --------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prepare initial input | `Pass`                                                                                            | None (injects `run_id` and `output_bucket` into `$.initial_input`)                                                                                                                              |
+| Rate-limit start      | `Task`                                                                                            | `rate_limit` (`checkpoint=rate-limit-start`)                                                                                                                                                    |
+| Initialise            | `Parallel`                                                                                        | `list_repositories` (writes to S3, returns reference), `list_teams` (writes to S3, returns reference)                                                                                           |
+| Prepare input         | `Pass`                                                                                            | None (reshapes root state; promotes S3 refs and `rate_limit_start`)                                                                                                                             |
+| Organisation checks   | `Parallel` (extensible via `organisation_check_names`)                                            | `dependabot_slo`, `secret_scanning_slo` → `store_organisation_checks` (one file per check)                                                                                                      |
+| Team checks           | `Map` → `Parallel` (runs all team checks in parallel per team, extensible via `team_check_names`) | `team_maintainer` (and other team checks as added)                                                                                                                                              |
+| Team checks format    | `Pass`                                                                                            | None (reformats check results array to dict)                                                                                                                                                    |
+| Team checks write     | `Task`                                                                                            | `store_team_checks` (aggregates checks and writes per team to S3)                                                                                                                               |
+| Repository checks     | `Map` (Mode=`DISTRIBUTED`, MaxConcurrency=5) + `Parallel`                                         | `codeowners`, `dependabot`, `external_pull_request`, `gitignore`, `inactivity`, `license`, `naming_convention`, `pirr`, `readme`, `repository_access`, `security_scanning`, `branch_protection` |
+| Repo output write     | `Task`                                                                                            | `store_repository_output`                                                                                                                                                                       |
+| Rate-limit end        | `Task`                                                                                            | `rate_limit` (`checkpoint=rate-limit-end`)                                                                                                                                                      |
+| Final aggregation     | `Task`                                                                                            | `store_output`                                                                                                                                                                                  |
 
 ## Storage and Lifecycle
 
@@ -158,8 +158,8 @@ EventBridge injects the initial execution input:
 
 ```json
 {
-    "owner": "ONS-Innovation",
-    "levels": ["critical", "high", "medium", "low"]
+  "owner": "ONS-Innovation",
+  "levels": ["critical", "high", "medium", "low"]
 }
 ```
 
@@ -167,14 +167,14 @@ EventBridge injects the initial execution input:
 
 ```json
 {
+  "owner": "ONS-Innovation",
+  "levels": ["critical", "high", "medium", "low"],
+  "initial_input": {
     "owner": "ONS-Innovation",
     "levels": ["critical", "high", "medium", "low"],
-    "initial_input": {
-        "owner": "ONS-Innovation",
-        "levels": ["critical", "high", "medium", "low"],
-        "run_id": "<sfn-execution-name>",
-        "output_bucket": "<s3-bucket-name>"
-    }
+    "run_id": "<sfn-execution-name>",
+    "output_bucket": "<s3-bucket-name>"
+  }
 }
 ```
 
@@ -186,8 +186,8 @@ Before initialization fan-out, a dedicated `rate_limit` task is invoked with:
 
 ```json
 {
-    "owner": "ONS-Innovation",
-    "checkpoint": "rate-limit-start"
+  "owner": "ONS-Innovation",
+  "checkpoint": "rate-limit-start"
 }
 ```
 
@@ -199,10 +199,10 @@ The response is persisted at `$.rate_limit_start` and carried through to final a
 
 ```json
 {
-    "s3_bucket": "<s3-bucket-name>",
-    "s3_key": "audit-runs/ONS-Innovation/<run_id>/repositories-list.json",
-    "repository_count": 42,
-    "environment": "prod"
+  "s3_bucket": "<s3-bucket-name>",
+  "s3_key": "audit-runs/ONS-Innovation/<run_id>/repositories-list.json",
+  "repository_count": 42,
+  "environment": "prod"
 }
 ```
 
@@ -210,12 +210,20 @@ The parallel branches return their results as an array under `$.initial_data`:
 
 ```json
 {
-    "owner": "ONS-Innovation",
-    "levels": ["critical", "high", "medium", "low"],
-    "initial_data": [
-        { "s3_bucket": "<s3-bucket-name>", "s3_key": "audit-runs/ONS-Innovation/<run_id>/repositories-list.json", "repository_count": 42 },
-        { "s3_bucket": "<s3-bucket-name>", "s3_key": "audit-runs/ONS-Innovation/<run_id>/teams-list.json", "team_count": 8 }
-    ]
+  "owner": "ONS-Innovation",
+  "levels": ["critical", "high", "medium", "low"],
+  "initial_data": [
+    {
+      "s3_bucket": "<s3-bucket-name>",
+      "s3_key": "audit-runs/ONS-Innovation/<run_id>/repositories-list.json",
+      "repository_count": 42
+    },
+    {
+      "s3_bucket": "<s3-bucket-name>",
+      "s3_key": "audit-runs/ONS-Innovation/<run_id>/teams-list.json",
+      "team_count": 8
+    }
+  ]
 }
 ```
 
@@ -227,13 +235,28 @@ The parallel branches return their results as an array under `$.initial_data`:
 
 ```json
 {
-    "owner": "ONS-Innovation",
-    "levels": ["critical", "high", "medium", "low"],
-    "run_id": "<sfn-execution-name>",
-    "output_bucket": "<s3-bucket-name>",
-    "repositories_s3_ref": { "s3_bucket": "<s3-bucket-name>", "s3_key": "audit-runs/ONS-Innovation/<run_id>/repositories-list.json", "repository_count": 42 },
-    "teams_s3_ref": { "s3_bucket": "<s3-bucket-name>", "s3_key": "audit-runs/ONS-Innovation/<run_id>/teams-list.json", "team_count": 8 },
-    "rate_limit_start": { "checkpoint": "rate-limit-start", "remaining": 4988, "limit": 5000, "reset": 1721668800, "used": 12, "retrieved_at": "..." }
+  "owner": "ONS-Innovation",
+  "levels": ["critical", "high", "medium", "low"],
+  "run_id": "<sfn-execution-name>",
+  "output_bucket": "<s3-bucket-name>",
+  "repositories_s3_ref": {
+    "s3_bucket": "<s3-bucket-name>",
+    "s3_key": "audit-runs/ONS-Innovation/<run_id>/repositories-list.json",
+    "repository_count": 42
+  },
+  "teams_s3_ref": {
+    "s3_bucket": "<s3-bucket-name>",
+    "s3_key": "audit-runs/ONS-Innovation/<run_id>/teams-list.json",
+    "team_count": 8
+  },
+  "rate_limit_start": {
+    "checkpoint": "rate-limit-start",
+    "remaining": 4988,
+    "limit": 5000,
+    "reset": 1721668800,
+    "used": 12,
+    "retrieved_at": "..."
+  }
 }
 ```
 
@@ -245,11 +268,11 @@ Both `repositories_s3_ref` and `teams_s3_ref` are lightweight references to data
 
 Three branches run in parallel. Each branch receives a subset of the state and writes results to S3:
 
-| Branch | Receives | Writes to S3 |
-| --- | --- | --- |
-| `dependabot_slo` → `store_organisation_checks` | `owner`, `levels` | `organisation-checks/dependabot_slo.json` |
-| `secret_scanning_slo` → `store_organisation_checks` | `owner` | `organisation-checks/secret_scanning_slo.json` |
-| `TeamMaintainerMap` (Map over `teams` from S3 ItemReader) → `store_team_check` | `owner`, `run_id`, `output_bucket`, `team.slug` per iteration | `teams/{team_slug}.json` |
+| Branch                                                                         | Receives                                                      | Writes to S3                                   |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------- | ---------------------------------------------- |
+| `dependabot_slo` → `store_organisation_checks`                                 | `owner`, `levels`                                             | `organisation-checks/dependabot_slo.json`      |
+| `secret_scanning_slo` → `store_organisation_checks`                            | `owner`                                                       | `organisation-checks/secret_scanning_slo.json` |
+| `TeamMaintainerMap` (Map over `teams` from S3 ItemReader) → `store_team_check` | `owner`, `run_id`, `output_bucket`, `team.slug` per iteration | `teams/{team_slug}.json`                       |
 
 The organisation-level check Lambdas return their results:
 
@@ -271,10 +294,18 @@ Each item in the array spawns a child execution. The item selector passes only w
 
 ```json
 {
-    "owner": "ONS-Innovation",
-    "run_id": "<sfn-execution-name>",
-    "output_bucket": "<s3-bucket-name>",
-    "repository": { "name": "repo-a", "data": { "default_branch": "main", "updated_at": "...", "visibility": "private", "security_and_analysis": {} } }
+  "owner": "ONS-Innovation",
+  "run_id": "<sfn-execution-name>",
+  "output_bucket": "<s3-bucket-name>",
+  "repository": {
+    "name": "repo-a",
+    "data": {
+      "default_branch": "main",
+      "updated_at": "...",
+      "visibility": "private",
+      "security_and_analysis": {}
+    }
+  }
 }
 ```
 
@@ -290,14 +321,14 @@ The `ResultSelector` on each check task strips any additional fields, retaining 
 
 ```json
 {
-    "owner": "ONS-Innovation",
-    "run_id": "<sfn-execution-name>",
-    "output_bucket": "<s3-bucket-name>",
-    "repository_name": "repo-a",
-    "checks": [
-        { "check_name": "readme",      "result": "pass", "message": "..." },
-        { "check_name": "codeowners",  "result": "fail", "message": "..." }
-    ]
+  "owner": "ONS-Innovation",
+  "run_id": "<sfn-execution-name>",
+  "output_bucket": "<s3-bucket-name>",
+  "repository_name": "repo-a",
+  "checks": [
+    { "check_name": "readme", "result": "pass", "message": "..." },
+    { "check_name": "codeowners", "result": "fail", "message": "..." }
+  ]
 }
 ```
 
@@ -321,8 +352,8 @@ After organisation checks and repository map completion, and before final aggreg
 
 ```json
 {
-    "owner": "ONS-Innovation",
-    "checkpoint": "rate-limit-end"
+  "owner": "ONS-Innovation",
+  "checkpoint": "rate-limit-end"
 }
 ```
 
@@ -340,11 +371,25 @@ After all repository child executions complete, `store_output` is invoked with o
 
 ```json
 {
-    "owner": "ONS-Innovation",
-    "run_id": "<sfn-execution-name>",
-    "output_bucket": "<s3-bucket-name>",
-    "rate_limit_start": { "checkpoint": "rate-limit-start", "remaining": 4988, "limit": 5000, "reset": 1721668800, "used": 12, "retrieved_at": "..." },
-    "rate_limit_end": { "checkpoint": "rate-limit-end", "remaining": 4321, "limit": 5000, "reset": 1721668800, "used": 679, "retrieved_at": "..." }
+  "owner": "ONS-Innovation",
+  "run_id": "<sfn-execution-name>",
+  "output_bucket": "<s3-bucket-name>",
+  "rate_limit_start": {
+    "checkpoint": "rate-limit-start",
+    "remaining": 4988,
+    "limit": 5000,
+    "reset": 1721668800,
+    "used": 12,
+    "retrieved_at": "..."
+  },
+  "rate_limit_end": {
+    "checkpoint": "rate-limit-end",
+    "remaining": 4321,
+    "limit": 5000,
+    "reset": 1721668800,
+    "used": 679,
+    "retrieved_at": "..."
+  }
 }
 ```
 
@@ -366,45 +411,59 @@ The summary file structure:
 
 ```json
 {
-    "owner": "ONS-Innovation",
-    "repositories": {
-        "repo-a": {
-            "checks": {
-                "readme": {
-                    "result": "pass",
-                    "message": "..."
-                }
-            },
-            "is_compliant": true,
-            "rating": "non-compliant"
+  "owner": "ONS-Innovation",
+  "repositories": {
+    "repo-a": {
+      "checks": {
+        "readme": {
+          "result": "pass",
+          "message": "..."
         }
-    },
-    "organisation_checks": {
-        "dependabot_slo": { "result": "pass", "message": "..." }
-    },
-    "teams": {
-        "team-a": {
-            "checks": {
-                "team_maintainer": {
-                    "result": "pass",
-                    "message": "..."
-                }
-            },
-            "is_compliant": true
+      },
+      "is_compliant": true,
+      "rating": "non-compliant"
+    }
+  },
+  "organisation_checks": {
+    "dependabot_slo": { "result": "pass", "message": "..." }
+  },
+  "teams": {
+    "team-a": {
+      "checks": {
+        "team_maintainer": {
+          "result": "pass",
+          "message": "..."
         }
-    },
-    "summary": {
-        "total_repositories": 1,
-        "compliant_repositories": 1,
-        "total_teams": 1,
-        "compliant_teams": 1,
-        "repository_checks": { "readme": { "total": 1, "compliant": 1 } },
-        "organisation_checks": { "dependabot_slo": { "compliant": true } },
-        "team_checks": { "team_maintainer": { "total": 1, "compliant": 1 } }
-    },
-    "rate-limit-start": { "checkpoint": "rate-limit-start", "remaining": 4988, "limit": 5000, "reset": 1721668800, "used": 12, "retrieved_at": "..." },
-    "rate-limit-end": { "checkpoint": "rate-limit-end", "remaining": 4321, "limit": 5000, "reset": 1721668800, "used": 679, "retrieved_at": "..." },
-    "timestamp": "2026-07-16T08:00:00+00:00"
+      },
+      "is_compliant": true
+    }
+  },
+  "summary": {
+    "total_repositories": 1,
+    "compliant_repositories": 1,
+    "total_teams": 1,
+    "compliant_teams": 1,
+    "repository_checks": { "readme": { "total": 1, "compliant": 1 } },
+    "organisation_checks": { "dependabot_slo": { "compliant": true } },
+    "team_checks": { "team_maintainer": { "total": 1, "compliant": 1 } }
+  },
+  "rate-limit-start": {
+    "checkpoint": "rate-limit-start",
+    "remaining": 4988,
+    "limit": 5000,
+    "reset": 1721668800,
+    "used": 12,
+    "retrieved_at": "..."
+  },
+  "rate-limit-end": {
+    "checkpoint": "rate-limit-end",
+    "remaining": 4321,
+    "limit": 5000,
+    "reset": 1721668800,
+    "used": 679,
+    "retrieved_at": "..."
+  },
+  "timestamp": "2026-07-16T08:00:00+00:00"
 }
 ```
 

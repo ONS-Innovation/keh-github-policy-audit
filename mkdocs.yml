@@ -12,7 +12,7 @@ nav:
   - Step Function Flow: step-function-flow.md
   - Lambda Versioning: lambda-versioning.md
   - Rate Limit Considerations: rate-limit-considerations.md
-  - Dev Guides: 
+  - Dev Guides:
       - Adding a New Check: dev_guides/adding-new-check.md
 theme:
   name: material

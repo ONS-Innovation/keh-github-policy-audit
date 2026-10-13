@@ -31,9 +31,7 @@ Example:
 {
   "<rating_name>": {
     "min_compliance": 90,
-    "required_checks": [
-      "<check_name>"
-    ]
+    "required_checks": ["<check_name>"]
   }
 }
 ```
@@ -126,11 +124,7 @@ Example output excerpt:
     },
     "bronze": {
       "min_compliance": 50,
-      "required_checks": [
-        "codeowners",
-        "dependabot",
-        "security_scanning"
-      ]
+      "required_checks": ["codeowners", "dependabot", "security_scanning"]
     }
   },
   "summary": {
