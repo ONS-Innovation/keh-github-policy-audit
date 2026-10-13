@@ -117,7 +117,6 @@ States = {
 
 Thereafter the tests must be updated in the same way as for repository-level checks by updating `lambda.tftest.hcl` and `state_machine.tftest.hcl`. You simply need to update the number of lambdas being looked at.
 
-
 ### Documentation
 
 Once all the technical details have been implemented, the documentation must also be updated. The main documentation to be updated are:
