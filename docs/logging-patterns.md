@@ -81,16 +81,14 @@ With PRETTY JSON enabled:
 ```json
 {
   "event": "lambda_invoked",
-  "event_keys": [
-    "owner"
-  ]
+  "event_keys": ["owner"]
 }
 ```
 
 Without PRETTY JSON enabled:
 
 ```json
-{"event":"lambda_invoked","event_keys":["owner"]}
+{ "event": "lambda_invoked", "event_keys": ["owner"] }
 ```
 
 This can help digest dense logs during local development.
